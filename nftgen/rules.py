@@ -11,7 +11,7 @@ from __future__ import annotations
 import ipaddress
 
 from nftgen.definitions import Definitions
-from nftgen.ir import BuildError, Chain, NamedSet
+from nftgen.ir import BuildError, Chain, Flowtable, NamedSet
 
 PRIORITIES = {"raw": -300, "mangle": -150, "dstnat": -100, "filter": 0, "security": 50, "srcnat": 100}
 
@@ -85,6 +85,8 @@ class RuleRenderer:
             mss = rule["set-mss"]
             target = "rt mtu" if str(mss) in ("pmtu", "rt-mtu", "rt_mtu") else str(mss)
             out.append(f"tcp flags syn tcp option maxseg size set {target}")
+        if "flow-offload" in rule:
+            out.append(f"flow add @{rule['flow-offload']}")
         return out
 
     def _counter(self, value) -> str:
@@ -171,6 +173,26 @@ class RuleRenderer:
                 return f"{kind} to {target}"
             raise BuildError(f"unknown action: {action!r}")
         return str(action)
+
+
+def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:
+    out = []
+    for spec in specs or []:
+        devices: list[str] = []
+        for dev in spec.get("devices", []):
+            if dev in defs.interfaces:
+                devices.extend(f'"{d}"' for d in defs.interface(dev))
+            else:
+                devices.append(f'"{dev}"')
+        out.append(
+            Flowtable(
+                name=spec["name"],
+                hook=spec.get("hook", "ingress"),
+                priority=resolve_priority(spec.get("priority", 0)),
+                devices=devices,
+            )
+        )
+    return out
 
 
 def build_chain(spec: dict, renderer: RuleRenderer) -> Chain:

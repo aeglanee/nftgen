@@ -12,7 +12,7 @@ import yaml
 
 from nftgen.definitions import Definitions
 from nftgen.ir import Table, build_sets
-from nftgen.rules import RuleRenderer, build_chain
+from nftgen.rules import RuleRenderer, build_chain, build_flowtables
 
 
 def _resolve_list(items: list, key: str, base_dir: pathlib.Path) -> list:
@@ -67,6 +67,7 @@ def generate(
                 chains=chains,
                 raw=list(tspec.get("raw", [])),
                 counters=counters,
+                flowtables=build_flowtables(tspec.get("flowtables", []), defs),
             )
         )
 

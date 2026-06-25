@@ -63,6 +63,22 @@ class Chain:
 
 
 @dataclass
+class Flowtable:
+    name: str
+    hook: str
+    priority: int | str
+    devices: list[str]  # already-resolved device tokens (quoted)
+
+    def render(self) -> list[str]:
+        return [
+            f"{SET_INDENT}flowtable {self.name} {{",
+            f"{BODY_INDENT}hook {self.hook} priority {self.priority}",
+            f"{BODY_INDENT}devices = {{ {', '.join(self.devices)} }}",
+            f"{SET_INDENT}}}",
+        ]
+
+
+@dataclass
 class Table:
     family: str
     name: str
@@ -70,11 +86,13 @@ class Table:
     chains: list[Chain] = field(default_factory=list)
     raw: list[str] = field(default_factory=list)  # table-level raw object declarations
     counters: list[str] = field(default_factory=list)  # named counter objects
+    flowtables: list[Flowtable] = field(default_factory=list)
 
     def render(self) -> str:
         out = [f"table {self.family} {self.name} {{"]
         blocks: list[list[str]] = []
         blocks += [[f"{SET_INDENT}{r}"] for r in self.raw]
+        blocks += [ft.render() for ft in self.flowtables]
         blocks += [[f"{SET_INDENT}counter {c} {{", f"{SET_INDENT}}}"] for c in self.counters]
         blocks += [s.render() for s in self.sets]
         blocks += [c.render() for c in self.chains]
