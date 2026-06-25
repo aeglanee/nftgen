@@ -35,8 +35,9 @@ class RuleRenderer:
     def render(self, rule: dict) -> list[str]:
         if "raw" in rule:
             return [rule["raw"]]
-        if "action" not in rule:
-            raise BuildError(f"rule has no action: {rule!r}")
+        statements = self._statements(rule)
+        if "action" not in rule and not statements and not rule.get("counter"):
+            raise BuildError(f"rule has neither an action nor a statement: {rule!r}")
 
         addr = {k: self._addr(rule[k]) for k in ("saddr", "daddr") if k in rule}
         if addr:
@@ -60,11 +61,43 @@ class RuleRenderer:
             if rule.get("ct"):
                 parts.append("ct state " + ",".join(rule["ct"]))
             parts.extend(self._proto_ports(rule))
+            parts.extend(statements)
             if rule.get("counter"):
                 parts.append("counter")
-            parts.append(self._verdict(rule["action"]))
+            if "action" in rule:
+                parts.append(self._verdict(rule["action"]))
             lines.append(" ".join(p for p in parts if p))
         return lines
+
+    # -- statements (non-terminal: rate/quota/log/mangle) ------------------- #
+    def _statements(self, rule: dict) -> list[str]:
+        out = []
+        if "limit" in rule:
+            out.append(f"limit rate {rule['limit']}")
+        if "quota" in rule:
+            out.append(f"quota {rule['quota']}")
+        if "log" in rule:
+            out.append(self._log(rule["log"]))
+        if "set-mark" in rule:
+            out.append(f"meta mark set {rule['set-mark']}")
+        if "set-mss" in rule:
+            mss = rule["set-mss"]
+            target = "rt mtu" if str(mss) in ("pmtu", "rt-mtu", "rt_mtu") else str(mss)
+            out.append(f"tcp flags syn tcp option maxseg size set {target}")
+        return out
+
+    @staticmethod
+    def _log(value) -> str:
+        if value is True:
+            return "log"
+        parts = ["log"]
+        if value.get("prefix"):
+            parts.append(f'prefix "{value["prefix"]}"')
+        if value.get("level"):
+            parts.append(f"level {value['level']}")
+        if value.get("group") is not None:
+            parts.append(f"group {value['group']}")
+        return " ".join(parts)
 
     # -- match helpers ------------------------------------------------------ #
     def _addr(self, value: str) -> dict[str, str]:
