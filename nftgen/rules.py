@@ -27,9 +27,10 @@ def _anon(items: list[str]) -> str:
 
 
 class RuleRenderer:
-    def __init__(self, defs: Definitions, named: dict[str, NamedSet]):
+    def __init__(self, defs: Definitions, named: dict[str, NamedSet], counters=frozenset()):
         self.defs = defs
         self.named = named
+        self.counters = frozenset(counters)
 
     # -- public ------------------------------------------------------------- #
     def render(self, rule: dict) -> list[str]:
@@ -63,7 +64,7 @@ class RuleRenderer:
             parts.extend(self._proto_ports(rule))
             parts.extend(statements)
             if rule.get("counter"):
-                parts.append("counter")
+                parts.append(self._counter(rule["counter"]))
             if "action" in rule:
                 parts.append(self._verdict(rule["action"]))
             lines.append(" ".join(p for p in parts if p))
@@ -85,6 +86,16 @@ class RuleRenderer:
             target = "rt mtu" if str(mss) in ("pmtu", "rt-mtu", "rt_mtu") else str(mss)
             out.append(f"tcp flags syn tcp option maxseg size set {target}")
         return out
+
+    def _counter(self, value) -> str:
+        if value is True:
+            return "counter"
+        name = str(value)
+        if name not in self.counters:
+            raise BuildError(
+                f"counter {name!r} is not declared in the table's `counters:` list"
+            )
+        return f"counter name {name}"
 
     @staticmethod
     def _log(value) -> str:

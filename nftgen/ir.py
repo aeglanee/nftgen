@@ -69,11 +69,13 @@ class Table:
     sets: list[NamedSet] = field(default_factory=list)
     chains: list[Chain] = field(default_factory=list)
     raw: list[str] = field(default_factory=list)  # table-level raw object declarations
+    counters: list[str] = field(default_factory=list)  # named counter objects
 
     def render(self) -> str:
         out = [f"table {self.family} {self.name} {{"]
         blocks: list[list[str]] = []
         blocks += [[f"{SET_INDENT}{r}"] for r in self.raw]
+        blocks += [[f"{SET_INDENT}counter {c} {{", f"{SET_INDENT}}}"] for c in self.counters]
         blocks += [s.render() for s in self.sets]
         blocks += [c.render() for c in self.chains]
         for i, block in enumerate(blocks):

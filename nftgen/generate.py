@@ -50,7 +50,8 @@ def generate(
     for tspec in policy.get("tables", []):
         sets_spec = _resolve_list(tspec.get("sets", []), "sets", include_base)
         sets = build_sets(sets_spec, defs)
-        renderer = RuleRenderer(defs, {s.name: s for s in sets})
+        counters = list(tspec.get("counters", []))
+        renderer = RuleRenderer(defs, {s.name: s for s in sets}, counters=set(counters))
 
         chains = []
         for cspec in tspec.get("chains", []):
@@ -65,6 +66,7 @@ def generate(
                 sets=sets,
                 chains=chains,
                 raw=list(tspec.get("raw", [])),
+                counters=counters,
             )
         )
 
