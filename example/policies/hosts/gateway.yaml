@@ -1,0 +1,124 @@
+# gateway.yaml — a showcase exercising every nftgen capability (Phases 0–6).
+#   generate:  nftgen example/policies/hosts/gateway.yaml
+site: site1                                     # per-site overlay: local_users -> site1
+
+tables:
+  - family: inet
+    name: filter
+
+    # 6B — named counters (read with: nft list counter inet filter <name>)
+    counters:
+      - bad_tcp
+      - web_hits
+      - ssh_excess
+
+    # 6C — flowtable; devices resolved from the wan / lan_if interface groups
+    flowtables:
+      - name: ft
+        hook: ingress
+        priority: filter
+        devices: [wan, lan_if]
+
+    # named sets (declared) + a bare, live-populated blocklist
+    sets:
+      - mgmt
+      - webhosts
+      - web
+      - ssh
+      - wan
+      - lan_if
+      - name: blocklist
+        type: ipv4_addr
+        flags: [interval, timeout]
+
+    chains:
+      - name: input
+        hook: input
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            flow-offload: ft                    # 6C — offload established flows
+            action: accept
+          - saddr: "@blocklist"
+            counter: true
+            action: drop
+          - vmap:                               # 6D — dispatch by interface
+              key: iif
+              map:
+                wan0:
+                  jump: input_wan
+                lan0:
+                  jump: input_lan
+
+      - name: input_wan                         # regular chain (reached by the vmap)
+        rules:
+          - flags:                              # 6E — drop invalid TCP flag combos
+              - match: none
+                mask: all
+              - match: [fin, syn]
+                mask: [fin, syn]
+              - match: [fin]
+                mask: [fin, ack]
+            counter: bad_tcp
+            action: drop
+          - proto: tcp                          # 6A — rate-limit new SSH...
+            dport: ssh
+            ct: [new]
+            limit: 4/minute
+            action: accept
+          - proto: tcp                          # ...then log + drop the excess
+            dport: ssh
+            log:
+              prefix: "ssh-excess "
+              level: info
+            counter: ssh_excess
+            action: drop
+          - proto: tcp
+            dport: web
+            counter: web_hits
+            action: accept
+
+      - name: input_lan
+        rules:
+          - proto: icmp
+            action: accept
+          - saddr: mgmt
+            proto: tcp
+            dport: ssh
+            action: accept
+
+      - name: forward
+        hook: forward
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - proto: tcp
+            set-mss: pmtu                        # 6A — MSS clamp (statement-only)
+          - iif: lan_if
+            oif: wan
+            set-mark: "0x1"                      # 6A — fwmark (statement-only)
+          - iif: lan_if
+            oif: wan
+            saddr: local_users                   # per-site overlay -> users_site1
+            action: accept
+          - saddr: webhosts                      # 6A — quota: cut off after 10 GiB
+            quota: over 10 gbytes
+            counter: true
+            action: drop
+          - raw: "udp dport 5060 ip dscp set ef" # escape hatch (dscp not yet structured)
+
+  - family: inet
+    name: nat
+    chains:
+      - name: postrouting
+        hook: postrouting
+        type: nat
+        priority: srcnat
+        policy: accept
+        rules:
+          - oif: wan
+            saddr: local_users
+            action: masquerade

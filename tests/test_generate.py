@@ -19,10 +19,26 @@ def _gen(host: str) -> str:
     )
 
 
-@pytest.mark.parametrize("host", ["router1.yaml", "router2.yaml"])
+@pytest.mark.parametrize("host", ["router1.yaml", "router2.yaml", "gateway.yaml"])
 def test_matches_golden(host):
     expected = (GOLDEN / host.replace(".yaml", ".nft")).read_text()
     assert _gen(host) == expected
+
+
+def test_gateway_showcases_all_capabilities():
+    out = _gen("gateway.yaml")
+    assert "flowtable ft {" in out                                  # 6C
+    assert "flow add @ft" in out
+    assert "counter bad_tcp {" in out                               # 6B
+    assert "iifname vmap {" in out                                  # 6D
+    assert "tcp flags & (fin|syn) == (fin|syn) counter name bad_tcp drop" in out  # 6E + named counter
+    assert "limit rate 4/minute" in out                             # 6A limit
+    assert 'log prefix "ssh-excess "' in out                        # 6A log
+    assert "maxseg size set rt mtu" in out                          # 6A mss
+    assert "meta mark set 0x1" in out                               # 6A mark
+    assert "quota over 10 gbytes" in out                            # 6A quota
+    assert "ip saddr 192.168.10.0/24" in out                        # per-site overlay
+    assert "ip dscp set ef" in out                                  # raw hatch
 
 
 def test_site_overlay_differs_per_host():
