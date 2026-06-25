@@ -1,0 +1,49 @@
+# nftgen — TODO / roadmap
+
+Phases 0–6 are done (skeleton → defs → named sets → rules/chains → host→.nft →
+nft -c validation → primitives A–E). What's left, à la carte:
+
+## Promote remaining `raw:` recipes to structured keys
+- [ ] **set-dscp** — deferred from Phase 6A because DSCP is family-specific
+      (`ip dscp set` vs `ip6 dscp set`). Needs to render per-family (like
+      addresses do) or require a family-scoped rule. `raw:` works meanwhile.
+- [ ] **concatenations** — `saddr . dport @set` matches; needs a concat-typed
+      set declaration too. Likely `match-pairs:` + a concat set type.
+- [ ] **named / reusable maps** — declare a table-level `maps:` (verdict maps,
+      or key→value maps for dnat targets); reference from a `vmap:` rule or a
+      dnat map. (Phase 6D did inline vmaps only.)
+- [ ] more meta matches (mark, pkttype, skuid, …), `redirect` action, ct mark.
+
+## Output
+- [ ] **JSON emitter** — a second emitter on the same IR (libnftables JSON), for
+      `nft -j` apply + round-tripping + live `add element`. The IR was built so
+      this is additive (Table/Set/Chain/Rule already model the objects).
+
+## Testing & infra
+- [ ] **Vagrant behavioral harness** — spin a VM, apply the generated `.nft`,
+      probe with nc/curl/nmap. This validates *semantics* (does the firewall
+      behave), not just `nft -c` syntax. The real-trust test.
+- [ ] **own venv + CI** — the repo currently borrows the aerleon `.venv` for
+      dev. Give it its own venv; add CI that runs `pytest` and `nft -c` (the 3
+      skipped validation tests light up on a box with nftables).
+
+## DX / polish
+- [ ] **nftgen JSON schema** for def + policy files. Right now the editor
+      mis-applies *Aerleon's* schema (the bogus "Missing property terms" /
+      "Network Definition" errors all over the example). A schema fixes that and
+      gives autocompletion.
+- [ ] update **DESIGN.md / RAW.md** to mark which `raw:` recipes are now
+      structured (A–E), and document statements / counters / flowtables / vmaps /
+      flags / per-table `raw:` in the spec.
+- [ ] **multi-site / `local`** is built in the defs loader (Phase 1) and wired
+      via `site:` (Phase 4). Possible later: layered scopes (`site:` as a list →
+      global → region → site), and an inline per-host `local:` override.
+
+## Notes / decisions already made (don't re-litigate)
+- Mirror nftables structure; author your own chains; no optimizer.
+- A definition becomes a **named set** only when listed under a table's `sets:`;
+  else it inlines. Named set = single family (mixed → error, split `_v4`/`_v6`).
+- Services carry proto (`22/tcp`) but emit a proto-agnostic `inet_service` set;
+  the rule states the proto (kills the tcp/udp cross-product footgun).
+- `raw:` (per-rule and per-table) is the escape hatch — nothing is ever blocked.
+- ct state is authored, never auto-injected; counters only where you ask.
