@@ -5,7 +5,7 @@ import argparse
 import pathlib
 import sys
 
-from nftgen import __version__
+from nftgen import __version__, validate
 from nftgen.generate import generate
 
 
@@ -20,6 +20,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base", help="include base dir (default: the policies dir)")
     parser.add_argument("--sites", help="sites dir (default: <root>/sites)")
     parser.add_argument("--out", help="output .nft file (default: stdout)")
+    parser.add_argument(
+        "--check", action="store_true", help="validate the output with `nft -c -f`"
+    )
     return parser
 
 
@@ -52,6 +55,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {out}", file=sys.stderr)
     else:
         sys.stdout.write(text)
+
+    if args.check:
+        if not validate.nft_available():
+            print("nftgen: --check requested but `nft` was not found", file=sys.stderr)
+            return 2
+        result = validate.check(text)
+        if result.ok:
+            print("nftgen: nft -c passed", file=sys.stderr)
+        else:
+            print(f"nftgen: nft -c FAILED:\n{result.stderr}", file=sys.stderr)
+            return 1
     return 0
 
 
