@@ -7,6 +7,5 @@ dist/
 .venv/
 venv/
 .pytest_cache/
-# generated rulesets (regenerate from source)
+# generated rulesets (regenerate from source); golden test fixtures are kept
 **/generated/
-*.nft

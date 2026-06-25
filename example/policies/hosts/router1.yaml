@@ -24,7 +24,6 @@ tables:
     name: filter
     sets:
       - include: includes/common-sets.yaml     # shared named sets
-      - lan                                     # this host's extra
     chains:
       - name: input
         hook: input
