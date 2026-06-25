@@ -1,0 +1,12 @@
+# Common host input — diagnostics + management access. Shared by all hosts.
+# SSH is restricted to mgmt (never open).
+rules:
+  - proto: icmp
+    action: accept
+  - proto: icmpv6
+    action: accept
+  - saddr: mgmt
+    proto: tcp
+    dport: ssh
+    counter: true
+    action: accept

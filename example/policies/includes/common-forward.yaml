@@ -1,0 +1,7 @@
+# Common forward rules — never-forwardable drops + MSS clamp. Shared by routers.
+rules:
+  - daddr: no_forward_ipv4
+    counter: true
+    action: drop
+  # MSS clamp for forwarded TCP (raw: no structured key yet)
+  - raw: "tcp flags syn tcp option maxseg size set rt mtu"

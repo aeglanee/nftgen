@@ -1,0 +1,11 @@
+# Shared egress for THIS site's users — references the per-site alias
+# `local_users`, which resolves differently per host's site. Written once, used
+# by every router; each gets its own site's subnet.
+rules:
+  - iif: lan_if
+    oif: wan
+    saddr: local_users
+    proto: tcp
+    dport: web
+    counter: true
+    action: accept

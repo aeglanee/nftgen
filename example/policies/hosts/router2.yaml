@@ -1,0 +1,55 @@
+# router2 — site2 edge router. Nearly identical to router1: same COMMON includes,
+# only `site:` (and any UNIQUE rules) differ. The shared rules resolve to site2's
+# groups via local_users.
+site: site2
+
+tables:
+  - family: inet
+    name: raw
+    sets:
+      - bogon_ipv4
+    chains:
+      - name: prerouting
+        hook: prerouting
+        type: filter
+        priority: raw
+        policy: accept
+        rules:
+          - include: includes/scrub.yaml
+
+  - family: inet
+    name: filter
+    sets:
+      - include: includes/common-sets.yaml
+    chains:
+      - name: input
+        hook: input
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - include: includes/common-input.yaml
+
+      - name: forward
+        hook: forward
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - include: includes/common-forward.yaml
+          - include: includes/local-egress.yaml     # LOCAL: local_users -> users_site2
+
+  - family: inet
+    name: nat
+    chains:
+      - name: postrouting
+        hook: postrouting
+        type: nat
+        priority: srcnat
+        policy: accept
+        rules:
+          - oif: wan
+            saddr: local_users
+            action: masquerade

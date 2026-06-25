@@ -1,0 +1,65 @@
+# router1 — site1 edge router.
+# Layers: COMMON (shared includes) + LOCAL (site1 via `site:`) + UNIQUE (this host).
+# `site:` selects the per-site definitions the generator merges over def/ (later
+# phase) so `local_users` resolves to site1's group.
+site: site1
+
+tables:
+  # ----- raw: early scrubbing (policy accept; only bad traffic dropped) -----
+  - family: inet
+    name: raw
+    sets:
+      - bogon_ipv4
+    chains:
+      - name: prerouting
+        hook: prerouting
+        type: filter
+        priority: raw
+        policy: accept
+        rules:
+          - include: includes/scrub.yaml       # COMMON: bogons + bad-tcp
+
+  # ----- filtering -----
+  - family: inet
+    name: filter
+    sets:
+      - include: includes/common-sets.yaml     # shared named sets
+      - lan                                     # this host's extra
+    chains:
+      - name: input
+        hook: input
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - include: includes/common-input.yaml   # COMMON: icmp + ssh-from-mgmt
+          - saddr: webhosts                        # UNIQUE: this host serves web
+            proto: tcp
+            dport: web
+            counter: true
+            action: accept
+
+      - name: forward
+        hook: forward
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - include: includes/common-forward.yaml  # COMMON: no-forward + mss
+          - include: includes/local-egress.yaml     # LOCAL: local_users -> users_site1
+
+  # ----- NAT -----
+  - family: inet
+    name: nat
+    chains:
+      - name: postrouting
+        hook: postrouting
+        type: nat
+        priority: srcnat
+        policy: accept
+        rules:
+          - oif: wan
+            saddr: local_users                      # LOCAL: site1 users
+            action: masquerade

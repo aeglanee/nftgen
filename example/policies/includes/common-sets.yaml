@@ -1,0 +1,11 @@
+# Named sets every router materialises. Pulled into a table's `sets:` with
+# `- include:`. Each host can still add its own.
+sets:
+  - mgmt
+  - webhosts
+  - web
+  - ssh
+  - wan
+  - lan_if
+  - bogon_ipv4
+  - no_forward_ipv4
