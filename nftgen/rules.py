@@ -36,6 +36,8 @@ class RuleRenderer:
     def render(self, rule: dict) -> list[str]:
         if "raw" in rule:
             return [rule["raw"]]
+        if "vmap" in rule:
+            return [self._vmap(rule["vmap"])]
         statements = self._statements(rule)
         if "action" not in rule and not statements and not rule.get("counter"):
             raise BuildError(f"rule has neither an action nor a statement: {rule!r}")
@@ -163,6 +165,20 @@ class RuleRenderer:
                 raise BuildError(f"service {value!r} has no {proto} ports")
             return _anon(ports)
         return str(value)
+
+    _VMAP_KEYS = {"iif": "iifname", "oif": "oifname", "proto": "meta l4proto"}
+
+    def _vmap(self, spec: dict) -> str:
+        key = spec.get("key")
+        keyexpr = self._VMAP_KEYS.get(key)
+        if keyexpr is None:
+            raise BuildError(f"vmap key {key!r} not supported (use iif/oif/proto)")
+        quote = key in ("iif", "oif")
+        entries = []
+        for k, verdict in spec["map"].items():
+            token = f'"{k}"' if quote else str(k)
+            entries.append(f"{token} : {self._verdict(verdict)}")
+        return f"{keyexpr} vmap {{ {', '.join(entries)} }}"
 
     def _verdict(self, action) -> str:
         if isinstance(action, dict):
