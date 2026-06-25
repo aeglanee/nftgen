@@ -26,6 +26,46 @@ def _anon(items: list[str]) -> str:
     return items[0] if len(items) == 1 else "{ " + ", ".join(items) + " }"
 
 
+_TCP_FLAGS = ("fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr")
+_TCP_ALL = ("fin", "syn", "rst", "psh", "ack", "urg")  # the 'all' keyword (excludes ecn/cwr)
+
+
+def _expand_flags(value) -> list[str]:
+    """Expand a flags value (list / 'all' / 'none' / None) to canonical flag names."""
+    if value in (None, "none", []):
+        return []
+    items = [value] if isinstance(value, str) else list(value)
+    out: list[str] = []
+    for item in items:
+        f = str(item).lower()
+        if f == "all":
+            out.extend(_TCP_ALL)
+        elif f == "none":
+            continue
+        elif f in _TCP_FLAGS:
+            out.append(f)
+        else:
+            raise BuildError(f"unknown tcp flag {item!r}")
+    return [f for f in _TCP_FLAGS if f in out]  # canonical order, deduped
+
+
+def _fmt_flags(flags: list[str]) -> str:
+    if not flags:
+        return "0x0"
+    return flags[0] if len(flags) == 1 else "(" + "|".join(flags) + ")"
+
+
+def _flag_clause(check: dict) -> str:
+    """Render one {match, mask} flag check to 'tcp flags & <mask> == <comp>'."""
+    match = _expand_flags(check.get("match", []))
+    mask = _expand_flags(check["mask"]) if check.get("mask") is not None else list(match)
+    if not mask:
+        raise BuildError(f"flags check needs a mask (examined flags): {check!r}")
+    if not set(match) <= set(mask):
+        raise BuildError(f"flags check match is not a subset of mask: {check!r}")
+    return f"tcp flags & {_fmt_flags(mask)} == {_fmt_flags(match)}"
+
+
 class RuleRenderer:
     def __init__(self, defs: Definitions, named: dict[str, NamedSet], counters=frozenset()):
         self.defs = defs
@@ -39,6 +79,7 @@ class RuleRenderer:
         if "vmap" in rule:
             return [self._vmap(rule["vmap"])]
         statements = self._statements(rule)
+        flag_clauses = self._flag_clauses(rule)
         if "action" not in rule and not statements and not rule.get("counter"):
             raise BuildError(f"rule has neither an action nor a statement: {rule!r}")
 
@@ -52,25 +93,36 @@ class RuleRenderer:
 
         lines = []
         for fam in families:
-            parts: list[str] = []
-            if "iif" in rule:
-                parts.append(f"iifname {self._iface(rule['iif'])}")
-            if "oif" in rule:
-                parts.append(f"oifname {self._iface(rule['oif'])}")
-            if "saddr" in rule:
-                parts.append(f"{fam} saddr {addr['saddr'][fam]}")
-            if "daddr" in rule:
-                parts.append(f"{fam} daddr {addr['daddr'][fam]}")
-            if rule.get("ct"):
-                parts.append("ct state " + ",".join(rule["ct"]))
-            parts.extend(self._proto_ports(rule))
-            parts.extend(statements)
-            if rule.get("counter"):
-                parts.append(self._counter(rule["counter"]))
-            if "action" in rule:
-                parts.append(self._verdict(rule["action"]))
-            lines.append(" ".join(p for p in parts if p))
+            for flag_clause in flag_clauses:
+                parts: list[str] = []
+                if "iif" in rule:
+                    parts.append(f"iifname {self._iface(rule['iif'])}")
+                if "oif" in rule:
+                    parts.append(f"oifname {self._iface(rule['oif'])}")
+                if "saddr" in rule:
+                    parts.append(f"{fam} saddr {addr['saddr'][fam]}")
+                if "daddr" in rule:
+                    parts.append(f"{fam} daddr {addr['daddr'][fam]}")
+                if rule.get("ct"):
+                    parts.append("ct state " + ",".join(rule["ct"]))
+                parts.extend(self._proto_ports(rule))
+                if flag_clause:
+                    parts.append(flag_clause)
+                parts.extend(statements)
+                if rule.get("counter"):
+                    parts.append(self._counter(rule["counter"]))
+                if "action" in rule:
+                    parts.append(self._verdict(rule["action"]))
+                lines.append(" ".join(p for p in parts if p))
         return lines
+
+    # -- tcp flags ---------------------------------------------------------- #
+    def _flag_clauses(self, rule: dict) -> list:
+        flags = rule.get("flags")
+        if flags is None:
+            return [None]
+        checks = flags if isinstance(flags, list) else [flags]
+        return [_flag_clause(c) for c in checks]
 
     # -- statements (non-terminal: rate/quota/log/mangle) ------------------- #
     def _statements(self, rule: dict) -> list[str]:
