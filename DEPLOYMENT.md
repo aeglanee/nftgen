@@ -128,19 +128,43 @@ scheduled reconcile ─ re-converge every host to git state (revert drift)
 ```
 Manual path is the same `nftgen build` + `ansible-playbook --limit`, run by hand.
 
-## 10. Integration mechanics — agreed + open
-**Agreed (2026-06-26):**
-- nftgen replaces the existing nftables role's *generation* (the common/site/host
-  hand-written `.nft` fragment globbing). nftgen emits **one complete `.nft` per
-  host**; composition is nftgen's, resolved at build time, not on-target.
-- **Two plays:** (1) localhost `nftgen build <root>` → `generated/<host>.nft`;
-  (2) ship/validate/apply per host. nftgen is a **CLI (shell out)**, not an
-  in-process plugin (DECISIONS §3.4).
+## 10. Integration mechanics (agreed 2026-06-26)
+nftgen replaces the existing nftables role's *generation* (the hand-written
+common/site/host fragment globbing). nftgen emits **one complete config per
+host**; composition is nftgen's, resolved at build time. Invoked as a **CLI
+(shell out)**, not an in-process plugin (DECISIONS §3.4).
 
-**Open (the discussion agenda — see [docs/progress.md](docs/progress.md)):**
-- **Per-host build:** how play 1 builds just one host (args/convention).
-- **Per-host apply:** how play 2 targets one host (`--limit`), on-target `nft -c`,
-  timed rollback (§6).
-- **`flush ruleset`:** whether nftgen emits it so the file is directly
-  `nft -f`-applyable and reapply-safe (needed for the §5 reconcile). Recommended.
-- **CI / change-detection:** §3–5 in practice.
+### 10.1 Deploy artifact (Shape A)
+The build output **is** the target's `/etc/nftables.conf`, shipped verbatim:
+shebang + `flush ruleset` + the host's tables (DECISIONS §5.3). So the committed
+`.nft` == the on-box config byte-for-byte, it's directly `nft -f`-applyable, and
+`flush ruleset` makes every apply an atomic replace (the §5 reconcile). *Rejected:*
+a wrapper `nftables.conf` that `flush`+`include`s a flush-free file (Shape B).
+
+### 10.2 Two-play playbook + targeting
+Naming contract (exact): `inventory_hostname` == `policies/hosts/<name>.yaml` ==
+`generated/<name>.nft`.
+- **Play 1 — build:** `hosts: all`, `run_once: true`, `delegate_to: localhost`,
+  runs `nftgen build <root>` → all hosts' files. `hosts: all` (not `localhost`)
+  so `--limit` can't skip it. `--limit` narrows *apply*, never *build*.
+  (`nftgen build --host <name>` exists for a single-host manual build.)
+- **Play 2 — apply:** `hosts: all` (filtered by `--limit`), `serial: 1`, ships
+  `generated/{{ inventory_hostname }}.nft`.
+
+`ansible-playbook nftables.yml --limit router1` → builds all once, applies router1.
+
+### 10.3 Apply + rollback (per host, `serial: 1`)
+Apply to the *live* ruleset first; persist `/etc/nftables.conf` only after
+confirm — so a lockout reverts AND a reboot stays safe (realises §6).
+1. **Ship** → staging `/etc/nftables.conf.new`.
+2. **Validate** `nft -c -f /etc/nftables.conf.new` → failure aborts; live + boot config untouched.
+3. **Snapshot** the running ruleset → `/etc/nftables.rollback.nft` (last-known-good).
+4. **Arm dead-man revert:** `systemd-run --on-active=Ns` → `nft -f /etc/nftables.rollback.nft`, cancellable.
+5. **Apply to live:** `nft -f /etc/nftables.conf.new` (atomic via flush). Boot config not yet changed.
+6. **Confirm** via reconnect (`wait_for_connection`): reachable → cancel timer +
+   promote `.new` → `/etc/nftables.conf`; locked out → timer reverts live, boot
+   config stays good, play halts.
+
+*Verify at implementation:* exact `systemd-run` flags, Debian `nftables.service`
+`ExecReload`, and `wait_for_connection` timing vs N (confirm must finish before
+the timer fires).

@@ -24,17 +24,23 @@ turn. Last updated: 2026-06-26.
 - **Integration = two-play playbook:** play 1 (localhost) `nftgen build <root>`
   generates; play 2 ships/validates/applies per host. nftgen is invoked as a
   **CLI (shell out)**, not an in-process filter/lookup plugin. (DECISIONS §3.4.)
+- **Deploy artifact = Shape A:** the build output *is* `/etc/nftables.conf` —
+  shebang + `flush ruleset` + tables, shipped verbatim. `build()` regenerates all
+  hosts; `--host` builds one. (DECISIONS §5.3, DEPLOYMENT §10.1.)
+- **Targeting:** naming contract `inventory_hostname == policies/hosts/<name>.yaml
+  == generated/<name>.nft` (exact). Build all once (`run_once`+`delegate_to:
+  localhost`); `--limit` narrows *apply* only. (DEPLOYMENT §10.2.)
+- **Apply = apply-to-live → confirm → persist**, with a `systemd-run` dead-man
+  revert, `serial: 1`, reconnect-confirm. (DEPLOYMENT §10.3.)
 
 ## Open agenda (discuss in this order)
-1. **Import mechanics** — how play 1 builds *one* host; the `build()` API +
-   directory convention (PLAN Step 2).
-2. **Apply mechanics** — how play 2 limits to one host (`--limit`), ships the
-   committed `.nft`, on-target `nft -c`, **timed rollback** (DEPLOYMENT §6).
-3. **CI / change-detection** — regenerate all, diff committed `.nft`, apply the
+1. **CI / change-detection** — regenerate all, diff committed `.nft`, apply the
    changed hosts; `committed == render` gate (DEPLOYMENT §3–5).
-4. **Capability reference** — a full table: render / can't-render yet / TODO.
-5. **`flush ruleset`** — should nftgen emit it so the file is directly
-   `nft -f`-applyable and reapply-safe? (recommended, not ratified.)
+2. **Capability reference** — a full table: render / can't-render yet / TODO.
+
+## Implementation backlog (after the design)
+Step 2 `build()` (incl. `flush ruleset` + `--host`) · Step 3 the apply role
+(rollback sequence) · Step 4 molecule/behavioral in sessrumnir. See [../PLAN.md](../PLAN.md).
 
 ## Sequencing (user priority)
 Nail nftgen functionality + verify correct nftables **first** (Step 2), **then**

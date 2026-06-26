@@ -195,6 +195,23 @@ serves manual use, future CI, and the Ansible role.
 `module_utils` form for Ansible is a *separate, optional* packaging step, not the
 primary shape.
 
+### 5.3 `build()` output is the deploy artifact (complete config, `flush ruleset`)
+`nftgen build <root>` regenerates **all** hosts → `generated/<host>.nft`; a
+`--host <name>` flag builds just one. Each file is a **complete, directly-
+applyable config**: shebang + `flush ruleset` + the host's tables. It ships
+verbatim as the target's `/etc/nftables.conf` (DEPLOYMENT §10, "Shape A").
+*Why build-all:* generation is cheap + deterministic, and change-detection needs
+every host regenerated to diff (DEPLOYMENT §4); `--host` is a manual-speed convenience.
+*Why `flush ruleset`:* makes the file a complete replaceable unit — directly
+`nft -f`-applyable, atomic, reapply-safe (the §5 reconcile). It does **not**
+violate §1.5 "explicit over magic": it's the *deploy command's* artifact (that's
+`build()`'s job), the flush is visible at the top of the output, and it injects no
+firewall *rule* behind the author's back. The lower-level `generate()` (one
+policy → text) stays flush-free for composition/embedding.
+*Rejected:* a wrapper `nftables.conf` that `flush`+`include`s a flush-free file
+(Shape B) — keeps output "purer" but breaks committed==on-box and adds
+indirection for no gain.
+
 ---
 
 ## 6. Environmental notes (not decisions, but don't re-discover)
