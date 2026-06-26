@@ -42,11 +42,30 @@ deployer — Ansible (later) ships and applies the output.
   its own venv is a TODO.)
 - **License:** Apache-2.0 + NOTICE (definitions model adapted from Aerleon).
 
-## Pointers
-- Spec & schema: [DESIGN.md](DESIGN.md) · raw cookbook: [RAW.md](RAW.md)
-- Decisions & rationale: [DECISIONS.md](DECISIONS.md)
-- Deployment / Ansible / GitOps vision: [DEPLOYMENT.md](DEPLOYMENT.md)
-- Plan & status: [PLAN.md](PLAN.md) · backlog: [TODO.md](TODO.md)
+## Docs map (how the docs are structured)
+
+Root-level Markdown = the durable, reviewed record. `docs/` = focused
+findings/proposals. Each has one job — don't duplicate across them:
+
+- **[DESIGN.md](DESIGN.md)** — the spec: the YAML schema and what it renders to.
+- **[DECISIONS.md](DECISIONS.md)** — *why* it's built this way; rationale +
+  rejected alternatives + environmental notes. Read before changing a design choice.
+- **[RAW.md](RAW.md)** — the `raw:` escape-hatch cookbook.
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** — the Ansible/GitOps target end-state (not built).
+- **[PLAN.md](PLAN.md)** — the ordered plan + current status. **[TODO.md](TODO.md)** — à-la-carte backlog.
+- **[docs/](docs/)** — findings & proposals, one topic per file:
+  - [docs/step1-review.md](docs/step1-review.md) — coverage map, test audit,
+    the `nft -c` recipe, and the bugs it found.
+  - [docs/concatenations.md](docs/concatenations.md) — the concatenation-set design proposal.
+
+When you produce a substantial review/finding, add a `docs/<topic>.md` and link
+it here so the structure stays discoverable.
+
+## nft -c on this dev box (no VM needed)
+
+`nft` is in `/nix/store/*-nftables-*/bin/nft`; plain `nft -c` fails here
+(`NoNewPrivs` blocks netlink), but `unshare -rn <nft> -c -f <file>` validates
+correctly. See [docs/step1-review.md](docs/step1-review.md) §Deliverable 3.
 
 ## Later (from sessrumnir)
 Adopt sessrumnir's `AGENTS.md` conventions, pre-commit hooks, and lint/CI setup

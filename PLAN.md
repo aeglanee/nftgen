@@ -9,19 +9,23 @@ The agreed order of work from here. Rationale and decisions live in
 This plan was written while the working session was still rooted in the *aerleon*
 repo (the build happened cross-repo). The intended next move is to **root a
 Claude session in this repo** so `CLAUDE.md` auto-loads and history files here.
-To resume: read [CLAUDE.md](CLAUDE.md) + this file, then continue **Step 1**.
+To resume: read [CLAUDE.md](CLAUDE.md) + this file. **Step 1 is done** — its
+output is [docs/step1-review.md](docs/step1-review.md); pick up the open items below.
 
-**Live thread not yet in the other docs:**
-- Step 1 must produce three artifacts (see Step 1 below): a **capability/coverage
-  map**, a **critical test audit**, and a **real `nft -c` validation path**.
-- **Biggest confidence gap:** `nft -c` *skips in the dev sandbox*, so "80 green"
-  means "matches our committed snapshots," **not** "valid nftables." Getting
-  `nft -c` to actually run (a VM/container with nftables) and validating every
-  golden through it is the highest-value next step — it turns the goldens from
-  self-referential pins into machine-verified-correct nft.
-- **Open question (unanswered):** is there a real/existing router ruleset to
-  **port** into nftgen as the coverage benchmark? Porting one real config surfaces
-  real gaps far better than a theoretical capability list. Answer this first.
+**Step 1 outcome (2026-06-26) — see [docs/step1-review.md](docs/step1-review.md):**
+
+- All three artifacts produced: coverage map, test audit, `nft -c` path.
+- **Confidence gap resolved:** `nft -c` *does* run on this dev box via
+  `unshare -rn <nft> -c -f` (no VM needed). Running it immediately found **two
+  invalid-nft strings the suite had pinned green**, both now **fixed**:
+  `quota … gbytes` and `dnat to …` in `inet` tables (family qualifier inferred
+  from the target). All three goldens now pass `nft -c`.
+- **Open question answered:** no real ruleset to port; we sketched a multi-zone
+  VLAN router as the intent benchmark. Top gap ranked by real use:
+  **concatenations**, then `reject with` / `icmp type`.
+- **Open items from Step 1:** (a) fix the dnat-in-inet bug + add a dnat golden
+  through `nft -c`; (b) wire the `unshare` fallback into `validate.py` and
+  parametrize the nft-check over *all* hosts (not just router1/router2).
 
 ## Status
 - **Done:** Phases 0–6 — skeleton → definitions → named sets → rules/chains →
@@ -32,7 +36,7 @@ To resume: read [CLAUDE.md](CLAUDE.md) + this file, then continue **Step 1**.
 
 ## The plan
 
-### Step 1 — Walkthrough + critical structure review  ⟵ next
+### Step 1 — Walkthrough + critical structure review  ✓ done → [docs/step1-review.md](docs/step1-review.md)
 Module by module (`definitions → ir → rules → generate → validate → cli`): what
 it does, how it fits, what's solid, what to change. **Three concrete deliverables**
 (not just discussion):
