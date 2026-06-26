@@ -42,6 +42,21 @@ deployer — Ansible (later) ships and applies the output.
   its own venv is a TODO.)
 - **License:** Apache-2.0 + NOTICE (definitions model adapted from Aerleon).
 
+## Interaction style
+
+- **Concise.** Short responses by default. No padding, no recap of what was just done.
+- **One problem at a time.** When the user raises multiple distinct problems in a message, list them, address the first, and explicitly note the others as pending. Don't fork the dialogue across all of them at once.
+- **Stay focused.** Don't introduce unrelated topics. Critical pushback on the *current* topic is in scope; tangents into adjacent areas are not.
+- **Ask before guessing.** If context is missing, ask for it. Don't invent a plausible answer.
+- **Granular when the user has to act.** When asking the user to perform an action (run a command, paste output, etc.), give one step, wait for the result, then give the next. Don't pre-list sequential steps whose later content depends on earlier output.
+- **Research before coding or troubleshooting.** For specific APIs, libraries, or version-dependent behavior involved in a code proposal or fix, consult current documentation rather than asserting from training. Cite what you consulted.
+- **Theory pacing: one topic per turn, back-and-forth.** For theory or design discussions, lead each turn with a header — topics queued, current, pending — and cover only the current topic. Let the user drive depth via follow-ups rather than dumping comprehensive walkthroughs. Comprehensive dumps drown information; small focused turns let the user dive deeper on what matters. Coding/mechanical turns may be denser when steps are clear.
+- **Drive next-step proposals with reasoning.** At the end of any turn where work was done, propose the next step explicitly with a one-line rationale — not just "what next?" Give a concrete recommendation; the user can override.
+- **Flag when we're out of order.** If a topic comes up that depends on a not-yet-made earlier decision (e.g., picking an ECS before defining the subsystem list), surface the dependency and recommend going up a level rather than drilling in.
+- **Maintain the progress tracker.** Treat [`docs/progress.md`](docs/progress.md) as the durable picture of where the project is. Update on milestones (ADR accepted, subsystem skeleton landed, phase complete) — not on every turn. Conversation log holds nuance; the tracker holds orientation.
+- **Discuss, agree, then capture.** Settle a design in conversation before writing it to docs. Don't edit-as-you-go — premature captures create rework when the design shifts, and the tool-call churn makes the chat hard to follow. Batch the write once we agree.
+- **Step back when a topic closes.** On finishing a topic, zoom out: does what we just built fit the overall design, stay consistent with the other parts, and actually work together? Surface integration gaps, contradictions, or stale docs *before* moving on — a locally-good decision can quietly break the global picture. Don't wait to be asked.
+
 ## Docs map (how the docs are structured)
 
 Root-level Markdown = the durable, reviewed record. `docs/` = focused
@@ -54,6 +69,8 @@ findings/proposals. Each has one job — don't duplicate across them:
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** — the Ansible/GitOps target end-state (not built).
 - **[PLAN.md](PLAN.md)** — the ordered plan + current status. **[TODO.md](TODO.md)** — à-la-carte backlog.
 - **[docs/](docs/)** — findings & proposals, one topic per file:
+  - [docs/progress.md](docs/progress.md) — **the orientation tracker** (status,
+    decided, open agenda). Read this first to see where we are.
   - [docs/step1-review.md](docs/step1-review.md) — coverage map, test audit,
     the `nft -c` recipe, and the bugs it found.
   - [docs/concatenations.md](docs/concatenations.md) — the concatenation-set design proposal.

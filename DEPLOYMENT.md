@@ -127,3 +127,20 @@ apply changed hosts, one by one ─ ship committed .nft → nft -c on target
 scheduled reconcile ─ re-converge every host to git state (revert drift)
 ```
 Manual path is the same `nftgen build` + `ansible-playbook --limit`, run by hand.
+
+## 10. Integration mechanics — agreed + open
+**Agreed (2026-06-26):**
+- nftgen replaces the existing nftables role's *generation* (the common/site/host
+  hand-written `.nft` fragment globbing). nftgen emits **one complete `.nft` per
+  host**; composition is nftgen's, resolved at build time, not on-target.
+- **Two plays:** (1) localhost `nftgen build <root>` → `generated/<host>.nft`;
+  (2) ship/validate/apply per host. nftgen is a **CLI (shell out)**, not an
+  in-process plugin (DECISIONS §3.4).
+
+**Open (the discussion agenda — see [docs/progress.md](docs/progress.md)):**
+- **Per-host build:** how play 1 builds just one host (args/convention).
+- **Per-host apply:** how play 2 targets one host (`--limit`), on-target `nft -c`,
+  timed rollback (§6).
+- **`flush ruleset`:** whether nftgen emits it so the file is directly
+  `nft -f`-applyable and reapply-safe (needed for the §5 reconcile). Recommended.
+- **CI / change-detection:** §3–5 in practice.

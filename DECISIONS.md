@@ -125,6 +125,21 @@ Definitions can reference other definitions; expansion recurses with a `seen`
 cycle guard and order-preserving dedupe.
 *Why:* composable networks/services without infinite loops or duplicate elements.
 
+### 3.4 Integration = two-play playbook, nftgen invoked as a CLI (not a plugin)
+nftgen integrates with the sessrumnir collection as a **two-play playbook**: play
+one runs `nftgen build <root>` on the controller (localhost) → `generated/
+<host>.nft`; play two ships/validates/applies per host. nftgen is called as a
+**CLI / standalone lib (shell out)**, not an in-process Ansible filter or lookup
+plugin.
+*Why:* one tested entry point shared by CLI, CI, and the role (§5.2); preserves
+manual-path parity (DEPLOYMENT §7) and committed-render change detection
+(DEPLOYMENT §4); avoids coupling nftgen into the collection's plugin path.
+*Rejected:* the **filter-plugin-over-vars** pattern the `systemd_networkd` role
+uses (`vars | compile_networkd`). That fits flat per-interface vars; nftgen reads
+a **directory tree** with its own composition, so a `| filter` is the wrong mold
+(§3.1 already rules out vars-in). A lookup plugin *could* read the directory
+in-process, but it re-adds coupling for no gain over shelling out.
+
 ---
 
 ## 4. Output & primitives (Phase 6 forms)
