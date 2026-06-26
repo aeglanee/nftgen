@@ -39,6 +39,7 @@ def test_gateway_showcases_all_capabilities():
     assert "quota over 10240 mbytes" in out                         # 6A quota
     assert "ip saddr 192.168.10.0/24" in out                        # per-site overlay
     assert "ip dscp set ef" in out                                  # raw hatch
+    assert "dnat ip to 192.168.10.50:443" in out                    # dnat, family-qualified for inet
 
 
 def test_site_overlay_differs_per_host():

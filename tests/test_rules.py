@@ -60,9 +60,17 @@ def test_standalone_proto():
 
 
 def test_actions_jump_dnat():
+    # inet tables need a family qualifier; it's inferred from the target address
     assert one({"proto": "tcp", "dport": "8443", "action": {"dnat": "192.168.1.50:443"}}) == \
-        "tcp dport 8443 dnat to 192.168.1.50:443"
+        "tcp dport 8443 dnat ip to 192.168.1.50:443"
+    assert one({"action": {"dnat": "[2001:db8::5]:443"}}) == "dnat ip6 to [2001:db8::5]:443"
+    assert one({"oif": "wan", "action": {"snat": "203.0.113.7"}}) == "oifname @wan snat ip to 203.0.113.7"
     assert one({"action": {"jump": "common_input"}}) == "jump common_input"
+
+
+def test_dnat_target_without_ip_errors():
+    with pytest.raises(BuildError):
+        R.render({"proto": "tcp", "dport": "8443", "action": {"dnat": "not-an-ip"}})
 
 
 def test_masquerade():

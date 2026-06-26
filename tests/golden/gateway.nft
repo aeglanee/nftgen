@@ -86,6 +86,11 @@ table inet filter {
 }
 
 table inet nat {
+    chain prerouting {
+        type nat hook prerouting priority -100; policy accept;
+        iifname { "wan0", "wwan0" } tcp dport 443 dnat ip to 192.168.10.50:443
+    }
+
     chain postrouting {
         type nat hook postrouting priority 100; policy accept;
         oifname { "wan0", "wwan0" } ip saddr 192.168.10.0/24 masquerade

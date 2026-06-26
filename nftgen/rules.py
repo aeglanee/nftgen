@@ -26,6 +26,29 @@ def _anon(items: list[str]) -> str:
     return items[0] if len(items) == 1 else "{ " + ", ".join(items) + " }"
 
 
+def _nat_family(target) -> str:
+    """Infer the nft family qualifier ('ip'/'ip6') from a dnat/snat target.
+
+    inet tables can't infer it, so `dnat to <addr>` is rejected there; the
+    target address itself disambiguates. Handles `host`, `host:port`,
+    `[v6]:port`, and ranges (`a-b`).
+    """
+    host = str(target)
+    if host.startswith("["):            # [2001:db8::1]:443
+        host = host[1:].split("]", 1)[0]
+    elif host.count(":") == 1:          # 10.0.0.1:443 (single colon => host:port)
+        host = host.split(":", 1)[0]
+    host = host.split("-", 1)[0]        # range a-b => first endpoint
+    try:
+        version = ipaddress.ip_address(host).version
+    except ValueError as e:
+        raise BuildError(
+            f"dnat/snat target {target!r} must contain an IP so its family "
+            f"(ip/ip6) can be set for an inet table ({e})"
+        ) from e
+    return "ip6" if version == 6 else "ip"
+
+
 _TCP_FLAGS = ("fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr")
 _TCP_ALL = ("fin", "syn", "rst", "psh", "ack", "urg")  # the 'all' keyword (excludes ecn/cwr)
 
@@ -238,7 +261,9 @@ class RuleRenderer:
             if kind in ("jump", "goto"):
                 return f"{kind} {target}"
             if kind in ("dnat", "snat"):
-                return f"{kind} to {target}"
+                # inet tables require a family qualifier (`dnat ip to`); infer it
+                # from the target address. Required in inet, accepted in ip/ip6.
+                return f"{kind} {_nat_family(target)} to {target}"
             raise BuildError(f"unknown action: {action!r}")
         return str(action)
 

@@ -33,7 +33,7 @@ def test_validate_module_is_graceful_without_nft():
 
 
 @requires_nft
-@pytest.mark.parametrize("host", ["router1.yaml", "router2.yaml"])
+@pytest.mark.parametrize("host", ["router1.yaml", "router2.yaml", "gateway.yaml"])
 def test_generated_passes_nft_check(host):
     result = validate.check(_gen(host))
     assert result.ok, result.stderr
