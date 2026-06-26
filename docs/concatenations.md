@@ -1,5 +1,21 @@
 # Finding: structured rules can't emit concatenated set lookups
 
+> **Maintainer note (2026-06-26).** This is the design proposal for the deferred
+> **concatenations** feature — see [TODO.md](../TODO.md) and Step 5 in
+> [PLAN.md](../PLAN.md). It is **not a bug**: concatenated lookups work *today*
+> via `raw:` + a bare concat set (confirmed in this doc); promoting them to a
+> structured key is an enhancement, not a fix. The root cause below was **verified
+> accurate** against `rules.py` (`render()` appends matches as independent
+> space-joined parts; `_addr`/`_port` resolve independently; no `.`-join path).
+> Two corrections to the proposal:
+> - **Priority:** framed below as "high for the tiered design," but that tiered
+>   `goto`-dispatch example is illustrative — it is **not in this repo** (our
+>   examples use vmaps). For us this is à-la-carte; rank it via the Step 1
+>   coverage map against real rules, not as a blocker.
+> - **`_VMAP_KEYS` reuse:** only *partial* — vmap's map is just `iif/oif/proto`;
+>   concat also needs family-aware `saddr/daddr` and proto-tagged `dport/sport`,
+>   so it's a broader shared table, not a literal reuse.
+
 ## Summary
 
 The generator produces the **chain-structure** half of the tiered design

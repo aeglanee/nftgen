@@ -8,7 +8,10 @@ nft -c validation → primitives A–E). What's left, à la carte:
       (`ip dscp set` vs `ip6 dscp set`). Needs to render per-family (like
       addresses do) or require a family-scoped rule. `raw:` works meanwhile.
 - [ ] **concatenations** — `saddr . dport @set` matches; needs a concat-typed
-      set declaration too. Likely `match-pairs:` + a concat set type.
+      set declaration too. Full design proposal (schema `match: [..] + set:`,
+      derive set type/elements from field types, single-family split, validation,
+      touch points) in [docs/concatenations.md](docs/concatenations.md). Verified
+      accurate vs `rules.py`; `raw:` + a bare concat set works meanwhile.
 - [ ] **named / reusable maps** — declare a table-level `maps:` (verdict maps,
       or key→value maps for dnat targets); reference from a `vmap:` rule or a
       dnat map. (Phase 6D did inline vmaps only.)
