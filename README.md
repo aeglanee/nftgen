@@ -3,8 +3,15 @@
 A small, **nftables-only** firewall-as-code generator. YAML definitions +
 host policies → a native `.nft` ruleset you keep in git and apply with `nft -f`.
 
-> Status: **early.** Phase 0 (skeleton). See [DESIGN.md](DESIGN.md) for the
-> spec/philosophy and [RAW.md](RAW.md) for the `raw:` escape-hatch cookbook.
+> Status: **working standalone generator** (Phases 0–6: definitions, named sets,
+> rules/chains, host→`.nft` with includes + per-site overlay, `nft -c` validation,
+> primitives — statements, counters, flowtables, vmaps, tcp-flags). 80 tests.
+> Ansible/CI integration is planned, not built — see [PLAN.md](PLAN.md).
+>
+> **Docs:** [DESIGN.md](DESIGN.md) (spec) · [DECISIONS.md](DECISIONS.md) (why) ·
+> [DEPLOYMENT.md](DEPLOYMENT.md) (GitOps/Ansible vision) · [PLAN.md](PLAN.md)
+> (plan & status) · [RAW.md](RAW.md) (`raw:` cookbook) · [TODO.md](TODO.md)
+> (backlog) · [CLAUDE.md](CLAUDE.md) (working guardrails).
 
 ## Idea
 
@@ -29,10 +36,14 @@ policies/
 
 See [example/](example/) for a worked multi-host example.
 
-## Usage (planned)
+## Usage
 
 ```bash
+# one host (works today)
 nftgen policies/hosts/router1.yaml --defs def --out generated/router1.nft
+
+# whole fleet from a directory (planned — see PLAN.md step 2)
+nftgen build <root>          # → generated/<host>.nft for every policies/hosts/*.yaml
 ```
 
 ## Develop
