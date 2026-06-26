@@ -36,7 +36,7 @@ def test_gateway_showcases_all_capabilities():
     assert 'log prefix "ssh-excess "' in out                        # 6A log
     assert "maxseg size set rt mtu" in out                          # 6A mss
     assert "meta mark set 0x1" in out                               # 6A mark
-    assert "quota over 10 gbytes" in out                            # 6A quota
+    assert "quota over 10240 mbytes" in out                         # 6A quota
     assert "ip saddr 192.168.10.0/24" in out                        # per-site overlay
     assert "ip dscp set ef" in out                                  # raw hatch
 

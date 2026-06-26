@@ -105,7 +105,7 @@ tables:
             saddr: local_users                   # per-site overlay -> users_site1
             action: accept
           - saddr: webhosts                      # 6A — quota: cut off after 10 GiB
-            quota: over 10 gbytes
+            quota: over 10240 mbytes
             counter: true
             action: drop
           - raw: "udp dport 5060 ip dscp set ef" # escape hatch (dscp not yet structured)

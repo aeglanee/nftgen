@@ -23,8 +23,8 @@ def test_limit():
 
 
 def test_quota():
-    assert one({"saddr": "bad", "quota": "over 1 gbytes", "action": "drop"}) == \
-        "ip saddr 192.0.2.50/32 quota over 1 gbytes drop"
+    assert one({"saddr": "bad", "quota": "over 1024 mbytes", "action": "drop"}) == \
+        "ip saddr 192.0.2.50/32 quota over 1024 mbytes drop"
 
 
 def test_log_bool_and_opts():
