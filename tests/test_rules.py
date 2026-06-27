@@ -79,6 +79,26 @@ def test_dnat_target_without_ip_errors():
         R.render({"proto": "tcp", "dport": "8443", "action": {"dnat": "not-an-ip"}})
 
 
+def test_dnat_map():
+    d = Definitions.from_mappings(
+        {"networks": {"web": ["10.0.0.10"], "db": ["10.0.0.20"]}, "services": {"https": ["443/tcp"]}}
+    )
+    r = RuleRenderer(d, {})
+    assert r.render({"iif": "eth0", "action": {"dnat": {"proto": "tcp", "map": {80: "web", "https": "db"}}}}) == \
+        ['iifname "eth0" dnat ip to tcp dport map { 80 : 10.0.0.10, 443 : 10.0.0.20 }']
+
+
+def test_dnat_map_errors():
+    d = Definitions.from_mappings({"networks": {"web": ["10.0.0.10"], "grp": ["10.0.0.1", "10.0.0.2"]}})
+    r = RuleRenderer(d, {})
+    with pytest.raises(BuildError):  # target carries a port (address-only)
+        r.render({"action": {"dnat": {"proto": "tcp", "map": {80: "10.0.0.10:8080"}}}})
+    with pytest.raises(BuildError):  # port key needs a proto
+        r.render({"action": {"dnat": {"map": {80: "web"}}}})
+    with pytest.raises(BuildError):  # target resolves to >1 address
+        r.render({"action": {"dnat": {"proto": "tcp", "map": {80: "grp"}}}})
+
+
 def test_masquerade():
     assert one({"oif": "wan", "saddr": "mgmt", "action": "masquerade"}) == \
         "oifname @wan ip saddr 192.168.9.0/24 masquerade"

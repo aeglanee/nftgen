@@ -99,10 +99,11 @@ ip saddr . tcp dport vmap { 10.0.0.1 . 22 : jump admin_in }
 ## nftgen plan
 
 - ✅ **Inline vmaps** — `vmap:` rule, keys `iif`/`oif`/`proto` → verdict (done).
+- ✅ **Inline dnat data map** — `action: {dnat: {proto: tcp, map: {80: web, 443: db}}}`
+  → `dnat ip to tcp dport map { … }` (multi-port-forward; address-only targets for now).
 - ☐ **Named verdict maps** — a table-level `maps:` declaration referenced from rules
-  (DRY + live-update).
-- ☐ **Data maps** — the dnat-target map (multi-port-forward), the genuinely new
-  capability. Needs a new IR `Map` object + a `dnat … map` rule form.
+  (DRY + live-update). Low value at our scale.
+- ☐ **Named data maps + port-translation** in a map (concat value `addr . port`).
 
 ## Gotcha (found while verifying)
 

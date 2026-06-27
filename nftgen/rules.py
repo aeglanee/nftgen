@@ -49,6 +49,13 @@ def _nat_family(target) -> str:
     return "ip6" if version == 6 else "ip"
 
 
+def _has_port(addr: str) -> bool:
+    """True if a target carries a port (host:port / [v6]:port), vs a bare address."""
+    if addr.startswith("["):
+        return "]:" in addr
+    return addr.count(":") == 1  # bare IPv6 has >1 colon; one colon == host:port
+
+
 _TCP_FLAGS = ("fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr")
 _TCP_ALL = ("fin", "syn", "rst", "psh", "ack", "urg")  # the 'all' keyword (excludes ecn/cwr)
 
@@ -318,11 +325,59 @@ class RuleRenderer:
             if kind in ("jump", "goto"):
                 return f"{kind} {target}"
             if kind in ("dnat", "snat"):
+                if isinstance(target, dict):  # map form: dnat to <proto> dport map {…}
+                    return self._nat_map(kind, target)
                 # inet tables require a family qualifier (`dnat ip to`); infer it
                 # from the target address. Required in inet, accepted in ip/ip6.
                 return f"{kind} {_nat_family(target)} to {target}"
             raise BuildError(f"unknown action: {action!r}")
         return str(action)
+
+    def _nat_map(self, kind: str, spec: dict) -> str:
+        """`dnat/snat: {proto, map, key?}` -> `dnat ip to tcp dport map { k : v, … }`."""
+        key = spec.get("key", "dport")
+        if key not in ("dport", "sport"):
+            raise BuildError(f"{kind} map key must be dport/sport, got {key!r}")
+        proto = spec.get("proto")
+        if not proto:
+            raise BuildError(f"{kind} map needs `proto:` for the {key} key")
+        mapping = spec.get("map")
+        if not mapping:
+            raise BuildError(f"{kind} map needs `map:` entries: {spec!r}")
+        entries, families = [], set()
+        for k, v in mapping.items():
+            keytok = self._map_port_key(kind, k, proto)
+            valtok = str(v)
+            if valtok in self.defs.networks:
+                addrs = self.defs.network(valtok)
+                if len(addrs) != 1:
+                    raise BuildError(
+                        f"{kind} map target {valtok!r} resolves to {len(addrs)} "
+                        f"addresses; a map target takes one"
+                    )
+                valtok = addrs[0]
+            if _has_port(valtok):
+                raise BuildError(
+                    f"{kind} map target {valtok!r} has a port; map targets are "
+                    f"address-only for now (port translation in a map is unsupported)"
+                )
+            families.add(_nat_family(valtok))
+            entries.append(f"{keytok} : {valtok}")
+        if len(families) > 1:
+            raise BuildError(f"{kind} map mixes v4 and v6 targets: {sorted(families)}")
+        fam = families.pop()
+        return f"{kind} {fam} to {proto} {key} map {{ {', '.join(entries)} }}"
+
+    def _map_port_key(self, kind: str, val, proto: str) -> str:
+        val = str(val)
+        if val in self.defs.services:
+            ports = self.defs.service_ports(val, proto)
+            if len(ports) != 1:
+                raise BuildError(
+                    f"{kind} map key service {val!r} has {len(ports)} {proto} port(s); need one"
+                )
+            return ports[0]
+        return val
 
 
 def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:

@@ -78,6 +78,7 @@ A rule may be **statement-only** (no verdict) — e.g. an MSS clamp or a fwmark.
 | `action: {goto: lan_to_wan}` | `goto lan_to_wan` |
 | `action: {dnat: "192.168.10.50:443"}` | `dnat ip to 192.168.10.50:443` (family from target) |
 | `action: {snat: "203.0.113.7"}` | `snat ip to 203.0.113.7` |
+| `action: {dnat: {proto: tcp, map: {80: web, 443: db}}}` | `dnat ip to tcp dport map { 80 : …, 443 : … }` (inline multi-port-forward; address-only targets) |
 
 ---
 
