@@ -77,6 +77,8 @@ findings/proposals. Each has one job — don't duplicate across them:
     hygiene + matching patterns (independent/cartesian vs paired/concatenation), YAML→nft.
   - [docs/sets-and-performance.md](docs/sets-and-performance.md) — nftables sets
     background: hash vs interval(tree), the complexity math, how to define for perf.
+  - [docs/maps.md](docs/maps.md) — nftables maps: verdict maps (dispatch) vs data
+    maps (dnat targets), inline vs named, each as verified nft code blocks.
   - [docs/automation/](docs/automation/) — what nftgen derives vs leaves to you,
     each as define→generate + defaults + overrides (A set-type done; B–D pending).
   - [docs/step1-review.md](docs/step1-review.md) — coverage map, test audit,

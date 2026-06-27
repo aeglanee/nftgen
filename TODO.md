@@ -10,6 +10,10 @@ nft -c validation → primitives A–E). What's left, à la carte:
       rendering a broader rule. `raw:`/`vmap:` must be a rule's only key. Tests:
       `test_unknown_key_errors`, `test_raw_must_be_alone`, `test_vmap_must_be_alone`.
 
+- [ ] **reject nft-keyword set/map names** — a set/map named after an nft keyword
+      (`fwd`, `last`, …) breaks the generated ruleset with a confusing parse error.
+      Guard against it at build time. (Found while verifying maps; see docs/maps.md.)
+
 ## Promote remaining `raw:` recipes to structured keys
 - [ ] **set-dscp** — deferred from Phase 6A because DSCP is family-specific
       (`ip dscp set` vs `ip6 dscp set`). Needs to render per-family (like
