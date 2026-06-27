@@ -12,8 +12,13 @@ turn. Last updated: 2026-06-26.
 - **Two bugs found via real `nft -c` and fixed:** `quota gbytes→mbytes`;
   `dnat`/`snat` family-qualified for `inet` tables.
 - **`validate.py`** runs `nft -c` under `unshare -rn` when direct netlink is
-  blocked → goldens validate wherever `nft` is on PATH (85 pass / 0 skipped with
-  nft available; 81 + 4 skipped without).
+  blocked → goldens validate wherever `nft` is on PATH (88 pass / 0 skipped with
+  nft available; 84 + 4 skipped without).
+- **Strict rule-key validation shipped** (#1 safety) — unknown rule keys are a
+  `BuildError`, so a typo can't silently weaken a rule. See [TODO.md](../TODO.md).
+- **Reference docs written:** [capabilities.md](capabilities.md) (render ref),
+  [best-practices.md](best-practices.md) (cookbook), [sets-and-performance.md](sets-and-performance.md),
+  and the [automation/](automation/) directory (A–D + not-automated).
 
 ## Decided
 - **nftgen ↔ sessrumnir are decoupled.** nftgen replaces the existing nftables
