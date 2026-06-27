@@ -81,7 +81,8 @@ findings/proposals. Each has one job — don't duplicate across them:
     each as define→generate + defaults + overrides (A set-type done; B–D pending).
   - [docs/step1-review.md](docs/step1-review.md) — coverage map, test audit,
     the `nft -c` recipe, and the bugs it found.
-  - [docs/concatenations.md](docs/concatenations.md) — the concatenation-set design proposal.
+  - [docs/concatenations.md](docs/concatenations.md) — the concatenation-set design proposal (why).
+  - [docs/concat-authoring.md](docs/concat-authoring.md) — concatenation tuple-authoring options + recommendation (decision pending).
 
 When you produce a substantial review/finding, add a `docs/<topic>.md` and link
 it here so the structure stays discoverable.
