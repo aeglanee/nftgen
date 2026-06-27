@@ -165,6 +165,7 @@ _CONCAT_FIELD_TYPE = {
     "saddr": "addr", "daddr": "addr",
     "sport": "inet_service", "dport": "inet_service",
     "iif": "ifname", "oif": "ifname",
+    "mark": "mark",
 }
 
 
@@ -249,6 +250,8 @@ def _resolve_concat_value(setname, field, val, proto, defs):
                 )
             val = ports[0]
         return val, None, "-" in val  # a port range needs interval
+    if kind == "mark":
+        return val, None, "-" in val  # bare fwmark number; no name resolution
     # ifname
     if val in defs.interfaces:
         devs = defs.interface(val)

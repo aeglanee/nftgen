@@ -64,6 +64,14 @@ def test_match_v6_and_iface_and_counter():
         ["iifname . ip saddr . tcp dport @f counter accept"]
 
 
+def test_mark_field():
+    sets = build_sets([{"name": "f", "concat": ["mark", "saddr"], "tuples": [["0x1", "app"]]}], DEFS)
+    assert sets[0].type == "mark . ipv4_addr"
+    assert sets[0].elements == ["0x1 . 10.0.1.10"]
+    r = RuleRenderer(DEFS, {s.name: s for s in sets})
+    assert r.render({"set": "f", "action": "accept"}) == ["meta mark . ip saddr @f accept"]
+
+
 # -- guardrails ------------------------------------------------------------- #
 def test_multivalue_field_errors():
     with pytest.raises(BuildError):

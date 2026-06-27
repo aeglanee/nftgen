@@ -8,7 +8,7 @@
 > ```yaml
 > sets:
 >   - name: db_flows
->     concat: [saddr, daddr, dport]   # field names: saddr/daddr/sport/dport/iif/oif
+>     concat: [saddr, daddr, dport]   # fields: saddr/daddr/sport/dport/iif/oif/mark
 >     proto: tcp                       # required when a port field is present
 >     tuples:
 >       - [app_host, db_host, postgres]   # literals or single-value definition names

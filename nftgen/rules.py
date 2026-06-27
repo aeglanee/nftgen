@@ -298,6 +298,8 @@ class RuleRenderer:
                 exprs.append(f"{s.concat_family} {f}")
             elif f in ("sport", "dport"):
                 exprs.append(f"{s.concat_proto} {f}")
+            elif f == "mark":
+                exprs.append("meta mark")
             else:  # iif / oif
                 exprs.append("iifname" if f == "iif" else "oifname")
         parts = [" . ".join(exprs) + f" @{name}"]
