@@ -23,7 +23,7 @@ optimization) is the "no optimizer / no magic" line — that stays yours.
 | # | Automation | Doc |
 | --- | --- | --- |
 | A | **Set type + `interval` flag** — derived from the members | [set-type.md](set-type.md) |
-| B | Family split (v4/v6) — render per family, error on incompatible mixes | _pending_ |
+| B | **Family split (v4/v6)** — render per family, error on incompatible mixes | [family-split.md](family-split.md) |
 | C | Dedup + deterministic ordering | _pending_ |
 | D | Match-expression syntax — key → nft tokens | _pending_ |
 
