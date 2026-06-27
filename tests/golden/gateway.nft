@@ -81,7 +81,6 @@ table inet filter {
         iifname @lan_if oifname @wan meta mark set 0x1
         iifname @lan_if oifname @wan ip saddr 192.168.10.0/24 accept
         ip saddr @webhosts quota over 10240 mbytes counter drop
-        udp dport 5060 ip dscp set ef
     }
 }
 

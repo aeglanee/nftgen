@@ -1,9 +1,8 @@
 # Common early scrubbing — drop obviously-bad packets. Shared by all routers,
-# pulled into a raw-priority chain. Shows both structured rules (bogon address
-# drops) and the `raw:` escape hatch (TCP-flag matching, which has no structured
-# key yet — full nft power when the schema doesn't cover something).
+# pulled into a raw-priority chain. All structured (the TCP-flag combos use the
+# `flags:` key, list form — each clause renders one drop line).
 rules:
-  # --- bogon source/destination drops (structured) ---
+  # --- bogon source/destination drops ---
   - saddr: bogon_ipv4
     counter: true
     action: drop
@@ -11,8 +10,15 @@ rules:
     counter: true
     action: drop
 
-  # --- invalid TCP flag combinations (raw nft, the escape hatch) ---
-  - raw: "tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 counter drop"   # null scan
-  - raw: "tcp flags & (fin|syn) == (fin|syn) counter drop"             # syn+fin
-  - raw: "tcp flags & (fin|rst) == (fin|rst) counter drop"             # fin+rst
-  - raw: "tcp flags & (fin|ack) == fin counter drop"                   # fin without ack
+  # --- invalid TCP flag combinations ---
+  - flags:
+      - match: none          # null scan
+        mask: all
+      - match: [fin, syn]    # syn+fin
+        mask: [fin, syn]
+      - match: [fin, rst]    # fin+rst
+        mask: [fin, rst]
+      - match: [fin]         # fin without ack
+        mask: [fin, ack]
+    counter: true
+    action: drop

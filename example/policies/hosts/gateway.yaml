@@ -108,7 +108,6 @@ tables:
             quota: over 10240 mbytes
             counter: true
             action: drop
-          - raw: "udp dport 5060 ip dscp set ef" # escape hatch (dscp not yet structured)
 
   - family: inet
     name: nat
