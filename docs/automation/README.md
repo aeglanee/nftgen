@@ -25,7 +25,7 @@ optimization) is the "no optimizer / no magic" line — that stays yours.
 | A | **Set type + `interval` flag** — derived from the members | [set-type.md](set-type.md) |
 | B | **Family split (v4/v6)** — render per family, error on incompatible mixes | [family-split.md](family-split.md) |
 | C | **Dedup + deterministic ordering** — only where order is irrelevant | [dedup-ordering.md](dedup-ordering.md) |
-| D | Match-expression syntax — key → nft tokens | _pending_ |
+| D | **Match-expression syntax** — key → nft tokens | [match-syntax.md](match-syntax.md) |
 
 ## Not safe to automate (stays author-defined)
 
