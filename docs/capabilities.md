@@ -47,6 +47,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | `saddr` / `daddr` | `saddr: webhosts` | `ip saddr @webhosts` | **family-aware**; named/inline/literal; renders once per common family |
 | `ct` | `ct: [established, related]` | `ct state established,related` | authored, never auto-injected |
 | `mark` | `mark: "0x1"` | `meta mark 0x1` | match an fwmark (set one with `set-mark:`) |
+| `icmp-type` | `proto: icmpv6` / `icmp-type: [nd-neighbor-solicit, …]` | `icmpv6 type { … }` | family from `proto:` (icmp/icmpv6); single or list |
 | `proto` (standalone) | `proto: icmp` | `meta l4proto icmp` | |
 | `dport` / `sport` | `proto: tcp` / `dport: web` | `tcp dport @web` (or `{ 80, 443 }`) | needs `proto:`; service name → ports |
 | `flags` | `flags: {match: [syn], mask: [syn, ack]}` | `tcp flags & (syn\|ack) == syn` | a list of clauses multiplies into several lines |
@@ -111,7 +112,6 @@ A rule may be **statement-only** (no verdict) — e.g. an MSS clamp or a fwmark.
 | Feature | `raw:` example | Promotion rank |
 | --- | --- | --- |
 | `reject with <type>` | `raw: "… reject with icmpx type admin-prohibited"` | **#1** |
-| `icmp type` match | `raw: "icmp type echo-request limit rate 5/second accept"` | #2 |
 | DSCP set | `raw: "udp dport 5060 ip dscp set ef"` | deferred (family-specific, DECISIONS §4.2) |
 | meta beyond mark (`pkttype`/`skuid`/`mark` match), ct mark/helper/label, `redirect`/`tproxy`, dynamic set ops (`add @set`), vmap on non-`iif/oif/proto` keys, rule `comment` | `raw: …` | unranked |
 
@@ -136,15 +136,14 @@ the cost, and the reason to promote a recipe once it earns a key.
 
 ## 9. Promotion queue (ranked, from real use)
 
-- ✅ **concatenations** — **done**; structured `concat:`/`tuples:` set + `set:` rule
-  ([concat-authoring.md](concat-authoring.md)).
+- ✅ **concatenations** · **`icmp type`** · **inline dnat data map** · **`mark`**
+  (read+write) — all **done** this round.
 1. **`reject with <type>`** — nicer zone-boundary rejects than silent drop.
-2. **`icmp type`** — type-level ICMP matching (echo-request, etc.).
-3. **set-dscp** (family-aware) — promote the deferred DSCP statement.
-4. **named / reusable maps** — table-level `maps:`; verdict maps and dnat-target maps.
-5. **more meta matches** (`mark`/`pkttype`/`skuid`), `redirect`, ct mark.
-6. **JSON emitter** — second emitter on the same IR (libnftables JSON).
-7. **concat follow-ons** — `proto: [tcp,udp]` list, per-row `proto` field, family auto-split.
+2. **set-dscp** (family-aware) — promote the deferred DSCP statement.
+3. **named / reusable maps** — table-level `maps:`; reusable vmaps + named data maps.
+4. **more meta matches** (`pkttype`/`skuid`), `redirect`, ct mark.
+5. **JSON emitter** — second emitter on the same IR (libnftables JSON).
+6. **concat follow-ons** — `proto: [tcp,udp]` list, per-row `proto` field, family auto-split.
 
 See [TODO.md](../TODO.md) for the full backlog; the top ranks came from porting the
 multi-zone router sketch, not speculation.

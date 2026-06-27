@@ -65,6 +65,22 @@ def test_standalone_proto():
     assert one({"proto": "icmp", "action": "accept"}) == "meta l4proto icmp accept"
 
 
+def test_icmp_type():
+    # single type, and the meta l4proto is suppressed (icmp type implies the proto)
+    assert one({"proto": "icmp", "icmp-type": "echo-request", "limit": "5/second", "action": "accept"}) == \
+        "icmp type echo-request limit rate 5/second accept"
+    # v6 + a list of types -> anon set
+    assert one({"proto": "icmpv6",
+                "icmp-type": ["nd-neighbor-solicit", "nd-neighbor-advert", "nd-router-advert"],
+                "action": "accept"}) == \
+        "icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert } accept"
+
+
+def test_icmp_type_needs_icmp_proto():
+    with pytest.raises(BuildError):
+        R.render({"proto": "tcp", "icmp-type": "echo-request", "action": "accept"})
+
+
 def test_actions_jump_dnat():
     # inet tables need a family qualifier; it's inferred from the target address
     assert one({"proto": "tcp", "dport": "8443", "action": {"dnat": "192.168.1.50:443"}}) == \

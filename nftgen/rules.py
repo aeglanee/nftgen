@@ -98,7 +98,7 @@ def _flag_clause(check: dict) -> str:
 
 _KNOWN_RULE_KEYS = frozenset({
     "iif", "oif", "saddr", "daddr", "ct", "mark", "proto", "sport", "dport", "flags",
-    "limit", "quota", "log", "set-mark", "set-mss", "flow-offload",
+    "icmp-type", "limit", "quota", "log", "set-mark", "set-mss", "flow-offload",
     "counter", "action", "raw", "vmap", "set",
 })
 
@@ -161,7 +161,17 @@ class RuleRenderer:
                     parts.append("ct state " + ",".join(rule["ct"]))
                 if "mark" in rule:
                     parts.append(f"meta mark {rule['mark']}")
-                parts.extend(self._proto_ports(rule))
+                if "icmp-type" in rule:
+                    proto = rule.get("proto")
+                    if proto not in ("icmp", "icmpv6"):
+                        raise BuildError(
+                            f"icmp-type needs `proto: icmp` or `proto: icmpv6`, got {proto!r}: {rule!r}"
+                        )
+                    types = rule["icmp-type"]
+                    types = types if isinstance(types, list) else [types]
+                    parts.append(f"{proto} type {_anon([str(t) for t in types])}")
+                else:
+                    parts.extend(self._proto_ports(rule))
                 if flag_clause:
                     parts.append(flag_clause)
                 parts.extend(statements)
