@@ -16,9 +16,20 @@ turn. Last updated: 2026-06-26.
   nft available; 84 + 4 skipped without).
 - **Strict rule-key validation shipped** (#1 safety) — unknown rule keys are a
   `BuildError`, so a typo can't silently weaken a rule. See [TODO.md](../TODO.md).
+- **`build(<root>)` + `flush` + `--host`** (Step 2 core) — fleet deploy artifacts.
+- **Feature round shipped:** concatenations, inline dnat data map, `mark`
+  (read+write), `icmp type`; examples migrated stale `raw:` → structured
+  (`flags`/`set-mss`). Suite **117** (real `nft -c` gated).
+- **JSON emitter: experimented, then shelved on branch `json-emitter`.** POC
+  emits + validates via `nft -j -c`, but it's a *parallel* re-implementation (the
+  text IR holds strings, not structured data) and `raw:` has no JSON form. Defer
+  until the apply pipeline wants `nft -j` / drift detection. See [maps.md](maps.md)/the branch.
 - **Reference docs written:** [capabilities.md](capabilities.md) (render ref),
   [best-practices.md](best-practices.md) (cookbook), [sets-and-performance.md](sets-and-performance.md),
-  and the [automation/](automation/) directory (A–D + not-automated).
+  [maps.md](maps.md), and the [automation/](automation/) directory (A–D + not-automated).
+- **⟶ Next: pivot to integration** — the generator is more than enough for a
+  homelab; the actual goal (deploy → apply → rollback) is 0% built. Prove the thin
+  end-to-end slice (PLAN Step 3).
 
 ## Decided
 - **nftgen ↔ sessrumnir are decoupled.** nftgen replaces the existing nftables
