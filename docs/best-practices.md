@@ -196,3 +196,36 @@ Paired flows are reachable via `raw:` (verified above) but lose
 validation/family-awareness/definition-composition — which is exactly why
 concatenation is the top promotion on the [roadmap](../TODO.md). See
 [capabilities.md](capabilities.md) for the full render reference.
+
+---
+
+## 6. The overall structure (the mental model)
+
+A whole policy is three layers:
+
+1. **Chain skeleton** — base chains, conntrack-early, default `drop`, and any
+   `jump`/`vmap` dispatch (§1). The structure the rules live in.
+2. **Group-to-group rules — the bulk.** Regular rules with sets:
+   `ip saddr @users ip daddr @services tcp dport @web accept`. Use these whenever
+   you want **all combinations** of the groups — the common case (~90%).
+3. **Specific paired flows — the exceptions.** A **concatenation** set of tuples,
+   for flows where only exact pairings are allowed and cross-combinations must be
+   denied.
+
+**The one question that picks layer 2 vs 3:** *do I want all combinations of the
+fields, or only specific pairings?*
+- all combinations → **group-to-group rule with sets** (layer 2).
+- only specific pairings → **concatenation** (layer 3).
+
+Never lump heterogeneous specific flows into one group-to-group rule — that allows
+the whole cross-product (too permissive). Either give them their own rules or a
+concat set.
+
+**Practical notes on concatenations:**
+- **One set per *shape*** (field combo) — a set's type is fixed. In practice that's
+  usually just `saddr.daddr.dport`; source-port matching is rare. So 1–2 sets, not many.
+- **tcp vs udp splits at the match** (`tcp dport` / `udp dport`) — separate rules/sets.
+- **A few specific flows?** Plain separate rules are just as fine; a concat set
+  earns its keep when there are **many**.
+- **Ranges/CIDRs in a concat are fine** — stored as ranges (interval/pipapo), not
+  expanded into individual addresses. No memory blowup; same as a normal interval set.
