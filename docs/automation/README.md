@@ -29,5 +29,7 @@ optimization) is the "no optimizer / no magic" line — that stays yours.
 
 ## Not safe to automate (stays author-defined)
 
-_pending — which flows are allowed (concatenation tuples), set-vs-inline, default
-policies, conntrack/counters placement, structure (no auto-chains)._
+See **[not-automated.md](not-automated.md)** — which flows are allowed (incl.
+concatenation tuples), chain structure (no auto-chains), default policy direction,
+set-vs-inline, conntrack/counters placement, rule order. The line:
+**mechanical + always-correct → automate (A–D); intent + policy → author.**
