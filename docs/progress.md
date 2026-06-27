@@ -33,9 +33,9 @@ turn. Last updated: 2026-06-26.
 - **Apply = apply-to-live → confirm → persist**, with a `systemd-run` dead-man
   revert, `serial: 1`, reconnect-confirm. (DEPLOYMENT §10.3.)
 
-## Open agenda
-1. **Capability reference** ← next — a full table: render / works-via-raw /
-   can't-render yet / TODO. Scopes the Step 2 functionality work.
+## Design phase: complete
+Integration design settled (#1–#4). The render reference is
+[capabilities.md](capabilities.md). Next is **implementation** — Step 2 below.
 
 ## Parked (revisit when wiring CI — does NOT affect generation)
 - **CI / change-detection.** Two-diff model agreed: **verify** (regenerate at
