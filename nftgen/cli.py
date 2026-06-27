@@ -6,7 +6,7 @@ import pathlib
 import sys
 
 from nftgen import __version__, validate
-from nftgen.generate import generate
+from nftgen.generate import build, generate
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,7 +33,41 @@ def _defaults(policy: pathlib.Path):
     return root / "def", include_base, root / "sites"
 
 
+def _build_cmd(argv: list[str]) -> int:
+    """`nftgen build <root>` — regenerate generated/<host>.nft for every host."""
+    parser = argparse.ArgumentParser(
+        prog="nftgen build",
+        description="generate generated/<host>.nft for every host under <root>",
+    )
+    parser.add_argument("root", help="project root (def/, sites/, policies/)")
+    parser.add_argument("--host", help="build only this host (default: all)")
+    parser.add_argument("--out-dir", help="output dir (default: <root>/generated)")
+    parser.add_argument(
+        "--check", action="store_true", help="validate each output with `nft -c -f`"
+    )
+    args = parser.parse_args(argv)
+
+    results = build(args.root, host=args.host)
+    out_dir = pathlib.Path(args.out_dir) if args.out_dir else pathlib.Path(args.root) / "generated"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rc = 0
+    for name, text in sorted(results.items()):
+        path = out_dir / f"{name}.nft"
+        path.write_text(text)
+        print(f"wrote {path}", file=sys.stderr)
+        if args.check and validate.can_check():
+            result = validate.check(text)
+            if not result.ok:
+                print(f"nftgen: {name}: nft -c FAILED:\n{result.stderr}", file=sys.stderr)
+                rc = 1
+    return rc
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "build":
+        return _build_cmd(argv[1:])
+
     args = build_parser().parse_args(argv)
     if not args.policy:
         build_parser().print_help()

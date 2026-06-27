@@ -51,8 +51,11 @@ Integration design settled (#1–#4). The render reference is
   Deferred: pure orchestration, no effect on generated output. (DEPLOYMENT §3–5.)
 
 ## Implementation backlog (after the design)
-Step 2 `build()` (incl. `flush ruleset` + `--host`) · Step 3 the apply role
-(rollback sequence) · Step 4 molecule/behavioral in sessrumnir. See [../PLAN.md](../PLAN.md).
+- [x] **Step 2 `build(<root>)`** — fleet generation + `flush ruleset` deploy
+      artifact + `--host` + `nftgen build` CLI. Deploy artifacts pass real `nft -c`.
+- [ ] **Concatenation** (#1 feature) — needs the tuple-authoring design decision first.
+- [ ] Step 3 the apply role (rollback sequence) · Step 4 molecule/behavioral in
+      sessrumnir. See [../PLAN.md](../PLAN.md).
 
 ## Sequencing (user priority)
 Nail nftgen functionality + verify correct nftables **first** (Step 2), **then**

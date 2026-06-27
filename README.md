@@ -39,12 +39,16 @@ See [example/](example/) for a worked multi-host example.
 ## Usage
 
 ```bash
-# one host (works today)
+# one host (composition primitive, no flush)
 nftgen policies/hosts/router1.yaml --defs def --out generated/router1.nft
 
-# whole fleet from a directory (planned — see PLAN.md step 2)
-nftgen build <root>          # → generated/<host>.nft for every policies/hosts/*.yaml
+# whole fleet from a directory (convention layout) — the deploy artifacts
+nftgen build <root>                 # → generated/<host>.nft for every policies/hosts/*.yaml
+nftgen build <root> --host router1  # just one host
 ```
+
+`build` output is a complete, applyable ruleset (`#!/usr/sbin/nft -f` +
+`flush ruleset` + tables) that ships verbatim as `/etc/nftables.conf`.
 
 ## Develop
 
