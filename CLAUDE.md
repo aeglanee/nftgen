@@ -75,6 +75,8 @@ findings/proposals. Each has one job — don't duplicate across them:
     nftgen turns YAML into (structured / raw-only / can't-express / promotion queue).
   - [docs/best-practices.md](docs/best-practices.md) — the cookbook: base-chain
     hygiene + matching patterns (independent/cartesian vs paired/concatenation), YAML→nft.
+  - [docs/sets-and-performance.md](docs/sets-and-performance.md) — nftables sets
+    background: hash vs interval(tree), the complexity math, how to define for perf.
   - [docs/step1-review.md](docs/step1-review.md) — coverage map, test audit,
     the `nft -c` recipe, and the bugs it found.
   - [docs/concatenations.md](docs/concatenations.md) — the concatenation-set design proposal.
