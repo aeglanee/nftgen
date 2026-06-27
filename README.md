@@ -58,4 +58,6 @@ python -m pytest
 
 ## License
 
-Apache-2.0. Definitions model adapted from Aerleon concepts — see [NOTICE](NOTICE).
+MIT (see [LICENSE](LICENSE)). The YAML definitions model reimplements concepts
+from [Aerleon](https://github.com/aerleon/aerleon) (Apache-2.0) clean-room — no
+Aerleon code is used; the acknowledgment is courtesy, not a license obligation.

@@ -230,6 +230,6 @@ indirection for no gain.
 nftgen is a **clean-room, nftables-only** rebuild, not the fork. The Aerleon
 nftables fork (`~/repo/aerleon`, tag `v1.16.0-nft.6`) was the exploration that
 taught us what we wanted; nftgen keeps the good ideas (definitions model — hence
-the NOTICE attribution) and drops the rest (multi-platform ACL model, optimizer,
+the README acknowledgment) and drops the rest (multi-platform ACL model, optimizer,
 silent family widening). Decisions here intentionally diverge from Aerleon where
 its behavior was a footgun (§2.2, §2.4).

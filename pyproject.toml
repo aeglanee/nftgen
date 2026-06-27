@@ -4,7 +4,7 @@ version = "0.0.1"
 description = "A small, nftables-only firewall-as-code generator (YAML -> .nft)."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = { text = "MIT" }
 authors = [{ name = "aeglanee" }]
 dependencies = ["PyYAML>=6.0"]
 

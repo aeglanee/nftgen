@@ -40,7 +40,8 @@ deployer — Ansible (later) ships and applies the output.
 - **YAML examples are block-style** (no `{ }` flow mappings) — author preference.
 - **Run tests:** `python -m pytest`. (Dev currently borrows the aerleon venv;
   its own venv is a TODO.)
-- **License:** Apache-2.0 + NOTICE (definitions model adapted from Aerleon).
+- **License:** MIT (definitions model reimplements Aerleon concepts clean-room;
+  acknowledged in README, no Aerleon code used).
 
 ## Interaction style
 
