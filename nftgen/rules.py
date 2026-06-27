@@ -89,6 +89,13 @@ def _flag_clause(check: dict) -> str:
     return f"tcp flags & {_fmt_flags(mask)} == {_fmt_flags(match)}"
 
 
+_KNOWN_RULE_KEYS = frozenset({
+    "iif", "oif", "saddr", "daddr", "ct", "proto", "sport", "dport", "flags",
+    "limit", "quota", "log", "set-mark", "set-mss", "flow-offload",
+    "counter", "action", "raw", "vmap",
+})
+
+
 class RuleRenderer:
     def __init__(self, defs: Definitions, named: dict[str, NamedSet], counters=frozenset()):
         self.defs = defs
@@ -97,9 +104,18 @@ class RuleRenderer:
 
     # -- public ------------------------------------------------------------- #
     def render(self, rule: dict) -> list[str]:
+        # Reject typos/unknown keys loudly: an unread key silently weakens a rule
+        # (e.g. `dprot:` for `dport:`) and nft -c can't catch it (still valid nft).
+        unknown = set(rule) - _KNOWN_RULE_KEYS
+        if unknown:
+            raise BuildError(f"unknown rule key(s) {sorted(unknown)}: {rule!r}")
         if "raw" in rule:
+            if len(rule) != 1:
+                raise BuildError(f"`raw:` must be a rule's only key: {rule!r}")
             return [rule["raw"]]
         if "vmap" in rule:
+            if len(rule) != 1:
+                raise BuildError(f"`vmap:` must be a rule's only key: {rule!r}")
             return [self._vmap(rule["vmap"])]
         statements = self._statements(rule)
         flag_clauses = self._flag_clauses(rule)

@@ -83,6 +83,24 @@ def test_raw_passthrough():
         ["tcp flags & (fin|syn) == (fin|syn) counter drop"]
 
 
+# -- strict key validation (typos must fail loudly, not silently weaken) ----- #
+def test_unknown_key_errors():
+    # `dprot` is a typo for `dport`; without the guard this would render a rule
+    # with no port match (silently broader) and nft -c would not catch it.
+    with pytest.raises(BuildError):
+        R.render({"saddr": "mgmt", "proto": "tcp", "dprot": "22", "action": "accept"})
+
+
+def test_raw_must_be_alone():
+    with pytest.raises(BuildError):
+        R.render({"raw": "ip saddr 10.0.0.1 accept", "action": "drop"})
+
+
+def test_vmap_must_be_alone():
+    with pytest.raises(BuildError):
+        R.render({"vmap": {"key": "iif", "map": {"wan0": "drop"}}, "action": "accept"})
+
+
 def test_explicit_at_reference():
     assert one({"saddr": "@webhosts", "action": "drop"}) == "ip saddr @webhosts drop"
 

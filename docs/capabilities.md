@@ -10,6 +10,9 @@ The authoritative reference for what the generator turns YAML into, grounded in
 > Deploy-side capabilities (the `.nft` → apply pipeline) live in
 > [DEPLOYMENT.md](../DEPLOYMENT.md), not here. This file is **generation only**.
 
+> **Strict keys:** a rule with an unknown key (e.g. `dprot:` for `dport:`) is a
+> `BuildError`, not a silently-weaker rule. `raw:`/`vmap:` must be a rule's only key.
+
 ---
 
 ## 1. Structure — tables, chains, sets, objects

@@ -3,13 +3,12 @@
 Phases 0–6 are done (skeleton → defs → named sets → rules/chains → host→.nft →
 nft -c validation → primitives A–E). What's left, à la carte:
 
-## Safety / validation (high priority)
-- [ ] **Strict rule-key validation.** `RuleRenderer.render()` reads only known
-      keys and silently ignores the rest, so a typo (`dprot:` for `dport:`)
-      renders a *broader* rule with no error and `nft -c` can't catch it. Add an
-      allowlist guard: `unknown = set(rule) - _KNOWN_KEYS` → `BuildError`. Also
-      assert `raw:`/`vmap:` appear alone (they currently short-circuit and ignore
-      sibling keys). Additive, no downside; agreed 2026-06-27.
+## Safety / validation
+- [x] **Strict rule-key validation** (done 2026-06-27). `RuleRenderer.render()`
+      now rejects unknown rule keys (`unknown = set(rule) - _KNOWN_RULE_KEYS` →
+      `BuildError`), so a typo like `dprot:` fails loudly instead of silently
+      rendering a broader rule. `raw:`/`vmap:` must be a rule's only key. Tests:
+      `test_unknown_key_errors`, `test_raw_must_be_alone`, `test_vmap_must_be_alone`.
 
 ## Promote remaining `raw:` recipes to structured keys
 - [ ] **set-dscp** — deferred from Phase 6A because DSCP is family-specific
