@@ -90,7 +90,7 @@ def _flag_clause(check: dict) -> str:
 
 
 _KNOWN_RULE_KEYS = frozenset({
-    "iif", "oif", "saddr", "daddr", "ct", "proto", "sport", "dport", "flags",
+    "iif", "oif", "saddr", "daddr", "ct", "mark", "proto", "sport", "dport", "flags",
     "limit", "quota", "log", "set-mark", "set-mss", "flow-offload",
     "counter", "action", "raw", "vmap", "set",
 })
@@ -152,6 +152,8 @@ class RuleRenderer:
                     parts.append(f"{fam} daddr {addr['daddr'][fam]}")
                 if rule.get("ct"):
                     parts.append("ct state " + ",".join(rule["ct"]))
+                if "mark" in rule:
+                    parts.append(f"meta mark {rule['mark']}")
                 parts.extend(self._proto_ports(rule))
                 if flag_clause:
                     parts.append(flag_clause)

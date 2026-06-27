@@ -46,6 +46,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | `iif` / `oif` | `iif: wan` | `iifname @wan` / `{ "wan0", … }` / `"eth9"` | named set, inline anon set, or literal |
 | `saddr` / `daddr` | `saddr: webhosts` | `ip saddr @webhosts` | **family-aware**; named/inline/literal; renders once per common family |
 | `ct` | `ct: [established, related]` | `ct state established,related` | authored, never auto-injected |
+| `mark` | `mark: "0x1"` | `meta mark 0x1` | match an fwmark (set one with `set-mark:`) |
 | `proto` (standalone) | `proto: icmp` | `meta l4proto icmp` | |
 | `dport` / `sport` | `proto: tcp` / `dport: web` | `tcp dport @web` (or `{ 80, 443 }`) | needs `proto:`; service name → ports |
 | `flags` | `flags: {match: [syn], mask: [syn, ack]}` | `tcp flags & (syn\|ack) == syn` | a list of clauses multiplies into several lines |

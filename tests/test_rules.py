@@ -49,6 +49,12 @@ def test_ct_state():
         "ct state established,related accept"
 
 
+def test_mark_match():
+    assert one({"mark": "0x1", "action": "accept"}) == "meta mark 0x1 accept"
+    assert one({"saddr": "mgmt", "mark": "0x1", "action": "drop"}) == \
+        "ip saddr 192.168.9.0/24 meta mark 0x1 drop"
+
+
 def test_service_inline_is_proto_correct():
     # dns is tcp+udp 53; inline for udp must only give the udp port
     line = one({"saddr": "mgmt", "proto": "udp", "dport": "dns", "action": "accept"})
