@@ -25,9 +25,14 @@ class BuildError(Exception):
 @dataclass
 class NamedSet:
     name: str
-    type: str  # ipv4_addr | ipv6_addr | inet_service | ifname | …
+    type: str  # ipv4_addr | ipv6_addr | inet_service | ifname | concat (a . b) | …
     elements: list[str] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
+    # concatenation metadata (None for a plain set) — lets the renderer build the
+    # `field . field @set` match from the same field list that built the type.
+    concat_fields: list[str] | None = None
+    concat_proto: str | None = None
+    concat_family: str | None = None  # 'ip' | 'ip6' | None (no address field)
 
     def render(self) -> list[str]:
         lines = [f"{SET_INDENT}set {self.name} {{", f"{BODY_INDENT}type {self.type}"]
@@ -115,7 +120,10 @@ def build_sets(sets_spec: list, defs: Definitions) -> list[NamedSet]:
         elif isinstance(entry, dict):
             if "include" in entry:
                 continue  # includes are resolved in a later phase
-            out.append(_bare_set(entry))
+            if "concat" in entry:
+                out.append(_concat_set(entry, defs))
+            else:
+                out.append(_bare_set(entry))
         else:
             raise BuildError(f"set entry must be a name or a mapping, got {entry!r}")
     return out
@@ -150,6 +158,107 @@ def _bare_set(entry: dict) -> NamedSet:
         elements=[str(e) for e in entry.get("elements", [])],
         flags=list(entry.get("flags", [])),
     )
+
+
+# concat field -> nft set-type component ("addr" resolves to ipv4_addr/ipv6_addr)
+_CONCAT_FIELD_TYPE = {
+    "saddr": "addr", "daddr": "addr",
+    "sport": "inet_service", "dport": "inet_service",
+    "iif": "ifname", "oif": "ifname",
+}
+
+
+def _concat_set(entry: dict, defs: Definitions) -> NamedSet:
+    """Build a concatenated (tuple) set from `concat:` fields + `tuples:` rows."""
+    name = entry.get("name")
+    fields = entry.get("concat")
+    if not name or not fields:
+        raise BuildError(f"concat set needs 'name' and 'concat': {entry!r}")
+    for f in fields:
+        if f not in _CONCAT_FIELD_TYPE:
+            raise BuildError(f"concat set {name!r}: unknown field {f!r} (use {sorted(_CONCAT_FIELD_TYPE)})")
+    proto = entry.get("proto")
+    if any(f in ("sport", "dport") for f in fields) and not proto:
+        raise BuildError(f"concat set {name!r}: a port field needs `proto:`")
+
+    rows: list[str] = []
+    interval = False
+    families: set[str] = set()
+    for tup in entry.get("tuples", []):
+        if not isinstance(tup, list) or len(tup) != len(fields):
+            raise BuildError(
+                f"concat set {name!r}: tuple {tup!r} must have {len(fields)} values "
+                f"(one per field {fields})"
+            )
+        parts = []
+        for f, val in zip(fields, tup):
+            token, fam, is_iv = _resolve_concat_value(name, f, val, proto, defs)
+            parts.append(token)
+            if fam:
+                families.add(fam)
+            interval = interval or is_iv
+        rows.append(" . ".join(parts))
+
+    if families == {"ip"}:
+        family = "ip"
+    elif families == {"ip6"}:
+        family = "ip6"
+    elif not families:
+        family = None
+    else:
+        raise BuildError(
+            f"concat set {name!r} mixes IPv4 and IPv6; single-family only — "
+            f"split into {name}_v4 / {name}_v6"
+        )
+
+    addr_type = "ipv4_addr" if family == "ip" else "ipv6_addr"
+    type_str = " . ".join(
+        addr_type if _CONCAT_FIELD_TYPE[f] == "addr" else _CONCAT_FIELD_TYPE[f]
+        for f in fields
+    )
+    s = NamedSet(name, type_str, rows, ["interval"] if interval else [])
+    s.concat_fields = list(fields)
+    s.concat_proto = proto
+    s.concat_family = family
+    return s
+
+
+def _resolve_concat_value(setname, field, val, proto, defs):
+    """Resolve one tuple value -> (nft token, family|None, needs_interval)."""
+    kind = _CONCAT_FIELD_TYPE[field]
+    val = str(val)
+    if kind == "addr":
+        if val in defs.networks:
+            vals = defs.network(val)
+            if len(vals) != 1:
+                raise BuildError(
+                    f"concat set {setname!r}: field {field}={val!r} resolves to "
+                    f"{len(vals)} values; a tuple field takes one. Use a regular "
+                    f"rule with sets for group-to-group, or list separate tuples."
+                )
+            val = vals[0]
+        fam = "ip" if ipaddress.ip_network(val, strict=False).version == 4 else "ip6"
+        return val, fam, "/" in val  # prefix notation (incl. /32) needs interval
+    if kind == "inet_service":
+        if val in defs.services:
+            ports = defs.service_ports(val, proto)
+            if len(ports) != 1:
+                raise BuildError(
+                    f"concat set {setname!r}: service {val!r} has {len(ports)} "
+                    f"{proto} port(s); a tuple field takes one"
+                )
+            val = ports[0]
+        return val, None, "-" in val  # a port range needs interval
+    # ifname
+    if val in defs.interfaces:
+        devs = defs.interface(val)
+        if len(devs) != 1:
+            raise BuildError(
+                f"concat set {setname!r}: interface {val!r} resolves to {len(devs)} "
+                f"devices; a tuple field takes one"
+            )
+        val = devs[0]
+    return f'"{val}"', None, False
 
 
 def _classify_family(elements: list[str], name: str) -> str:

@@ -92,7 +92,13 @@ def _flag_clause(check: dict) -> str:
 _KNOWN_RULE_KEYS = frozenset({
     "iif", "oif", "saddr", "daddr", "ct", "proto", "sport", "dport", "flags",
     "limit", "quota", "log", "set-mark", "set-mss", "flow-offload",
-    "counter", "action", "raw", "vmap",
+    "counter", "action", "raw", "vmap", "set",
+})
+
+# a concat (`set:`) rule may only carry these alongside the set reference
+_CONCAT_RULE_KEYS = frozenset({
+    "set", "action", "counter", "limit", "quota", "log",
+    "set-mark", "set-mss", "flow-offload",
 })
 
 
@@ -117,6 +123,8 @@ class RuleRenderer:
             if len(rule) != 1:
                 raise BuildError(f"`vmap:` must be a rule's only key: {rule!r}")
             return [self._vmap(rule["vmap"])]
+        if "set" in rule:
+            return [self._concat_match(rule)]
         statements = self._statements(rule)
         flag_clauses = self._flag_clauses(rule)
         if "action" not in rule and not statements and not rule.get("counter"):
@@ -270,6 +278,35 @@ class RuleRenderer:
             token = f'"{k}"' if quote else str(k)
             entries.append(f"{token} : {self._verdict(verdict)}")
         return f"{keyexpr} vmap {{ {', '.join(entries)} }}"
+
+    def _concat_match(self, rule: dict) -> str:
+        name = rule["set"]
+        s = self.named.get(name)
+        if s is None or not s.concat_fields:
+            raise BuildError(f"`set: {name}` is not a declared concat set")
+        extra = set(rule) - _CONCAT_RULE_KEYS
+        if extra:
+            raise BuildError(
+                f"a concat rule (`set: {name}`) can't carry match keys {sorted(extra)}: {rule!r}"
+            )
+        if "action" not in rule and not self._statements(rule) and not rule.get("counter"):
+            raise BuildError(f"concat rule has neither an action nor a statement: {rule!r}")
+
+        exprs = []
+        for f in s.concat_fields:
+            if f in ("saddr", "daddr"):
+                exprs.append(f"{s.concat_family} {f}")
+            elif f in ("sport", "dport"):
+                exprs.append(f"{s.concat_proto} {f}")
+            else:  # iif / oif
+                exprs.append("iifname" if f == "iif" else "oifname")
+        parts = [" . ".join(exprs) + f" @{name}"]
+        parts.extend(self._statements(rule))
+        if rule.get("counter"):
+            parts.append(self._counter(rule["counter"]))
+        if "action" in rule:
+            parts.append(self._verdict(rule["action"]))
+        return " ".join(p for p in parts if p)
 
     def _verdict(self, action) -> str:
         if isinstance(action, dict):
