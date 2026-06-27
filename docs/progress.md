@@ -53,7 +53,8 @@ Integration design settled (#1–#4). The render reference is
 ## Implementation backlog (after the design)
 - [x] **Step 2 `build(<root>)`** — fleet generation + `flush ruleset` deploy
       artifact + `--host` + `nftgen build` CLI. Deploy artifacts pass real `nft -c`.
-- [ ] **Concatenation** (#1 feature) — needs the tuple-authoring design decision first.
+- [x] **Concatenation** (#1 feature, done) — structured `concat:`/`tuples:` set +
+      `set:` rule; nft-c verified. See [concat-authoring.md](concat-authoring.md).
 - [ ] Step 3 the apply role (rollback sequence) · Step 4 molecule/behavioral in
       sessrumnir. See [../PLAN.md](../PLAN.md).
 

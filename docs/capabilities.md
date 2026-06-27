@@ -26,6 +26,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | Named set (service) | `sets: [web]` | `set web { type inet_service; elements = { 80, 443 } }` |
 | Named set (interface) | `sets: [wan]` | `set wan { type ifname; elements = { "wan0", "wwan0" } }` |
 | Bare / live set | `{name: blocklist, type: ipv4_addr, flags: [interval, timeout]}` | empty set, filled at runtime via `nft add element` |
+| Concat set | `{name: f, concat: [saddr, daddr, dport], proto: tcp, tuples: [...]}` | `set f { type ipv4_addr . ipv4_addr . inet_service; elements = { a.b.c, … } }` (paired flows; rule refs it with `set: f` → `ip saddr . ip daddr . tcp dport @f`) |
 | Named counter | table `counters: [bad_tcp]` | `counter bad_tcp { }` |
 | Flowtable | table `flowtables: [{name: ft, devices: [wan]}]` | `flowtable ft { hook ingress priority 0; devices = { "wan0" } }` |
 | Table-level raw | table `raw: ["…"]` | verbatim object declaration inside the table |
@@ -107,9 +108,8 @@ A rule may be **statement-only** (no verdict) — e.g. an MSS clamp or a fwmark.
 
 | Feature | `raw:` example | Promotion rank |
 | --- | --- | --- |
-| concatenations | `raw: "ip daddr . tcp dport @svc_pairs accept"` | **#2** ([proposal](concatenations.md)) |
-| `reject with <type>` | `raw: "… reject with icmpx type admin-prohibited"` | #3 |
-| `icmp type` match | `raw: "icmp type echo-request limit rate 5/second accept"` | #4 |
+| `reject with <type>` | `raw: "… reject with icmpx type admin-prohibited"` | **#1** |
+| `icmp type` match | `raw: "icmp type echo-request limit rate 5/second accept"` | #2 |
 | DSCP set | `raw: "udp dport 5060 ip dscp set ef"` | deferred (family-specific, DECISIONS §4.2) |
 | meta beyond mark (`pkttype`/`skuid`/`mark` match), ct mark/helper/label, `redirect`/`tproxy`, dynamic set ops (`add @set`), vmap on non-`iif/oif/proto` keys, rule `comment` | `raw: …` | unranked |
 
@@ -134,14 +134,15 @@ the cost, and the reason to promote a recipe once it earns a key.
 
 ## 9. Promotion queue (ranked, from real use)
 
-1. **concatenations** — `match: [...] + set:` → `field . field @set`; derive the
-   concat set from definitions ([proposal](concatenations.md)).
-2. **`reject with <type>`** — nicer zone-boundary rejects than silent drop.
-3. **`icmp type`** — type-level ICMP matching (echo-request, etc.).
-4. **set-dscp** (family-aware) — promote the deferred DSCP statement.
-5. **named / reusable maps** — table-level `maps:`; verdict maps and dnat-target maps.
-6. **more meta matches** (`mark`/`pkttype`/`skuid`), `redirect`, ct mark.
-7. **JSON emitter** — second emitter on the same IR (libnftables JSON).
+- ✅ **concatenations** — **done**; structured `concat:`/`tuples:` set + `set:` rule
+  ([concat-authoring.md](concat-authoring.md)).
+1. **`reject with <type>`** — nicer zone-boundary rejects than silent drop.
+2. **`icmp type`** — type-level ICMP matching (echo-request, etc.).
+3. **set-dscp** (family-aware) — promote the deferred DSCP statement.
+4. **named / reusable maps** — table-level `maps:`; verdict maps and dnat-target maps.
+5. **more meta matches** (`mark`/`pkttype`/`skuid`), `redirect`, ct mark.
+6. **JSON emitter** — second emitter on the same IR (libnftables JSON).
+7. **concat follow-ons** — `proto: [tcp,udp]` list, per-row `proto` field, family auto-split.
 
-See [TODO.md](../TODO.md) for the full backlog; ranks 1–3 came from porting the
+See [TODO.md](../TODO.md) for the full backlog; the top ranks came from porting the
 multi-zone router sketch, not speculation.

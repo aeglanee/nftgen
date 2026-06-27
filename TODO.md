@@ -14,11 +14,11 @@ nft -c validation → primitives A–E). What's left, à la carte:
 - [ ] **set-dscp** — deferred from Phase 6A because DSCP is family-specific
       (`ip dscp set` vs `ip6 dscp set`). Needs to render per-family (like
       addresses do) or require a family-scoped rule. `raw:` works meanwhile.
-- [ ] **concatenations** — `saddr . dport @set` matches; needs a concat-typed
-      set declaration too. Full design proposal (schema `match: [..] + set:`,
-      derive set type/elements from field types, single-family split, validation,
-      touch points) in [docs/concatenations.md](docs/concatenations.md). Verified
-      accurate vs `rules.py`; `raw:` + a bare concat set works meanwhile.
+- [x] **concatenations** (done 2026-06-27) — structured `concat:`/`proto:`/`tuples:`
+      set + `set:` rule; derives type, resolves names, auto-interval, single-family,
+      one-element-per-field validation. See [docs/concat-authoring.md](docs/concat-authoring.md),
+      `tests/test_concat.py`. Follow-ons: `proto: [tcp,udp]` list, per-row `proto`
+      field, family auto-split (`_v4`/`_v6`).
 - [ ] **named / reusable maps** — declare a table-level `maps:` (verdict maps,
       or key→value maps for dnat targets); reference from a `vmap:` rule or a
       dnat map. (Phase 6D did inline vmaps only.)

@@ -1,10 +1,28 @@
 # Concatenation: how to author the tuples (options)
 
-> **Status: decision pending.** This presents the authoring options for the
-> concatenation feature (the #1 promotion) and a recommendation. The *why*
-> (cartesian vs paired, root cause, the raw workaround) is in
-> [concatenations.md](concatenations.md); the use-case framing is in
-> [best-practices.md](best-practices.md) §2.
+> **Status: BUILT — Option 1.** The schema below is implemented (see
+> `tests/test_concat.py`). The options/comparison are kept as the decision record.
+> *Refinement during build:* the proto moved out of the field list to a set-level
+> `proto:` key (cleaner than the inline `{dport: tcp}`):
+>
+> ```yaml
+> sets:
+>   - name: db_flows
+>     concat: [saddr, daddr, dport]   # field names: saddr/daddr/sport/dport/iif/oif
+>     proto: tcp                       # required when a port field is present
+>     tuples:
+>       - [app_host, db_host, postgres]   # literals or single-value definition names
+>       - [10.0.1.11, 192.0.2.21, 8443]
+> rules:
+>   - set: db_flows
+>     action: accept
+> ```
+>
+> nftgen derives the type, resolves names via definitions, auto-adds `interval` for
+> ranges, family-splits errors on mixed v4/v6, and enforces **one element per field**
+> (multi-value → error → use a regular rule). Single-proto for now; `proto: [tcp,udp]`
+> and per-row `proto` field are follow-ons. The *why* (cartesian vs paired) is in
+> [concatenations.md](concatenations.md) and [best-practices.md](best-practices.md) §2/§6.
 
 Concatenation expresses **specific paired flows** — "client A may reach server X
 *only* on 443, client B server Y *only* on 5432" — as a single set lookup over a
