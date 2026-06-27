@@ -33,10 +33,17 @@ turn. Last updated: 2026-06-26.
 - **Apply = apply-to-live → confirm → persist**, with a `systemd-run` dead-man
   revert, `serial: 1`, reconnect-confirm. (DEPLOYMENT §10.3.)
 
-## Open agenda (discuss in this order)
-1. **CI / change-detection** — regenerate all, diff committed `.nft`, apply the
-   changed hosts; `committed == render` gate (DEPLOYMENT §3–5).
-2. **Capability reference** — a full table: render / can't-render yet / TODO.
+## Open agenda
+1. **Capability reference** ← next — a full table: render / works-via-raw /
+   can't-render yet / TODO. Scopes the Step 2 functionality work.
+
+## Parked (revisit when wiring CI — does NOT affect generation)
+- **CI / change-detection.** Two-diff model agreed: **verify** (regenerate at
+  HEAD, assert `== committed`) + **apply set** (`git diff <last-applied>..HEAD --
+  generated/` → changed `.nft` = hosts). **Leaning model B** (CI regenerates →
+  commits to the *PR branch* → reviewed → apply the changed set), so a YAML-only
+  edit lets CI handle generation while the `.nft` is still reviewed pre-merge.
+  Deferred: pure orchestration, no effect on generated output. (DEPLOYMENT §3–5.)
 
 ## Implementation backlog (after the design)
 Step 2 `build()` (incl. `flush ruleset` + `--host`) · Step 3 the apply role
