@@ -229,3 +229,21 @@ concat set.
   earns its keep when there are **many**.
 - **Ranges/CIDRs in a concat are fine** — stored as ranges (interval/pipapo), not
   expanded into individual addresses. No memory blowup; same as a normal interval set.
+
+---
+
+## 7. Defining services — keep them coherent
+
+A service's ports should be **one proto**, or the **same port(s) across protos** —
+not a grab-bag of unrelated ports:
+
+```yaml
+https: [443/tcp]            # ok — single proto
+dns:   [53/tcp, 53/udp]     # ok — same port, both protos
+mixed: [53/udp, 80/tcp]     # avoid — unrelated ports under one name
+```
+
+Why: a rule/concat states one `proto:`, which selects *that proto's* ports from the
+service. nftgen **errors** if the service has **zero** ports for the chosen proto,
+but it won't second-guess a *partial* match — so a grab-bag service silently gives
+you only the matching-proto subset. Keep services coherent and that never surprises you.
