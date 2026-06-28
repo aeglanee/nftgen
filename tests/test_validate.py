@@ -20,7 +20,7 @@ requires_nft = pytest.mark.skipif(
 def _gen(host: str) -> str:
     return generate(
         EXAMPLE / "policies" / "hosts" / host,
-        defs_dir=EXAMPLE / "def",
+        defs_dir=EXAMPLE / "definitions",
         include_base=EXAMPLE / "policies",
         sites_dir=EXAMPLE / "sites",
     )

@@ -7,16 +7,16 @@ are `nft -c`-verified.
 ## Define → generate (the defaults)
 
 ```yaml
-# def/networks.yaml
+# definitions/networks.yaml
 networks:
   hosts4: [192.0.2.10, 192.0.2.11]     # exact v4 hosts
   net4:   [10.0.0.0/8]                 # a v4 CIDR
   hosts6: [2001:db8::1, 2001:db8::2]   # exact v6 hosts
-# def/services.yaml
+# definitions/services.yaml
 services:
   ssh:  [22/tcp]                       # single port
   etcd: [2379-2380/tcp]                # a port range
-# def/interfaces.yaml
+# definitions/interfaces.yaml
 interfaces:
   wan: [wan0, wwan0]
 ```

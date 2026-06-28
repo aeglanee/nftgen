@@ -27,12 +27,12 @@ A project is a directory (`<root>`) with a fixed convention. `nftgen build
 
 ```text
 <root>/
-├── def/                     # global named definitions (merged: every *.yaml)
+├── definitions/            # global named definitions (merged: every *.yaml)
 │   ├── networks.yaml        #   networks:   name -> [cidr | name ...]
 │   ├── services.yaml        #   services:   name -> [port/proto ...]
 │   └── interfaces.yaml      #   interfaces: name -> [ifname ...]
 ├── sites/                   # per-site definition overlays
-│   ├── site1.yaml           #   a host's `site: site1` merges this over def/
+│   ├── site1.yaml           #   a host's `site: site1` merges this over definitions/
 │   └── site2.yaml
 ├── policies/                # the include base (`include:` paths resolve here)
 │   ├── includes/            #   reusable rule/set fragments
@@ -48,12 +48,12 @@ A project is a directory (`<root>`) with a fixed convention. `nftgen build
     └── ...
 ```
 
-- **`def/`** — global definitions. Every `*.y{,a}ml` is merged by category
+- **`definitions/`** — global definitions. Every `*.y{,a}ml` is merged by category
   (`networks` / `services` / `interfaces`); a duplicate name across files is an
   error. Filenames are organizational only — the loader merges by the top-level
   key inside.
 - **`sites/`** — per-site overlays. A host with `site: site1` gets
-  `sites/site1.yaml` merged *over* `def/`, so a shared name (e.g. `local_users`)
+  `sites/site1.yaml` merged *over* `definitions/`, so a shared name (e.g. `local_users`)
   resolves to that site's value.
 - **`policies/includes/`** — fragments holding a `sets:` and/or `rules:` list,
   pulled into a host via `- include: includes/<file>.yaml`. Paths resolve
@@ -99,7 +99,7 @@ worked example lives under [example/](example/).
 ## Definitions (composable, merged across files)
 
 ```yaml
-# def/networks.yaml
+# definitions/networks.yaml
 networks:
   lan:      [192.168.1.0/24]
   mgmt:     [192.168.9.0/24]
@@ -107,7 +107,7 @@ networks:
   trusted:  [lan, mgmt]            # composition: names expand, literals stay
 ```
 ```yaml
-# def/services.yaml   (port carries proto; emitted as a proto-agnostic set,
+# definitions/services.yaml   (port carries proto; emitted as a proto-agnostic set,
 #                      the protocol is stated on the rule — kills tcp/udp mixups)
 services:
   ssh: [22/tcp]
@@ -115,7 +115,7 @@ services:
   dns: [53/tcp, 53/udp]
 ```
 ```yaml
-# def/interfaces.yaml
+# definitions/interfaces.yaml
 interfaces:
   wan:    [wan0, wwan0]
   lan_if: [lan0]                   # named distinctly from network `lan`

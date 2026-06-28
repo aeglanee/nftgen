@@ -62,7 +62,7 @@ actually changed get applied; identical renders are skipped). This relies on
 **deterministic output** (DECISIONS.md §2.5).
 
 ## 5. Triggers: edge + level
-- **Edge-triggered** (on change to def/includes/host policy): regenerate, apply
+- **Edge-triggered** (on change to definitions/includes/host policy): regenerate, apply
   the hosts whose `.nft` changed. The fast path.
 - **Level-triggered** (scheduled reconcile, e.g. cron): re-converge to git state.
   **This is the *enforcement* of "git wins,"** not just a backstop — it's what

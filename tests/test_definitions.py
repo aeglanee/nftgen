@@ -134,8 +134,28 @@ def test_site_overlay_collision_with_common_errors():
 
 # -- loading from the example directory ------------------------------------- #
 def test_load_example_dir_and_site_overlay():
-    defs = Definitions.load(EXAMPLE / "def", site_files=[EXAMPLE / "sites" / "site1.yaml"])
+    defs = Definitions.load(EXAMPLE / "definitions", site_files=[EXAMPLE / "sites" / "site1.yaml"])
     assert defs.network("webhosts") == ["192.0.2.10", "192.0.2.11"]
     assert defs.service("web") == [("tcp", "80"), ("tcp", "443")]
     assert defs.interface("wan") == ["wan0", "wwan0"]
     assert defs.network("local_users") == ["192.168.10.0/24"]  # site1 overlay
+
+
+def test_load_recurses_into_subdirectories(tmp_path):
+    # def dir may be organised into arbitrary subdirs; all *.yaml are merged.
+    (tmp_path / "net").mkdir()
+    (tmp_path / "svc").mkdir()
+    (tmp_path / "net" / "a.yaml").write_text("networks:\n  lan: [192.168.1.0/24]\n")
+    (tmp_path / "svc" / "b.yaml").write_text("services:\n  ssh: [22/tcp]\n")
+    defs = Definitions.load(tmp_path)
+    assert defs.network("lan") == ["192.168.1.0/24"]
+    assert defs.service("ssh") == [("tcp", "22")]
+
+
+def test_load_duplicate_across_subdirectories_errors(tmp_path):
+    (tmp_path / "x").mkdir()
+    (tmp_path / "y").mkdir()
+    (tmp_path / "x" / "one.yaml").write_text("networks:\n  lan: [192.168.1.0/24]\n")
+    (tmp_path / "y" / "two.yaml").write_text("networks:\n  lan: [192.168.2.0/24]\n")
+    with pytest.raises(DefinitionError):
+        Definitions.load(tmp_path)

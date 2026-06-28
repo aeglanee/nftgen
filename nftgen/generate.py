@@ -95,7 +95,7 @@ def build(
     contract (DEPLOYMENT §10.2).
     """
     root = pathlib.Path(root)
-    defs_dir = root / "def"
+    defs_dir = root / "definitions"
     include_base = root / "policies"
     sites_dir = root / "sites"
     hosts_dir = root / "policies" / "hosts"

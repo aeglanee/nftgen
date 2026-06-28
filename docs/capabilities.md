@@ -101,7 +101,7 @@ A rule may be **statement-only** (no verdict) — e.g. an MSS clamp or a fwmark.
 | services | `dns: [53/tcp, 53/udp]` | `port/proto`; emits proto-agnostic `inet_service`; proto stated on the rule |
 | interfaces | `wan: [wan0, wwan0]` | device names + composition |
 | composition | `trusted: [lan, mgmt]` | names expand recursively (cycle-guarded, deduped) |
-| site overlay | host `site: site1` | `def/` + `sites/<site>.yaml` (additive; collision = error) |
+| site overlay | host `site: site1` | `definitions/` + `sites/<site>.yaml` (additive; collision = error) |
 | includes | `- include: …` | shared rule/set fragments, nested-resolvable |
 | named vs inline | listed in a table's `sets:` or not | named `@set` vs inline anonymous `{ … }` — author's call per table |
 

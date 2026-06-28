@@ -31,9 +31,9 @@ class Definitions:
     # -- construction -------------------------------------------------------- #
     @classmethod
     def load(cls, def_dir: str | pathlib.Path, site_files: Iterable[str | pathlib.Path] = ()) -> "Definitions":
-        """Merge every ``*.yaml`` in ``def_dir`` (common), then the site overlays."""
+        """Merge every ``*.yaml`` under ``def_dir`` recursively (common), then site overlays."""
         defs = cls()
-        for path in sorted(pathlib.Path(def_dir).glob("*.y*ml")):
+        for path in sorted(pathlib.Path(def_dir).rglob("*.y*ml")):
             defs._merge(yaml.safe_load(path.read_text()) or {}, str(path))
         for sf in site_files:
             defs._merge(yaml.safe_load(pathlib.Path(sf).read_text()) or {}, str(sf))

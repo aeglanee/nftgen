@@ -37,7 +37,7 @@ duplicate is dropped, first-seen order preserved (`list(dict.fromkeys(...))`).
 | **rule order in a chain** | **preserved exactly — never reordered** | first-match-wins; order is load-bearing |
 | set elements | deduped, author order kept | a set is unordered; membership ignores order |
 | per-family lines | sorted (`ip` before `ip6`) | the two lines are independent; sort just fixes the tie |
-| file merge (`def/*.yaml`) | sorted by filename | files on disk have no author order |
+| file merge (`definitions/*.yaml`) | sorted by filename | files on disk have no author order |
 
 The rule: dedup/sort touches only **set membership**, **independent per-family
 lines**, and **file-merge order** — none of which change what the firewall does.

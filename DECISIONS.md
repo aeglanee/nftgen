@@ -103,7 +103,7 @@ correctness property, not a nicety.
 
 ### 3.1 nftgen owns composition — not Ansible vars
 Composition is **nftgen's** job, done in its own files:
-- **definitions** (`def/networks|services|interfaces`) — shared, defined once;
+- **definitions** (`definitions/networks|services|interfaces`) — shared, defined once;
 - **site overlay** (`sites/<site>.yaml`) — a host selects it with `site:`;
 - **includes** (`policies/includes/*`) — shared rule/set fragments a host pulls in.
 *Why:* nftgen's composition is **richer than Ansible's var layering** and avoids
@@ -115,7 +115,7 @@ flat per-interface dict; nftgen is not flat.
 vars-in Ansible filter. (See DEPLOYMENT.md.)
 
 ### 3.2 Site overlay = additive merge, collision is an error
-`def/` is common; `sites/<site>.yaml` overlays it; a host picks one with `site:`.
+`definitions/` is common; `sites/<site>.yaml` overlays it; a host picks one with `site:`.
 Merge is additive; a key defined in both that *collides* is an error.
 *Why:* per-site values (e.g. `local_users`) differ per location but the policy is
 shared. Additive-with-collision-error keeps it predictable — no silent override.
@@ -177,7 +177,7 @@ do the wrong thing across families — `raw:` is honest meanwhile.
 
 ### 5.1 Point at a directory (convention), no config file yet
 `nftgen build <root>` works by convention from a fixed layout
-(`def/`, `sites/`, `policies/includes/`, `policies/hosts/`, output `generated/`).
+(`definitions/`, `sites/`, `policies/includes/`, `policies/hosts/`, output `generated/`).
 CLI flags override individual paths.
 *Why:* nftgen has ~nothing to configure beyond paths, and the paths are derivable
 from the root. A config file whose only job is to repeat the layout is overhead.

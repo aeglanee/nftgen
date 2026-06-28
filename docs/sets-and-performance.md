@@ -52,7 +52,7 @@ exist to replace.)
 ## 3. How you define a set in nftgen (the two places)
 
 A `@named` set comes from **two** author actions:
-1. **`def/networks.yaml`** (or services/interfaces) defines the *members*:
+1. **`definitions/networks.yaml`** (or services/interfaces) defines the *members*:
    ```yaml
    networks:
      web_servers: [192.0.2.10, 192.0.2.11]

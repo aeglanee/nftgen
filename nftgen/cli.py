@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"nftgen {__version__}")
     parser.add_argument("policy", nargs="?", help="host policy YAML file")
-    parser.add_argument("--defs", help="definitions dir (default: <root>/def)")
+    parser.add_argument("--defs", help="definitions dir (default: <root>/definitions)")
     parser.add_argument("--base", help="include base dir (default: the policies dir)")
     parser.add_argument("--sites", help="sites dir (default: <root>/sites)")
     parser.add_argument("--out", help="output .nft file (default: stdout)")
@@ -30,7 +30,7 @@ def _defaults(policy: pathlib.Path):
     """For a <root>/policies/hosts/<host>.yaml layout, infer defs/base/sites."""
     include_base = policy.parent.parent          # .../policies
     root = policy.parents[2] if len(policy.parents) >= 3 else policy.parent
-    return root / "def", include_base, root / "sites"
+    return root / "definitions", include_base, root / "sites"
 
 
 def _build_cmd(argv: list[str]) -> int:
@@ -39,7 +39,7 @@ def _build_cmd(argv: list[str]) -> int:
         prog="nftgen build",
         description="generate generated/<host>.nft for every host under <root>",
     )
-    parser.add_argument("root", help="project root (def/, sites/, policies/)")
+    parser.add_argument("root", help="project root (definitions/, sites/, policies/)")
     parser.add_argument("--host", help="build only this host (default: all)")
     parser.add_argument("--out-dir", help="output dir (default: <root>/generated)")
     parser.add_argument(

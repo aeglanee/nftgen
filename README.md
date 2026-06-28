@@ -27,7 +27,7 @@ host policies → a native `.nft` ruleset you keep in git and apply with `nft -f
 ## Layout
 
 ```
-def/                 definitions (common to every host)
+definitions/                 definitions (common to every host)
 sites/<site>.yaml    per-site definitions (selected by a host's `site:`)
 policies/
   includes/          shared rule fragments (- include:)

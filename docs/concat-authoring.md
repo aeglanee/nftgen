@@ -105,7 +105,7 @@ to misuse); more "magic" to reason about.
 ## Option 3 — A first-class `flows:` definition category
 
 ```yaml
-# def/flows.yaml  (a new category alongside networks / services / interfaces)
+# definitions/flows.yaml  (a new category alongside networks / services / interfaces)
 flows:
   db_access:
     fields: [saddr, daddr, {dport: tcp}]
@@ -120,7 +120,7 @@ rules:
     action: accept
 ```
 
-**Pros:** reusable across hosts (defined once, like networks); fits the `def/`
+**Pros:** reusable across hosts (defined once, like networks); fits the `definitions/`
 mental model.
 **Cons:** a new top-level category + a richer (fields+tuples) schema — the
 biggest change.
