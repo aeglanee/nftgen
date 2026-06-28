@@ -4,9 +4,10 @@ A **map** is a key → value lookup: nft takes a field, looks it up, and uses th
 matched value in **one** operation instead of a ladder of rules. There are two
 flavours, by *what the value is*. Every nft block below is `nft -c`-verified.
 
-> nftgen status: **inline verdict maps are done** (Phase 6D, keyed on
-> `iif`/`oif`/`proto`). **Named maps** and **data maps** are the open
-> "named/reusable maps" backlog item.
+> nftgen status: **inline verdict maps are done** (Phase 6D), keyed on
+> `iif`/`oif`/`proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`, plus
+> **concatenated** keys (`key: [iif, oif]`). **Named maps** and **data maps** are
+> the open "named/reusable maps" backlog item.
 
 ---
 
@@ -110,7 +111,9 @@ groups expand** and cartesian-product into elements:
 
 ## nftgen plan
 
-- ✅ **Inline vmaps** — `vmap:` rule, keys `iif`/`oif`/`proto` → verdict (done).
+- ✅ **Inline vmaps** — `vmap:` rule → verdict. Keys: `iif`/`oif` (interface
+  groups), `proto`, `dport`/`sport` (`th dport`, literal ports), `mark`, `state`
+  (`ct state`), and `saddr`/`daddr` (network groups, single-family). (done.)
 - ✅ **Concat verdict maps** — `vmap: {key: [iif, oif], map: [{match, verdict}]}`
   → `iifname . oifname vmap { … }`; interface groups expand (done).
 - ✅ **Inline dnat data map** — `action: {dnat: {proto: tcp, map: {80: web, 443: db}}}`

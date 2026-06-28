@@ -285,21 +285,68 @@ class RuleRenderer:
             return _anon(ports)
         return str(value)
 
-    _VMAP_KEYS = {"iif": "iifname", "oif": "oifname", "proto": "meta l4proto"}
+    _VMAP_KEYS = {
+        "iif": "iifname", "oif": "oifname", "proto": "meta l4proto",
+        "dport": "th dport", "sport": "th sport",      # transport-agnostic ports
+        "mark": "meta mark", "state": "ct state",
+    }
+    _VMAP_ADDR = {"saddr", "daddr"}                     # family-aware (single-key only)
+    _VMAP_HELP = "iif/oif/proto/dport/sport/mark/state/saddr/daddr"
 
     def _vmap(self, spec: dict) -> str:
         key = spec.get("key")
         if isinstance(key, list):                       # concatenated key
             return self._concat_vmap(spec, key)
+        if key in self._VMAP_ADDR:                      # family-aware address vmap
+            return self._addr_vmap(spec, key)
         keyexpr = self._VMAP_KEYS.get(key)
         if keyexpr is None:
-            raise BuildError(f"vmap key {key!r} not supported (use iif/oif/proto)")
+            raise BuildError(f"vmap key {key!r} not supported (use {self._VMAP_HELP})")
         quote = key in ("iif", "oif")
         entries = []
         for k, verdict in spec["map"].items():
             token = f'"{k}"' if quote else str(k)
             entries.append(f"{token} : {self._verdict(verdict)}")
         return f"{keyexpr} vmap {{ {', '.join(entries)} }}"
+
+    def _addr_vmap(self, spec: dict, key: str) -> str:
+        """Address vmap (`saddr`/`daddr`) -> `ip saddr vmap` / `ip6 saddr vmap`.
+
+        Network groups resolve to their members; a vmap is single-family, so all
+        keys must share one family (mixing v4/v6 is an error — split per family).
+        """
+        mapping = spec.get("map")
+        if not isinstance(mapping, dict):
+            raise BuildError(f"a {key} vmap needs a `map:` of address -> verdict: {spec!r}")
+        fam, entries = None, []
+        for k, verdict in mapping.items():
+            kfam, cidrs = self._vmap_addr_tokens(key, k)
+            if fam is None:
+                fam = kfam
+            elif fam != kfam:
+                raise BuildError(
+                    f"vmap {key} mixes IP families ({fam} and {kfam}); a vmap is "
+                    f"single-family — split into per-family vmaps"
+                )
+            v = self._verdict(verdict)
+            entries.extend(f"{c} : {v}" for c in cidrs)
+        return f"{fam} {key} vmap {{ {', '.join(entries)} }}"
+
+    def _vmap_addr_tokens(self, key: str, value) -> tuple:
+        """One address vmap key -> (family, [cidrs]); a network group expands."""
+        cidrs = self.defs.network(value) if value in self.defs.networks else [str(value)]
+        fams = set()
+        for a in cidrs:
+            try:
+                ver = ipaddress.ip_network(a, strict=False).version
+            except ValueError as e:
+                raise BuildError(
+                    f"vmap {key} key {a!r} is not an address/CIDR or known network ({e})"
+                ) from e
+            fams.add("ip" if ver == 4 else "ip6")
+        if len(fams) > 1:
+            raise BuildError(f"vmap {key} value {value!r} mixes IP families")
+        return fams.pop(), cidrs
 
     def _concat_vmap(self, spec: dict, keys: list) -> str:
         """Concatenated vmap, e.g. ``key: [iif, oif]`` -> ``iifname . oifname vmap``.
@@ -310,9 +357,14 @@ class RuleRenderer:
         """
         keyexprs = []
         for k in keys:
+            if k in self._VMAP_ADDR:
+                raise BuildError(
+                    f"address vmap key {k!r} isn't supported in a concat vmap yet "
+                    f"(use a single-key {k} vmap)"
+                )
             ke = self._VMAP_KEYS.get(k)
             if ke is None:
-                raise BuildError(f"vmap key {k!r} not supported (use iif/oif/proto)")
+                raise BuildError(f"vmap key {k!r} not supported (use {self._VMAP_HELP})")
             keyexprs.append(ke)
         mapping = spec.get("map")
         if not isinstance(mapping, list):
