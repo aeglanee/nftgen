@@ -112,10 +112,12 @@ groups expand** and cartesian-product into elements:
 ## nftgen plan
 
 - ✅ **Inline vmaps** — `vmap:` rule → verdict. Keys: `iif`/`oif` (interface
-  groups), `proto`, `dport`/`sport` (`th dport`, literal ports), `mark`, `state`
+  groups expand), `proto`, `dport`/`sport` (`th dport`; **services resolve** via
+  `services.yaml`, a bundle expands to its ports, else literal), `mark`, `state`
   (`ct state`), and `saddr`/`daddr` (network groups, single-family). (done.)
 - ✅ **Concat verdict maps** — `vmap: {key: [iif, oif], map: [{match, verdict}]}`
-  → `iifname . oifname vmap { … }`; interface groups expand (done).
+  → `iifname . oifname vmap { … }`; groups/services expand, and `saddr`/`daddr`
+  positions are allowed (family inferred, single-family enforced). (done.)
 - ✅ **Inline dnat data map** — `action: {dnat: {proto: tcp, map: {80: web, 443: db}}}`
   → `dnat ip to tcp dport map { … }` (multi-port-forward; address-only targets for now).
 - ☐ **Named verdict maps** — a table-level `maps:` declaration referenced from rules

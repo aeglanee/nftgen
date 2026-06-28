@@ -302,11 +302,10 @@ class RuleRenderer:
         keyexpr = self._VMAP_KEYS.get(key)
         if keyexpr is None:
             raise BuildError(f"vmap key {key!r} not supported (use {self._VMAP_HELP})")
-        quote = key in ("iif", "oif")
         entries = []
         for k, verdict in spec["map"].items():
-            token = f'"{k}"' if quote else str(k)
-            entries.append(f"{token} : {self._verdict(verdict)}")
+            v = self._verdict(verdict)
+            entries.extend(f"{tok} : {v}" for tok in self._vmap_lit_tokens(key, k))
         return f"{keyexpr} vmap {{ {', '.join(entries)} }}"
 
     def _addr_vmap(self, spec: dict, key: str) -> str:
@@ -321,13 +320,7 @@ class RuleRenderer:
         fam, entries = None, []
         for k, verdict in mapping.items():
             kfam, cidrs = self._vmap_addr_tokens(key, k)
-            if fam is None:
-                fam = kfam
-            elif fam != kfam:
-                raise BuildError(
-                    f"vmap {key} mixes IP families ({fam} and {kfam}); a vmap is "
-                    f"single-family — split into per-family vmaps"
-                )
+            fam = self._one_family(key, fam, kfam)
             v = self._verdict(verdict)
             entries.extend(f"{c} : {v}" for c in cidrs)
         return f"{fam} {key} vmap {{ {', '.join(entries)} }}"
@@ -355,24 +348,16 @@ class RuleRenderer:
         match value resolves like a normal iif/oif (an interface group expands to
         its devices, cartesian-producting into elements), proto stays literal.
         """
-        keyexprs = []
         for k in keys:
-            if k in self._VMAP_ADDR:
-                raise BuildError(
-                    f"address vmap key {k!r} isn't supported in a concat vmap yet "
-                    f"(use a single-key {k} vmap)"
-                )
-            ke = self._VMAP_KEYS.get(k)
-            if ke is None:
+            if k not in self._VMAP_KEYS and k not in self._VMAP_ADDR:
                 raise BuildError(f"vmap key {k!r} not supported (use {self._VMAP_HELP})")
-            keyexprs.append(ke)
         mapping = spec.get("map")
         if not isinstance(mapping, list):
             raise BuildError(
                 f"a concat vmap (`key: {keys}`) needs a list `map:` of "
                 f"`{{match: [...], <verdict>}}` entries: {spec!r}"
             )
-        entries = []
+        fam, entries = None, []
         for entry in mapping:
             if not isinstance(entry, dict) or "match" not in entry:
                 raise BuildError(f"concat vmap entry needs `match: [...]`: {entry!r}")
@@ -386,18 +371,40 @@ class RuleRenderer:
             if len(verdict) != 1:
                 raise BuildError(f"concat vmap entry needs exactly one verdict: {entry!r}")
             v = self._verdict(verdict)
-            cols = [self._concat_key_tokens(keys[i], match[i]) for i in range(len(keys))]
+            cols = []
+            for i, kt in enumerate(keys):
+                if kt in self._VMAP_ADDR:                # family-aware position
+                    kfam, toks = self._vmap_addr_tokens(kt, match[i])
+                    fam = self._one_family(kt, fam, kfam)
+                    cols.append(toks)
+                else:
+                    cols.append(self._vmap_lit_tokens(kt, match[i]))
             for combo in itertools.product(*cols):
                 entries.append(f"{' . '.join(combo)} : {v}")
+        if any(k in self._VMAP_ADDR for k in keys) and fam is None:
+            raise BuildError(f"concat vmap with an address key needs at least one entry: {spec!r}")
+        keyexprs = [f"{fam} {k}" if k in self._VMAP_ADDR else self._VMAP_KEYS[k] for k in keys]
         return f"{' . '.join(keyexprs)} vmap {{ {', '.join(entries)} }}"
 
-    def _concat_key_tokens(self, keytype: str, value) -> list:
-        """One concat position -> ordered token list (interface groups expand)."""
+    def _vmap_lit_tokens(self, keytype: str, value) -> list:
+        """Non-address vmap element tokens for one key — groups and services expand."""
         if keytype in ("iif", "oif"):
             if value in self.defs.interfaces:
                 return [f'"{d}"' for d in self.defs.interface(value)]
             return [f'"{value}"']                       # literal device name
-        return [str(value)]                             # proto: literal
+        if keytype in ("dport", "sport") and isinstance(value, str) and value in self.defs.services:
+            return list(dict.fromkeys(port for _proto, port in self.defs.service(value)))
+        return [str(value)]                             # number / proto / mark / state / unknown
+
+    def _one_family(self, key: str, fam, kfam: str) -> str:
+        if fam is None:
+            return kfam
+        if fam != kfam:
+            raise BuildError(
+                f"vmap {key} mixes IP families ({fam} and {kfam}); a vmap is "
+                f"single-family — split into per-family vmaps"
+            )
+        return fam
 
     def _concat_match(self, rule: dict) -> str:
         name = rule["set"]

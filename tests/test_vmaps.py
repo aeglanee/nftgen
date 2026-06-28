@@ -65,7 +65,11 @@ def test_concat_vmap_match_arity_error():
 # -- more single-key vmaps: ports / mark / state / addresses ----------------- #
 RN = RuleRenderer(
     Definitions.from_mappings(
-        {"networks": {"admins": ["192.168.10.8/29"], "trusted6": ["2001:db8::/48"]}}
+        {
+            "networks": {"admins": ["192.168.10.8/29"], "trusted6": ["2001:db8::/48"]},
+            "services": {"ssh": ["22/tcp"], "web": ["80/tcp", "443/tcp"]},
+            "interfaces": {"users": ["lan0"], "uplinks": ["wan0", "wwan0"]},
+        }
     ),
     {},
 )
@@ -103,8 +107,30 @@ def test_saddr_vmap_mixed_family_errors():
         RN.render({"vmap": {"key": "saddr", "map": {"10.0.0.0/8": "accept", "2001:db8::/48": "drop"}}})
 
 
-def test_address_key_rejected_in_concat():
-    with pytest.raises(BuildError):
-        RN.render(
-            {"vmap": {"key": ["saddr", "dport"], "map": [{"match": ["admins", 22], "jump": "x"}]}}
-        )
+def test_dport_vmap_resolves_service_bundle():
+    # web -> 80,443 (two elements, same verdict); a number stays literal
+    rule = {"vmap": {"key": "dport", "map": {"web": {"jump": "w"}, 53: {"jump": "d"}}}}
+    assert RN.render(rule) == ["th dport vmap { 80 : jump w, 443 : jump w, 53 : jump d }"]
+
+
+def test_dport_vmap_unknown_name_passes_through():
+    assert RN.render({"vmap": {"key": "dport", "map": {"weird": "drop"}}}) == [
+        "th dport vmap { weird : drop }"
+    ]
+
+
+def test_iif_vmap_expands_group_single_key():
+    rule = {"vmap": {"key": "iif", "map": {"uplinks": {"jump": "wan_in"}}}}
+    assert RN.render(rule) == ['iifname vmap { "wan0" : jump wan_in, "wwan0" : jump wan_in }']
+
+
+def test_concat_saddr_dport_family_aware():
+    rule = {
+        "vmap": {
+            "key": ["saddr", "dport"],
+            "map": [{"match": ["admins", "ssh"], "jump": "admin_ssh"}],
+        }
+    }
+    assert RN.render(rule) == [
+        "ip saddr . th dport vmap { 192.168.10.8/29 . 22 : jump admin_ssh }"
+    ]
