@@ -183,11 +183,13 @@ Match keys: `iif` / `oif` (interface), `saddr` / `daddr` (address),
 A **verdict map** (a native primitive, authored — not inferred):
 
 ```yaml
-- vmap:
-    key: iifname
-    entries:
-      wan0: jump wan_input
-      lan0: jump lan_input
+- vmap:                        # key: iif/oif/proto/dport/sport/mark/state/saddr/daddr
+    key: iif                   # a list (key: [iif, oif]) concatenates the lookup
+    map:
+      wan0:
+        jump: wan_input
+      lan0:
+        jump: lan_input
 ```
 
 ## How nftables best practices map onto this YAML

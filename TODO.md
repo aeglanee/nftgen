@@ -26,7 +26,9 @@ nft -c validation → primitives A–E). What's left, à la carte:
 - [ ] **named / reusable maps** — declare a table-level `maps:` (verdict maps,
       or key→value maps for dnat targets); reference from a `vmap:` rule or a
       dnat map. (Phase 6D did inline vmaps only.)
-- [ ] more meta matches (mark, pkttype, skuid, …), `redirect` action, ct mark.
+- [ ] more meta matches (pkttype, skuid, …), `redirect` action, ct mark. (mark
+      match + the expanded **vmap keys** — `dport`/`sport`/`mark`/`state`/`saddr`/
+      `daddr` + concat `key: [iif, oif]` — are done; see docs/maps.md.)
 
 ## Output
 - [ ] **JSON emitter** — a second emitter on the same IR (libnftables JSON), for

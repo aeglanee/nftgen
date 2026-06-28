@@ -88,7 +88,7 @@ A rule may be **statement-only** (no verdict) — e.g. an MSS clamp or a fwmark.
 | Form | YAML | nft |
 | --- | --- | --- |
 | `raw:` | `raw: "udp dport 5060 ip dscp set ef"` | verbatim (the escape hatch) |
-| `vmap:` (inline) | `vmap: {key: iif, map: {wan0: {jump: wan_in}}}` | `iifname vmap { "wan0" : jump wan_in }` (keys: `iif`/`oif`/`proto`) |
+| `vmap:` (inline) | `vmap: {key: iif, map: {wan0: {jump: wan_in}}}` | `iifname vmap { … }` — keys `iif`/`oif`/`proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`; groups & services resolve; `key: [iif, oif]` concatenates |
 | `include:` | `- include: includes/common-input.yaml` | inlined rules/sets at build time |
 
 ---
@@ -113,7 +113,7 @@ A rule may be **statement-only** (no verdict) — e.g. an MSS clamp or a fwmark.
 | --- | --- | --- |
 | `reject with <type>` | `raw: "… reject with icmpx type admin-prohibited"` | **#1** |
 | DSCP set | `raw: "udp dport 5060 ip dscp set ef"` | deferred (family-specific, DECISIONS §4.2) |
-| meta beyond mark (`pkttype`/`skuid`/`mark` match), ct mark/helper/label, `redirect`/`tproxy`, dynamic set ops (`add @set`), vmap on non-`iif/oif/proto` keys, rule `comment` | `raw: …` | unranked |
+| meta beyond mark (`pkttype`/`skuid`), ct mark/helper/label, `redirect`/`tproxy`, dynamic set ops (`add @set`), rule `comment` | `raw: …` | unranked |
 
 `raw:` bypasses validation, family-awareness, and definition resolution — that's
 the cost, and the reason to promote a recipe once it earns a key.
@@ -137,7 +137,8 @@ the cost, and the reason to promote a recipe once it earns a key.
 ## 9. Promotion queue (ranked, from real use)
 
 - ✅ **concatenations** · **`icmp type`** · **inline dnat data map** · **`mark`**
-  (read+write) — all **done** this round.
+  (read+write) · **expanded vmap keys** (`dport`/`sport`/`mark`/`state`/`saddr`/
+  `daddr` + concat `key: [iif, oif]`; groups/services resolve) — **done**.
 1. **`reject with <type>`** — nicer zone-boundary rejects than silent drop.
 2. **set-dscp** (family-aware) — promote the deferred DSCP statement.
 3. **named / reusable maps** — table-level `maps:`; reusable vmaps + named data maps.

@@ -2,7 +2,7 @@
 
 Durable orientation: where nftgen is, what's decided, what's next. The
 conversation holds nuance; this holds the map. Update on milestones, not every
-turn. Last updated: 2026-06-26.
+turn. Last updated: 2026-06-28.
 
 ## Status
 - **Phases 0–6 done** — standalone generator works (defs → named sets →
@@ -27,9 +27,17 @@ turn. Last updated: 2026-06-26.
 - **Reference docs written:** [capabilities.md](capabilities.md) (render ref),
   [best-practices.md](best-practices.md) (cookbook), [sets-and-performance.md](sets-and-performance.md),
   [maps.md](maps.md), and the [automation/](automation/) directory (A–D + not-automated).
-- **⟶ Next: pivot to integration** — the generator is more than enough for a
-  homelab; the actual goal (deploy → apply → rollback) is 0% built. Prove the thin
-  end-to-end slice (PLAN Step 3).
+- **`def/` → `definitions/`** (all-full names) + **recursive load** (organise
+  definitions into subdirs). Layout pinned in DESIGN §Project layout.
+- **vmap built out** — keys `iif`/`oif`/`proto`/`dport`/`sport`/`mark`/`state`/
+  `saddr`/`daddr` + **concatenated** keys (`key: [iif, oif]`), with group/service
+  resolution and single-family addresses. See [maps.md](maps.md).
+- **Integration Step 3a done (in sessrumnir)** — the `nftables` role rewritten to
+  ship one nftgen-built `.nft` per host (`feat!`), a two-play example playbook, and
+  a realistic `gw1a`/`gw1b`/`gw2` fleet + baseline scrub/zone includes — all
+  `nft -c` clean. nftgen consumed as a pinned dependency.
+- **⟶ Next:** tag **`v0.1.0`**; Step 3b apply role (rollback) + Step 4 molecule
+  (deploy a host end-to-end). PLAN Step 3–4.
 
 ## Decided
 - **nftgen ↔ sessrumnir are decoupled.** nftgen replaces the existing nftables
@@ -66,8 +74,10 @@ Integration design settled (#1–#4). The render reference is
       artifact + `--host` + `nftgen build` CLI. Deploy artifacts pass real `nft -c`.
 - [x] **Concatenation** (#1 feature, done) — structured `concat:`/`tuples:` set +
       `set:` rule; nft-c verified. See [concat-authoring.md](concat-authoring.md).
-- [ ] Step 3 the apply role (rollback sequence) · Step 4 molecule/behavioral in
-      sessrumnir. See [../PLAN.md](../PLAN.md).
+- [x] **Step 3a — role rewrite** (sessrumnir): ships nftgen output, two-play
+      example, `gw` fleet, baseline includes. Done.
+- [ ] **Step 3b apply role** (rollback sequence) · **Step 4 molecule** (deploy a
+      host end-to-end) in sessrumnir. See [../PLAN.md](../PLAN.md).
 
 ## Sequencing (user priority)
 Nail nftgen functionality + verify correct nftables **first** (Step 2), **then**
