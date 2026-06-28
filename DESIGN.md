@@ -20,6 +20,61 @@ host policies → a native `.nft` ruleset you commit to git and apply with
    text. Robust output now; a JSON emitter later from the same IR.
 5. **Tested at every step.** Golden files (YAML → exact `.nft`) + `nft -c -f`.
 
+## Project layout
+
+A project is a directory (`<root>`) with a fixed convention. `nftgen build
+<root>` reads it and writes one complete `.nft` per host:
+
+```text
+<root>/
+├── def/                     # global named definitions (merged: every *.yaml)
+│   ├── networks.yaml        #   networks:   name -> [cidr | name ...]
+│   ├── services.yaml        #   services:   name -> [port/proto ...]
+│   └── interfaces.yaml      #   interfaces: name -> [ifname ...]
+├── sites/                   # per-site definition overlays
+│   ├── site1.yaml           #   a host's `site: site1` merges this over def/
+│   └── site2.yaml
+├── policies/                # the include base (`include:` paths resolve here)
+│   ├── includes/            #   reusable rule/set fragments
+│   │   ├── common-input.yaml
+│   │   ├── scrub.yaml
+│   │   └── ...
+│   └── hosts/               # one file per host — the entry points
+│       ├── gateway.yaml
+│       ├── router1.yaml
+│       └── router2.yaml
+└── generated/               # OUTPUT — nftgen writes <host>.nft here
+    ├── gateway.nft
+    └── ...
+```
+
+- **`def/`** — global definitions. Every `*.y{,a}ml` is merged by category
+  (`networks` / `services` / `interfaces`); a duplicate name across files is an
+  error. Filenames are organizational only — the loader merges by the top-level
+  key inside.
+- **`sites/`** — per-site overlays. A host with `site: site1` gets
+  `sites/site1.yaml` merged *over* `def/`, so a shared name (e.g. `local_users`)
+  resolves to that site's value.
+- **`policies/includes/`** — fragments holding a `sets:` and/or `rules:` list,
+  pulled into a host via `- include: includes/<file>.yaml`. Paths resolve
+  relative to `policies/`; includes may nest.
+- **`policies/hosts/<name>.yaml`** — the per-host policy (tables → chains →
+  rules). One file = one host = one output.
+- **`generated/<name>.nft`** — the deploy artifact: a complete ruleset with
+  `flush ruleset`, shipped verbatim as `/etc/nftables.conf`. Committed for
+  review; **never hand-edited** (the YAML is the only source).
+
+**The naming contract** (load-bearing for deployment — DEPLOYMENT §10.2):
+
+```text
+inventory_hostname  ==  policies/hosts/<name>.yaml  ==  generated/<name>.nft
+```
+
+`nftgen build <root>` globs `policies/hosts/*.y{,a}ml`, generates each (with
+`flush ruleset`), and writes `generated/<stem>.nft` — override the output dir
+with `--out-dir`, build one host with `--host`, validate with `--check`. The
+worked example lives under [example/](example/).
+
 ## The nftables model (what the YAML mirrors)
 
 - **Table** — a container, tied to a **family**: `ip` (v4), `ip6` (v6),
