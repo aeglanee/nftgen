@@ -81,7 +81,19 @@ lookup — e.g. dispatch by `(saddr, dport)`:
 ```nft
 ip saddr . tcp dport vmap { 10.0.0.1 . 22 : jump admin_in }
 ```
-(Same idea, key is a tuple. Niche; verify exact form when building.)
+nftgen supports this for verdict maps via a **list key** — `key: [iif, oif]` →
+`iifname . oifname vmap`. The `map:` becomes a list of `{match: [...], <verdict>}`
+entries; each match value resolves like a normal `iif`/`oif`, so **interface
+groups expand** and cartesian-product into elements:
+```yaml
+- vmap:
+    key: [iif, oif]
+    map:
+      - match: [users, uplinks]    # users=lan0, uplinks=wan0+wwan0
+        jump: fwd_users_inet        #   -> "lan0"."wan0", "lan0"."wwan0"
+      - match: [users, servers]
+        jump: fwd_users_servers
+```
 
 ---
 
@@ -99,6 +111,8 @@ ip saddr . tcp dport vmap { 10.0.0.1 . 22 : jump admin_in }
 ## nftgen plan
 
 - ✅ **Inline vmaps** — `vmap:` rule, keys `iif`/`oif`/`proto` → verdict (done).
+- ✅ **Concat verdict maps** — `vmap: {key: [iif, oif], map: [{match, verdict}]}`
+  → `iifname . oifname vmap { … }`; interface groups expand (done).
 - ✅ **Inline dnat data map** — `action: {dnat: {proto: tcp, map: {80: web, 443: db}}}`
   → `dnat ip to tcp dport map { … }` (multi-port-forward; address-only targets for now).
 - ☐ **Named verdict maps** — a table-level `maps:` declaration referenced from rules

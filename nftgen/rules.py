@@ -8,6 +8,7 @@ a literal stays literal.
 """
 from __future__ import annotations
 
+import itertools
 import ipaddress
 
 from nftgen.definitions import Definitions
@@ -288,6 +289,8 @@ class RuleRenderer:
 
     def _vmap(self, spec: dict) -> str:
         key = spec.get("key")
+        if isinstance(key, list):                       # concatenated key
+            return self._concat_vmap(spec, key)
         keyexpr = self._VMAP_KEYS.get(key)
         if keyexpr is None:
             raise BuildError(f"vmap key {key!r} not supported (use iif/oif/proto)")
@@ -297,6 +300,52 @@ class RuleRenderer:
             token = f'"{k}"' if quote else str(k)
             entries.append(f"{token} : {self._verdict(verdict)}")
         return f"{keyexpr} vmap {{ {', '.join(entries)} }}"
+
+    def _concat_vmap(self, spec: dict, keys: list) -> str:
+        """Concatenated vmap, e.g. ``key: [iif, oif]`` -> ``iifname . oifname vmap``.
+
+        ``map`` is a list of ``{match: [v0, v1, …], <verdict>}`` entries; each
+        match value resolves like a normal iif/oif (an interface group expands to
+        its devices, cartesian-producting into elements), proto stays literal.
+        """
+        keyexprs = []
+        for k in keys:
+            ke = self._VMAP_KEYS.get(k)
+            if ke is None:
+                raise BuildError(f"vmap key {k!r} not supported (use iif/oif/proto)")
+            keyexprs.append(ke)
+        mapping = spec.get("map")
+        if not isinstance(mapping, list):
+            raise BuildError(
+                f"a concat vmap (`key: {keys}`) needs a list `map:` of "
+                f"`{{match: [...], <verdict>}}` entries: {spec!r}"
+            )
+        entries = []
+        for entry in mapping:
+            if not isinstance(entry, dict) or "match" not in entry:
+                raise BuildError(f"concat vmap entry needs `match: [...]`: {entry!r}")
+            match = entry["match"]
+            if not isinstance(match, list) or len(match) != len(keys):
+                raise BuildError(
+                    f"concat vmap `match` must list {len(keys)} value(s), "
+                    f"one per key {keys}: {entry!r}"
+                )
+            verdict = {k: v for k, v in entry.items() if k != "match"}
+            if len(verdict) != 1:
+                raise BuildError(f"concat vmap entry needs exactly one verdict: {entry!r}")
+            v = self._verdict(verdict)
+            cols = [self._concat_key_tokens(keys[i], match[i]) for i in range(len(keys))]
+            for combo in itertools.product(*cols):
+                entries.append(f"{' . '.join(combo)} : {v}")
+        return f"{' . '.join(keyexprs)} vmap {{ {', '.join(entries)} }}"
+
+    def _concat_key_tokens(self, keytype: str, value) -> list:
+        """One concat position -> ordered token list (interface groups expand)."""
+        if keytype in ("iif", "oif"):
+            if value in self.defs.interfaces:
+                return [f'"{d}"' for d in self.defs.interface(value)]
+            return [f'"{value}"']                       # literal device name
+        return [str(value)]                             # proto: literal
 
     def _concat_match(self, rule: dict) -> str:
         name = rule["set"]
