@@ -56,7 +56,13 @@ turn. Last updated: 2026-07-05.
   divergent sites, static-snat vs masquerade) — README-narrated, `nft -c`
   clean, drift-pinned. Bare `dnat:`/`snat:` targets now resolve
   single-address network groups (per-site NAT address behind a shared name).
-- **⟶ Next:** the netns harness itself (testing-plan §Execution order), then
+- **Netns harness live (2026-07-05):** `tests/behavioral/` — agent as root
+  inside `unshare -r -n`, per-zone anonymous namespaces (holder pids +
+  `setns`), veth topology, applies the *real deploy artifact*, TCP probes
+  that distinguish connected/refused/timeout (self-validated). B01–B03 pass
+  in ~5s, rootless; suite **164**. Layer 4 exists — next is filling the
+  matrix (B04+) and the PoC truth table (P01–P20).
+- **⟶ Next:** §1 matrix breadth, then the P-matrix over example-poc, then
   R2 CI. PLAN §Roadmap.
 
 ## Decided

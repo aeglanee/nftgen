@@ -112,7 +112,14 @@ Behavioral tests assert *traffic outcomes only* — never text.
 
 ## Execution order
 
-1. Harness fixture (`netns` builder + apply/teardown) with B01–B03 to prove it.
+1. ~~Harness fixture (`netns` builder + apply/teardown) with B01–B03 to prove
+   it.~~ **Done 2026-07-05** — `tests/behavioral/` (agent under
+   `unshare -r -n`, anonymous zone namespaces via holder pids + `setns`,
+   JSON-line driven from pytest; probes discriminate
+   connected/refused/timeout and the suite self-validates all three).
+   B01–B03 green in ~5s; skips cleanly where userns/veth/nft/ct are missing.
+   Note: iproute2 7.x needs `ip link add name X type veth …` (explicit
+   `name`).
 2. §1 matrix, cheapest first; B24 last (needs packet crafting).
 3. §2 PoC matrix as one parametrized class over the truth table.
 4. Wire both into CI (R2) behind the namespace-availability mark.

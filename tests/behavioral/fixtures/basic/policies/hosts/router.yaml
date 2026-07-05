@@ -1,0 +1,46 @@
+---
+# Minimal stateful router: input serves ssh to the LAN only; forward allows
+# exactly lan->wan:testsvc. `open_unused` is accepted but has no listener —
+# it must probe as *refused*, proving the harness distinguishes a firewall
+# drop (timeout) from a closed port (refused).
+tables:
+  - family: inet
+    name: filter
+    chains:
+      - name: input
+        hook: input
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - ct: [invalid]
+            action: drop
+          - iif: lan_if
+            saddr: lan_net
+            proto: tcp
+            dport: ssh
+            action: accept
+          - iif: lan_if
+            saddr: lan_net
+            proto: tcp
+            dport: open_unused
+            action: accept
+
+      - name: forward
+        hook: forward
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - ct: [invalid]
+            action: drop
+          - iif: lan_if
+            oif: wan_if
+            saddr: lan_net
+            proto: tcp
+            dport: testsvc
+            action: accept

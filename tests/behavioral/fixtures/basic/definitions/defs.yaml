@@ -1,0 +1,12 @@
+---
+# B01–B03 fixture: two zones behind one router. Interface names match the
+# harness convention (router side of zone <name> is r-<name>).
+networks:
+  lan_net: [10.77.1.0/24]
+interfaces:
+  lan_if: [r-lan]
+  wan_if: [r-wan]
+services:
+  ssh: [22/tcp]
+  testsvc: [9000/tcp]
+  open_unused: [2323/tcp]
