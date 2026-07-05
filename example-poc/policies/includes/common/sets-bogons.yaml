@@ -1,0 +1,7 @@
+---
+# A sets include: any table that scrubs WAN ingress pulls the bogon sets into
+# its `sets:` list with one include line (a definition becomes a named set
+# only where a table declares it).
+sets:
+  - bogons_v4
+  - bogons_v6

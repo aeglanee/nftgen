@@ -1,0 +1,11 @@
+---
+# Inter-site transit. The user→server policy is identical fleet-wide, so nest
+# that include (includes resolve recursively against the policies/ root) and
+# add the cross-site monitoring paths on top.
+rules:
+  - include: includes/zones/fwd-users-servers.yaml
+  - saddr: monitors
+    daddr: all_servers
+    proto: tcp
+    dport: node_exporter
+    action: accept

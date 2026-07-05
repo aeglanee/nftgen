@@ -1,0 +1,128 @@
+---
+# poc-gw2 — site2 border router. Same shared includes as poc-gw1, but the
+# host composes only what its site has: no DMZ (no dnat, no inet-dmz pairs),
+# a dynamic uplink (masquerade instead of static snat), no flowtable. The
+# site2 overlay supplies the same local_* names with site2 values.
+site: site2
+
+tables:
+  - family: inet
+    name: filter
+
+    counters:
+      - bogon_drops
+      - bad_tcp
+
+    sets:
+      - include: includes/common/sets-bogons.yaml
+      - name: blocklist
+        type: ipv4_addr
+        flags: [timeout]
+
+    chains:
+      - name: input
+        hook: input
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - iif: loopback
+            action: accept
+          - include: includes/common/conntrack.yaml
+          - saddr: "@blocklist"
+            counter: true
+            action: drop
+          - include: includes/common/icmp.yaml
+          - vmap:
+              key: iif
+              map:
+                mgmt:
+                  jump: in_mgmt
+                users:
+                  jump: in_users
+                servers:
+                  jump: in_servers
+                uplinks:
+                  jump: in_wan
+
+      - name: in_mgmt
+        rules:
+          - include: includes/zones/in-mgmt.yaml
+      - name: in_users
+        rules:
+          - include: includes/zones/in-users.yaml
+      - name: in_servers
+        rules:
+          - include: includes/zones/in-servers.yaml
+      - name: svc_ssh
+        rules:
+          - include: includes/zones/svc-ssh.yaml
+      - name: svc_mon
+        rules:
+          - include: includes/zones/svc-mon.yaml
+      - name: in_wan
+        rules:
+          - include: includes/common/wan-bogons.yaml
+
+      - name: forward
+        hook: forward
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - include: includes/common/conntrack.yaml
+          - include: includes/common/bad-tcp.yaml
+          - saddr: "@blocklist"
+            counter: true
+            action: drop
+          - include: includes/common/wan-bogons.yaml
+          - vmap:
+              key: [iif, oif]
+              map:
+                - match: [users, uplinks]
+                  jump: fwd_users_inet
+                - match: [servers, uplinks]
+                  jump: fwd_servers_inet
+                - match: [iot, uplinks]
+                  jump: fwd_iot_inet
+                - match: [mgmt, uplinks]
+                  jump: fwd_mgmt_inet
+                - match: [users, servers]
+                  jump: fwd_users_servers
+                - match: [users, transit]
+                  jump: fwd_xsite
+                - match: [transit, servers]
+                  jump: fwd_xsite
+
+      - name: fwd_users_inet
+        rules:
+          - include: includes/zones/fwd-users-inet.yaml
+      - name: fwd_servers_inet
+        rules:
+          - include: includes/zones/fwd-servers-inet.yaml
+      - name: fwd_iot_inet
+        rules:
+          - include: includes/zones/fwd-iot-inet.yaml
+      - name: fwd_mgmt_inet
+        rules:
+          - include: includes/zones/fwd-mgmt-inet.yaml
+      - name: fwd_users_servers
+        rules:
+          - include: includes/zones/fwd-users-servers.yaml
+      - name: fwd_xsite
+        rules:
+          - include: includes/zones/fwd-xsite.yaml
+
+  - family: inet
+    name: nat
+    chains:
+      - name: postrouting
+        hook: postrouting
+        type: nat
+        priority: srcnat
+        policy: accept
+        rules:
+          # Dynamic uplink → masquerade (contrast with gw1's static snat).
+          - oif: uplinks
+            saddr: local_site
+            action: masquerade

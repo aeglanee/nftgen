@@ -1,0 +1,17 @@
+---
+# Zones are interface groups; rules and vmaps reference groups, never raw
+# device names (strict since v0.2.0 — a typo'd name fails the build).
+# `uplinks` composes two one-device groups: rows matching it expand over both.
+interfaces:
+  loopback: [lo]
+  wan: [wan0]
+  wan_backup: [lte0]
+  uplinks:
+    - wan
+    - wan_backup
+  users: [lan0]
+  servers: [svc0]
+  mgmt: [mgmt0]
+  iot: [iot0]
+  dmz: [dmz0]
+  transit: [xsite0]

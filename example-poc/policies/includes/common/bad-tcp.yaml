@@ -1,0 +1,19 @@
+---
+# TCP flag hygiene: null scan, SYN+FIN, SYN+RST. Each check renders as its own
+# masked-compare rule; the shared named counter makes scrub activity visible.
+rules:
+  - flags:
+      - match: none
+        mask: all
+    counter: bad_tcp
+    action: drop
+  - flags:
+      - match: [fin, syn]
+        mask: [fin, syn]
+    counter: bad_tcp
+    action: drop
+  - flags:
+      - match: [syn, rst]
+        mask: [syn, rst]
+    counter: bad_tcp
+    action: drop

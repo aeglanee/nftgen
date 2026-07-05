@@ -1,0 +1,17 @@
+---
+# Router services offered to the management zone. `local_mgmt` resolves per
+# site; `admins` is the fleet group — both sites' admin hosts can always
+# reach ssh, whichever gateway they land on.
+rules:
+  - saddr: local_mgmt
+    proto: tcp
+    dport: ssh
+    action: accept
+  - saddr: local_mgmt
+    proto: udp
+    dport: snmp
+    action: accept
+  - saddr: admins
+    proto: tcp
+    dport: ssh
+    action: accept

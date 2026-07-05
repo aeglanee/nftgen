@@ -1,0 +1,15 @@
+---
+# Users to servers — deliberately fleet-wide: all_users/all_servers compose
+# both sites, so the same include serves local traffic on either gateway AND
+# the inter-site path (fwd-xsite nests this file). One policy, one place.
+rules:
+  - saddr: all_users
+    daddr: all_servers
+    proto: tcp
+    dport: web
+    action: accept
+  - saddr: all_users
+    daddr: all_servers
+    proto: tcp
+    dport: ssh
+    action: accept

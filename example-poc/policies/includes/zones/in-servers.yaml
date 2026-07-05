@@ -1,0 +1,12 @@
+---
+# Server-zone input dispatch: a dport verdict map fans out to per-service
+# chains (docs/maps.md). Service names resolve to their ports; `th dport` is
+# transport-agnostic, so the per-service chains re-state the proto.
+rules:
+  - vmap:
+      key: dport
+      map:
+        ssh:
+          jump: svc_ssh
+        node_exporter:
+          jump: svc_mon

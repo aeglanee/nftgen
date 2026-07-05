@@ -1,0 +1,15 @@
+---
+# SSH guard chain: management zone freely, fleet admins rate-limited + logged.
+# Reached only via the in_servers dport vmap.
+rules:
+  - saddr: local_mgmt
+    proto: tcp
+    dport: ssh
+    action: accept
+  - saddr: admins
+    proto: tcp
+    dport: ssh
+    limit: 10/minute
+    log:
+      prefix: "ssh-admin "
+    action: accept

@@ -1,0 +1,12 @@
+---
+# site2 overlay: same local_* contract, different values — and deliberately
+# *fewer* names. site2 has no DMZ and a dynamic uplink (masquerade, so no
+# local_snat_ip). A site only defines what it has; a shared include that
+# referenced a missing name would fail that host's build loudly.
+networks:
+  local_site: [10.20.0.0/16]
+  local_mgmt: [10.20.10.0/24]
+  local_users: [10.20.20.0/24]
+  local_servers: [10.20.30.0/24]
+  local_iot: [10.20.50.0/24]
+  local_mon: [10.20.30.20]

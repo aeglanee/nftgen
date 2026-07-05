@@ -1,0 +1,13 @@
+---
+# IoT egress: time sync and nothing else. Logged so new device chatter is
+# visible before anyone is tempted to widen the rule.
+rules:
+  - saddr: local_iot
+    proto: udp
+    dport: ntp
+    action: accept
+  - saddr: local_iot
+    log:
+      prefix: "iot-egress-drop "
+    counter: true
+    action: drop

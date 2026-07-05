@@ -1,0 +1,11 @@
+---
+# Server egress: package updates and resolution only.
+rules:
+  - saddr: local_servers
+    proto: tcp
+    dport: web
+    action: accept
+  - saddr: local_servers
+    proto: udp
+    dport: dns
+    action: accept
