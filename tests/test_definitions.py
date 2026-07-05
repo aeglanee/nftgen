@@ -35,9 +35,27 @@ def test_network_dedupe_overlapping_refs():
     assert d.network("b") == ["10.0.0.0/8"]
 
 
-def test_network_cycle_is_guarded():
-    d = Definitions.from_mappings({"networks": {"loop": ["loop", "10.1.0.0/16"]}})
-    assert d.network("loop") == ["10.1.0.0/16"]
+def test_self_named_group_is_a_literal():
+    # `eth0: [eth0]` is the one-device-group idiom, not a cycle
+    d = Definitions.from_mappings({"interfaces": {"eth0": ["eth0"], "both": ["eth0", "eth1"]}})
+    assert d.interface("eth0") == ["eth0"]
+    assert d.interface("both") == ["eth0", "eth1"]
+
+
+def test_network_indirect_cycle_names_the_path():
+    d = Definitions.from_mappings({"networks": {"a": ["b"], "b": ["a"]}})
+    with pytest.raises(DefinitionError, match="a -> b -> a"):
+        d.network("a")
+
+
+def test_load_missing_defs_dir_errors(tmp_path):
+    with pytest.raises(DefinitionError, match="definitions directory not found"):
+        Definitions.load(tmp_path / "nope")
+
+
+def test_load_missing_site_file_errors(tmp_path):
+    with pytest.raises(DefinitionError, match="site definitions file not found"):
+        Definitions.load(tmp_path, site_files=[tmp_path / "site1.yaml"])
 
 
 def test_network_bad_literal_errors():

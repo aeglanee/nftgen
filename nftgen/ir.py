@@ -7,9 +7,12 @@ JSON emitter drop in later from the same objects.
 from __future__ import annotations
 
 import ipaddress
+import re
 from dataclasses import dataclass, field
 
 from nftgen.definitions import Definitions
+
+_PORT_LITERAL = re.compile(r"^\d+(-\d+)?$")  # port or port-range
 
 SET_INDENT = "    "
 BODY_INDENT = "        "
@@ -139,19 +142,32 @@ def _set_from_definition(name: str, defs: Definitions) -> NamedSet:
     category = matches[0]
     if category == "networks":
         elements = defs.network(name)
+        if not elements:
+            raise BuildError(f"set {name!r}: network group resolves to no elements")
         family = _classify_family(elements, name)
         return NamedSet(name, f"{family}_addr", elements, flags=["interval"])
     if category == "services":
         ports = _unique_ports(defs.service(name))
+        if not ports:
+            raise BuildError(f"set {name!r}: service group resolves to no ports")
         flags = ["interval"] if any("-" in p for p in ports) else []
         return NamedSet(name, "inet_service", ports, flags)
     devices = [f'"{d}"' for d in defs.interface(name)]
+    if not devices:
+        raise BuildError(f"set {name!r}: interface group resolves to no devices")
     return NamedSet(name, "ifname", devices)
+
+
+_BARE_SET_KEYS = frozenset({"name", "type", "elements", "flags"})
+_CONCAT_SET_KEYS = frozenset({"name", "concat", "proto", "tuples"})
 
 
 def _bare_set(entry: dict) -> NamedSet:
     if "name" not in entry or "type" not in entry:
         raise BuildError(f"bare set must have 'name' and 'type': {entry!r}")
+    unknown = set(entry) - _BARE_SET_KEYS
+    if unknown:
+        raise BuildError(f"unknown set key(s) {sorted(unknown)}: {entry!r}")
     return NamedSet(
         name=entry["name"],
         type=entry["type"],
@@ -175,6 +191,9 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:
     fields = entry.get("concat")
     if not name or not fields:
         raise BuildError(f"concat set needs 'name' and 'concat': {entry!r}")
+    unknown = set(entry) - _CONCAT_SET_KEYS
+    if unknown:
+        raise BuildError(f"unknown concat set key(s) {sorted(unknown)}: {entry!r}")
     for f in fields:
         if f not in _CONCAT_FIELD_TYPE:
             raise BuildError(f"concat set {name!r}: unknown field {f!r} (use {sorted(_CONCAT_FIELD_TYPE)})")
@@ -238,7 +257,13 @@ def _resolve_concat_value(setname, field, val, proto, defs):
                     f"rule with sets for group-to-group, or list separate tuples."
                 )
             val = vals[0]
-        fam = "ip" if ipaddress.ip_network(val, strict=False).version == 4 else "ip6"
+        try:
+            fam = "ip" if ipaddress.ip_network(val, strict=False).version == 4 else "ip6"
+        except ValueError:
+            raise BuildError(
+                f"concat set {setname!r}: field {field}={val!r} is not a known "
+                f"network group or an IP/CIDR"
+            ) from None
         return val, fam, "/" in val  # prefix notation (incl. /32) needs interval
     if kind == "inet_service":
         if val in defs.services:
@@ -249,19 +274,27 @@ def _resolve_concat_value(setname, field, val, proto, defs):
                     f"{proto} port(s); a tuple field takes one"
                 )
             val = ports[0]
+        elif not _PORT_LITERAL.match(val):
+            raise BuildError(
+                f"concat set {setname!r}: field {field}={val!r} is not a known "
+                f"service group or a port/range"
+            )
         return val, None, "-" in val  # a port range needs interval
     if kind == "mark":
         return val, None, "-" in val  # bare fwmark number; no name resolution
-    # ifname
-    if val in defs.interfaces:
-        devs = defs.interface(val)
-        if len(devs) != 1:
-            raise BuildError(
-                f"concat set {setname!r}: interface {val!r} resolves to {len(devs)} "
-                f"devices; a tuple field takes one"
-            )
-        val = devs[0]
-    return f'"{val}"', None, False
+    # ifname — strict: a typo'd group would silently become a literal device
+    if val not in defs.interfaces:
+        raise BuildError(
+            f"concat set {setname!r}: field {field}={val!r} is not a known "
+            f"interface group (define it under `interfaces:`)"
+        )
+    devs = defs.interface(val)
+    if len(devs) != 1:
+        raise BuildError(
+            f"concat set {setname!r}: interface {val!r} resolves to {len(devs)} "
+            f"devices; a tuple field takes one"
+        )
+    return f'"{devs[0]}"', None, False
 
 
 def _classify_family(elements: list[str], name: str) -> str:
@@ -270,6 +303,8 @@ def _classify_family(elements: list[str], name: str) -> str:
         return "ipv4"
     if versions == {6}:
         return "ipv6"
+    if not versions:
+        raise BuildError(f"set {name!r} has no elements to derive a family from")
     raise BuildError(
         f"set {name!r} mixes IPv4 and IPv6; a named set is single-family — "
         f"split into e.g. {name}_v4 / {name}_v6"

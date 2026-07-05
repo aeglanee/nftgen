@@ -10,8 +10,14 @@ The authoritative reference for what the generator turns YAML into, grounded in
 > Deploy-side capabilities (the `.nft` → apply pipeline) live in
 > [DEPLOYMENT.md](../DEPLOYMENT.md), not here. This file is **generation only**.
 
-> **Strict keys:** a rule with an unknown key (e.g. `dprot:` for `dport:`) is a
-> `BuildError`, not a silently-weaker rule. `raw:`/`vmap:` must be a rule's only key.
+> **Strict authoring surface (v0.2.0):** unknown keys are a `BuildError` at every
+> level — policy (`tables:`/`site:`), table, chain, set entry, vmap spec, and rule
+> (e.g. `dprot:` for `dport:`) — never a silently-weaker or empty ruleset. A policy
+> with no `tables:` refuses to generate (the flushing deploy artifact would wipe the
+> firewall). `raw:`/`vmap:` must be a rule's only key. Name resolution is strict
+> too: `iif`/`oif`/flowtable devices must be defined interface groups (a one-off
+> device gets a one-device group, e.g. `eth0: [eth0]`); a non-numeric `dport:` must
+> be a defined service; a group that resolves to no elements errors at use.
 
 ---
 
@@ -43,8 +49,8 @@ The authoritative reference for what the generator turns YAML into, grounded in
 
 | Key | YAML | nft | Notes |
 | --- | --- | --- | --- |
-| `iif` / `oif` | `iif: wan` | `iifname @wan` / `{ "wan0", … }` / `"eth9"` | named set, inline anon set, or literal |
-| `saddr` / `daddr` | `saddr: webhosts` | `ip saddr @webhosts` | **family-aware**; named/inline/literal; renders once per common family |
+| `iif` / `oif` | `iif: wan` | `iifname @wan` / `{ "wan0", … }` / `"wan0"` | named set or interface group (strict — unknown names error); one device inlines bare |
+| `saddr` / `daddr` | `saddr: webhosts` | `ip saddr @webhosts` | **family-aware**; named set, group, or IP/CIDR literal; renders once per common family |
 | `ct` | `ct: [established, related]` | `ct state established,related` | authored, never auto-injected |
 | `mark` | `mark: "0x1"` | `meta mark 0x1` | match an fwmark (set one with `set-mark:`) |
 | `icmp-type` | `proto: icmpv6` / `icmp-type: [nd-neighbor-solicit, …]` | `icmpv6 type { … }` | family from `proto:` (icmp/icmpv6); single or list |

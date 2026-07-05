@@ -38,10 +38,13 @@ def test_inline_group_not_declared():
     assert line == "ip saddr 192.168.9.0/24 tcp dport 22 accept"
 
 
-def test_interface_named_and_literal():
+def test_interface_named_and_unknown():
     assert one({"iif": "lan_if", "oif": "wan", "action": "accept"}) == \
         'iifname @lan_if oifname @wan accept'
-    assert one({"iif": "eth9", "action": "drop"}) == 'iifname "eth9" drop'
+    # an unknown name must error, not silently render a literal device that
+    # never matches (a typo'd group on a drop rule would fail open)
+    with pytest.raises(BuildError, match="unknown interface group"):
+        one({"iif": "eth9", "action": "drop"})
 
 
 def test_ct_state():
@@ -97,7 +100,11 @@ def test_dnat_target_without_ip_errors():
 
 def test_dnat_map():
     d = Definitions.from_mappings(
-        {"networks": {"web": ["10.0.0.10"], "db": ["10.0.0.20"]}, "services": {"https": ["443/tcp"]}}
+        {
+            "networks": {"web": ["10.0.0.10"], "db": ["10.0.0.20"]},
+            "services": {"https": ["443/tcp"]},
+            "interfaces": {"eth0": ["eth0"]},  # one-device group for a literal
+        }
     )
     r = RuleRenderer(d, {})
     assert r.render({"iif": "eth0", "action": {"dnat": {"proto": "tcp", "map": {80: "web", "https": "db"}}}}) == \
@@ -164,11 +171,29 @@ def test_port_without_proto_errors():
         R.render({"dport": "web", "action": "accept"})
 
 
+def test_port_literals_and_unknown_service():
+    assert one({"proto": "tcp", "dport": 8080, "action": "accept"}) == "tcp dport 8080 accept"
+    assert one({"proto": "tcp", "dport": "8080-8090", "action": "accept"}) == \
+        "tcp dport 8080-8090 accept"
+    with pytest.raises(BuildError, match="not a known service group"):
+        R.render({"proto": "tcp", "dport": "htttp", "action": "accept"})
+
+
+def test_named_set_type_mismatch_errors():
+    # webhosts is an address set; using it as an interface or port must fail
+    with pytest.raises(BuildError, match="not an interface set"):
+        R.render({"iif": "webhosts", "action": "accept"})
+    with pytest.raises(BuildError, match="not a port set"):
+        R.render({"proto": "tcp", "dport": "webhosts", "action": "accept"})
+
+
 # -- chains ----------------------------------------------------------------- #
 def test_resolve_priority():
     assert resolve_priority("filter") == 0
     assert resolve_priority("srcnat") == 100
     assert resolve_priority(-150) == -150
+    with pytest.raises(BuildError):
+        resolve_priority("dstnta")  # typo'd named priority
 
 
 def test_build_base_chain():
@@ -201,3 +226,23 @@ def test_build_regular_chain_has_no_header():
         "        meta l4proto icmp accept",
         "    }",
     ]
+
+
+def test_chain_policy_default_is_type_aware():
+    # filter chains fail closed; a nat/route chain must not drop unmatched flows
+    filt = build_chain({"name": "input", "hook": "input"}, R)
+    assert filt.policy == "drop"
+    nat = build_chain({"name": "post", "hook": "postrouting", "type": "nat", "priority": "srcnat"}, R)
+    assert nat.policy == "accept"
+    explicit = build_chain({"name": "post", "hook": "postrouting", "type": "nat", "policy": "drop"}, R)
+    assert explicit.policy == "drop"
+
+
+def test_chain_unknown_key_errors():
+    with pytest.raises(BuildError, match="unknown chain key"):
+        build_chain({"name": "input", "hook": "input", "rule": []}, R)  # typo'd `rules:`
+
+
+def test_chain_needs_name():
+    with pytest.raises(BuildError, match="needs a `name:`"):
+        build_chain({"hook": "input"}, R)

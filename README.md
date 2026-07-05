@@ -5,8 +5,10 @@ host policies → a native `.nft` ruleset you keep in git and apply with `nft -f
 
 > Status: **working standalone generator** (Phases 0–6: definitions, named sets,
 > rules/chains, host→`.nft` with includes + per-site overlay, `nft -c` validation,
-> primitives — statements, counters, flowtables, vmaps, tcp-flags). 80 tests.
-> Ansible/CI integration is planned, not built — see [PLAN.md](PLAN.md).
+> primitives — statements, counters, flowtables, vmaps, tcp-flags; strict
+> authoring surface — unknown keys/names and empty groups fail the build).
+> 153 tests. Ansible integration: the sessrumnir `nftables` role consumes
+> `nftgen build` (Step 3a done; 3b/4 remain — see [PLAN.md](PLAN.md)).
 >
 > **Docs:** [DESIGN.md](DESIGN.md) (spec) · [DECISIONS.md](DECISIONS.md) (why) ·
 > [DEPLOYMENT.md](DEPLOYMENT.md) (GitOps/Ansible vision) · [PLAN.md](PLAN.md)

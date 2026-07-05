@@ -52,6 +52,27 @@ def test_cli_build_writes_files(tmp_path):
         assert (tmp_path / f"{host}.nft").exists()
 
 
+def test_cli_build_check_unusable_fails_loudly(tmp_path, monkeypatch, capsys):
+    # --check must never silently skip: CI asking for validation has to know
+    # when it didn't run.
+    monkeypatch.setattr(validate, "can_check", lambda: False)
+    assert main(["build", str(EXAMPLE), "--out-dir", str(tmp_path), "--check"]) == 2
+    assert "--check requested" in capsys.readouterr().err
+    assert not list(tmp_path.glob("*.nft"))  # refused before writing
+
+
+def test_cli_authoring_error_is_clean(tmp_path, capsys):
+    # authoring mistakes exit 1 with a one-line message, not a traceback
+    root = tmp_path / "proj"
+    (root / "policies" / "hosts").mkdir(parents=True)
+    (root / "definitions").mkdir()
+    (root / "policies" / "hosts" / "h1.yaml").write_text("tabels: []\n")
+    assert main(["build", str(root)]) == 1
+    err = capsys.readouterr().err
+    assert "nftgen: error:" in err
+    assert "unknown policy key" in err
+
+
 @requires_nft
 @pytest.mark.parametrize("host", ["gateway", "router1", "router2"])
 def test_build_output_is_valid_nft(host):

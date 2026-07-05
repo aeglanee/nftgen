@@ -57,7 +57,7 @@ table inet filter {
         type filter hook input priority 0; policy drop;
         ct state established,related flow add @ft accept
         ip saddr @blocklist counter drop
-        iifname vmap { "wan0" : jump input_wan, "lan0" : jump input_lan }
+        iifname vmap { "wan0" : jump input_wan, "wwan0" : jump input_wan, "lan0" : jump input_lan }
     }
 
     chain input_wan {

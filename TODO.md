@@ -10,6 +10,31 @@ nft -c validation → primitives A–E). What's left, à la carte:
       rendering a broader rule. `raw:`/`vmap:` must be a rule's only key. Tests:
       `test_unknown_key_errors`, `test_raw_must_be_alone`, `test_vmap_must_be_alone`.
 
+- [x] **Strict authoring surface everywhere** (done 2026-07-05, v0.2.0). The
+      rule-level strictness extended to every level after a review found silent
+      failure modes that `nft -c` does NOT catch:
+      - unknown keys error at policy/table/chain/set/vmap/flowtable level (a
+        typo'd `tables:`/`chains:` used to generate a valid **empty** ruleset —
+        with the deploy flush prefix, a firewall wipe);
+      - a policy with no `tables:` refuses to generate;
+      - `iif`/`oif`/flowtable devices must be defined interface groups (a typo'd
+        name used to render a literal `iifname "lan_ifacse"` that deploys and
+        never matches — `nft -c` passes it); one-device groups (`eth0: [eth0]`)
+        are the literal escape hatch (a self-named item reads as a literal);
+      - non-numeric ports must be defined services; named-set refs are
+        type-checked (`iif: <addr set>` used to pass `nft -c`!);
+      - groups that resolve to no elements error at use (`iifname { }` passes
+        `nft -c` as a dead rule);
+      - definition cycles and include cycles error with the chain path
+        (previously: silent empty expansion / RecursionError);
+      - missing defs dir / site file / include file are clean errors;
+      - base-chain `policy:` default is type-aware (`filter` → drop, `nat`/
+        `route` → accept — drop on a nat chain drops unmatched new flows);
+      - `nftgen build --check` exits 2 loudly when `nft -c` isn't usable
+        (used to silently skip validation);
+      - CLI prints `nftgen: error: <msg>` (rc 1) for authoring mistakes instead
+        of a traceback.
+
 - [ ] **reject nft-keyword set/map names** — a set/map named after an nft keyword
       (`fwd`, `last`, …) breaks the generated ruleset with a confusing parse error.
       Guard against it at build time. (Found while verifying maps; see docs/maps.md.)

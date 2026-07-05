@@ -2,11 +2,28 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import pathlib
 import sys
 
+import yaml
+
 from nftgen import __version__, validate
+from nftgen.definitions import DefinitionError
 from nftgen.generate import build, generate
+from nftgen.ir import BuildError
+
+
+def _clean_errors(fn):
+    """Authoring mistakes get a one-line `nftgen: error:` instead of a traceback."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except (BuildError, DefinitionError, FileNotFoundError, yaml.YAMLError) as e:
+            print(f"nftgen: error: {e}", file=sys.stderr)
+            return 1
+    return wrapper
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,6 +50,7 @@ def _defaults(policy: pathlib.Path):
     return root / "definitions", include_base, root / "sites"
 
 
+@_clean_errors
 def _build_cmd(argv: list[str]) -> int:
     """`nftgen build <root>` — regenerate generated/<host>.nft for every host."""
     parser = argparse.ArgumentParser(
@@ -47,6 +65,16 @@ def _build_cmd(argv: list[str]) -> int:
     )
     args = parser.parse_args(argv)
 
+    # Probe before generating: a --check that can't run must fail loudly, not
+    # silently skip validation the caller (CI, the Ansible play) asked for.
+    if args.check and not validate.can_check():
+        print(
+            "nftgen: error: --check requested but `nft -c` is not usable here "
+            "(nft missing, or no netlink and no unshare fallback)",
+            file=sys.stderr,
+        )
+        return 2
+
     results = build(args.root, host=args.host)
     out_dir = pathlib.Path(args.out_dir) if args.out_dir else pathlib.Path(args.root) / "generated"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -55,7 +83,7 @@ def _build_cmd(argv: list[str]) -> int:
         path = out_dir / f"{name}.nft"
         path.write_text(text)
         print(f"wrote {path}", file=sys.stderr)
-        if args.check and validate.can_check():
+        if args.check:
             result = validate.check(text)
             if not result.ok:
                 print(f"nftgen: {name}: nft -c FAILED:\n{result.stderr}", file=sys.stderr)
@@ -63,6 +91,7 @@ def _build_cmd(argv: list[str]) -> int:
     return rc
 
 
+@_clean_errors
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "build":

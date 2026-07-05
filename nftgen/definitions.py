@@ -32,11 +32,19 @@ class Definitions:
     @classmethod
     def load(cls, def_dir: str | pathlib.Path, site_files: Iterable[str | pathlib.Path] = ()) -> "Definitions":
         """Merge every ``*.yaml`` under ``def_dir`` recursively (common), then site overlays."""
+        def_dir = pathlib.Path(def_dir)
+        if not def_dir.is_dir():
+            # A missing dir would silently yield empty definitions, degrading
+            # every group reference downstream — fail here instead.
+            raise DefinitionError(f"definitions directory not found: {def_dir}")
         defs = cls()
-        for path in sorted(pathlib.Path(def_dir).rglob("*.y*ml")):
+        for path in sorted(def_dir.rglob("*.y*ml")):
             defs._merge(yaml.safe_load(path.read_text()) or {}, str(path))
         for sf in site_files:
-            defs._merge(yaml.safe_load(pathlib.Path(sf).read_text()) or {}, str(sf))
+            sf = pathlib.Path(sf)
+            if not sf.is_file():
+                raise DefinitionError(f"site definitions file not found: {sf}")
+            defs._merge(yaml.safe_load(sf.read_text()) or {}, str(sf))
         return defs
 
     @classmethod
@@ -64,31 +72,35 @@ class Definitions:
     # -- resolution ---------------------------------------------------------- #
     def network(self, name: str) -> list[str]:
         """Resolve a network group to an ordered, deduped list of IP/CIDR strings."""
-        return self._expand("networks", self.networks, name, _net_leaf, frozenset())
+        return self._expand("networks", self.networks, name, _net_leaf, ())
 
     def service(self, name: str) -> list[tuple[str, str]]:
         """Resolve a service group to ordered, deduped (proto, port) pairs."""
-        return self._expand("services", self.services, name, _svc_leaf, frozenset())
+        return self._expand("services", self.services, name, _svc_leaf, ())
 
     def interface(self, name: str) -> list[str]:
         """Resolve an interface group to an ordered, deduped list of device names."""
-        return self._expand("interfaces", self.interfaces, name, _iface_leaf, frozenset())
+        return self._expand("interfaces", self.interfaces, name, _iface_leaf, ())
 
     def service_ports(self, name: str, proto: str) -> list[str]:
         """Just the ports of a service for one protocol (e.g. tcp)."""
         return [port for p, port in self.service(name) if p == proto]
 
-    def _expand(self, category, table, name, leaf, seen) -> list:
+    def _expand(self, category, table, name, leaf, stack: tuple) -> list:
         if name not in table:
             raise DefinitionError(f"undefined {category[:-1]}: {name!r}")
-        if name in seen:
-            return []  # cycle guard
-        seen = seen | {name}
+        if name in stack:
+            raise DefinitionError(
+                f"{category} definition cycle: {' -> '.join((*stack, name))}"
+            )
+        stack = (*stack, name)
         out: list = []
         for item in table[name]:
             key = str(item)
-            if key in table:
-                out.extend(self._expand(category, table, key, leaf, seen))
+            # A group referencing itself is meaningless as composition; read it
+            # as a literal so `eth0: [eth0]` names a one-device group.
+            if key in table and key != name:
+                out.extend(self._expand(category, table, key, leaf, stack))
             else:
                 out.extend(leaf(key, name))
         return list(dict.fromkeys(out))  # dedupe, preserve order

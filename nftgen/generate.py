@@ -11,11 +11,17 @@ import pathlib
 import yaml
 
 from nftgen.definitions import Definitions
-from nftgen.ir import Table, build_sets
+from nftgen.ir import BuildError, Table, build_sets
 from nftgen.rules import RuleRenderer, build_chain, build_flowtables
 
+# Strict authoring surface: an unknown key is a typo, and a typo'd `tables:` or
+# `chains:` would otherwise generate a valid-but-empty ruleset that nft -c
+# passes — with `flush ruleset` that artifact wipes the firewall on deploy.
+_POLICY_KEYS = frozenset({"site", "tables"})
+_TABLE_KEYS = frozenset({"family", "name", "sets", "chains", "counters", "raw", "flowtables"})
 
-def _resolve_list(items: list, key: str, base_dir: pathlib.Path) -> list:
+
+def _resolve_list(items: list, key: str, base_dir: pathlib.Path, stack: tuple = ()) -> list:
     """Flatten a list, expanding `{include: path}` entries (recursively).
 
     `key` is the section pulled from an include file ('sets' or 'rules').
@@ -24,8 +30,14 @@ def _resolve_list(items: list, key: str, base_dir: pathlib.Path) -> list:
     out: list = []
     for item in items or []:
         if isinstance(item, dict) and "include" in item:
-            data = yaml.safe_load((base_dir / item["include"]).read_text()) or {}
-            out.extend(_resolve_list(data.get(key, []), key, base_dir))
+            path = (base_dir / item["include"]).resolve()
+            if path in stack:
+                chain = " -> ".join(str(p) for p in (*stack, path))
+                raise BuildError(f"include cycle: {chain}")
+            if not path.is_file():
+                raise BuildError(f"include file not found: {base_dir / item['include']}")
+            data = yaml.safe_load(path.read_text()) or {}
+            out.extend(_resolve_list(data.get(key, []), key, base_dir, (*stack, path)))
         else:
             out.append(item)
     return out
@@ -42,13 +54,29 @@ def generate(
     include_base = pathlib.Path(include_base)
     policy = yaml.safe_load(policy_path.read_text()) or {}
 
+    if not isinstance(policy, dict):
+        raise BuildError(f"{policy_path}: policy must be a mapping, got {type(policy).__name__}")
+    unknown = set(policy) - _POLICY_KEYS
+    if unknown:
+        raise BuildError(f"{policy_path}: unknown policy key(s) {sorted(unknown)}")
+    if not policy.get("tables"):
+        raise BuildError(
+            f"{policy_path}: policy defines no `tables:` — refusing to generate "
+            f"an empty ruleset"
+        )
+
     site_files: list[pathlib.Path] = []
     if policy.get("site") and sites_dir:
         site_files = [pathlib.Path(sites_dir) / f"{policy['site']}.yaml"]
     defs = Definitions.load(defs_dir, site_files=site_files)
 
     tables = []
-    for tspec in policy.get("tables", []):
+    for tspec in policy["tables"]:
+        unknown = set(tspec) - _TABLE_KEYS
+        if unknown:
+            raise BuildError(f"{policy_path}: unknown table key(s) {sorted(unknown)}: {tspec.get('name', tspec)!r}")
+        if "family" not in tspec or "name" not in tspec:
+            raise BuildError(f"{policy_path}: a table needs `family:` and `name:`: {tspec!r}")
         sets_spec = _resolve_list(tspec.get("sets", []), "sets", include_base)
         sets = build_sets(sets_spec, defs)
         counters = list(tspec.get("counters", []))

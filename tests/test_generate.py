@@ -1,8 +1,10 @@
 """Phase 4 — full host -> .nft, includes, and the per-site overlay (golden)."""
 import pathlib
+import textwrap
 
 import pytest
 
+from nftgen.ir import BuildError
 from nftgen.generate import generate
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -60,3 +62,83 @@ def test_includes_and_raw_present():
     assert "ct state established,related accept" in out          # common-input baseline
     assert "tcp flags & (fin|syn) == (fin|syn) counter drop" in out  # scrub raw
     assert "maxseg size set rt mtu" in out                       # common-forward raw
+
+
+# -- strict policy surface (a typo'd section must not become an empty ruleset) - #
+def _write_project(tmp_path, policy_text):
+    (tmp_path / "definitions").mkdir()
+    (tmp_path / "definitions" / "defs.yaml").write_text("networks:\n  lan: [10.0.0.0/24]\n")
+    policy = tmp_path / "policy.yaml"
+    policy.write_text(textwrap.dedent(policy_text))
+    return policy
+
+
+def _gen_tmp(tmp_path, policy_text):
+    return generate(
+        _write_project(tmp_path, policy_text),
+        defs_dir=tmp_path / "definitions",
+        include_base=tmp_path,
+    )
+
+
+def test_policy_typo_table_key_errors(tmp_path):
+    # `table:` for `tables:` used to yield a valid empty ruleset — with the
+    # deploy flush prefix that artifact wipes the firewall.
+    with pytest.raises(BuildError, match="unknown policy key"):
+        _gen_tmp(tmp_path, """
+            table:
+              - {family: inet, name: filter}
+        """)
+
+
+def test_policy_without_tables_errors(tmp_path):
+    with pytest.raises(BuildError, match="defines no `tables:`"):
+        _gen_tmp(tmp_path, "site: site1\n")
+
+
+def test_table_typo_chain_key_errors(tmp_path):
+    with pytest.raises(BuildError, match="unknown table key"):
+        _gen_tmp(tmp_path, """
+            tables:
+              - family: inet
+                name: filter
+                chain:
+                  - {name: input, hook: input}
+        """)
+
+
+def test_table_needs_family_and_name(tmp_path):
+    with pytest.raises(BuildError, match="needs `family:` and `name:`"):
+        _gen_tmp(tmp_path, """
+            tables:
+              - name: filter
+        """)
+
+
+def test_include_missing_file_errors(tmp_path):
+    with pytest.raises(BuildError, match="include file not found"):
+        _gen_tmp(tmp_path, """
+            tables:
+              - family: inet
+                name: filter
+                chains:
+                  - name: input
+                    hook: input
+                    rules:
+                      - include: nope.yaml
+        """)
+
+
+def test_include_cycle_errors(tmp_path):
+    (tmp_path / "self.yaml").write_text("rules:\n  - include: self.yaml\n")
+    with pytest.raises(BuildError, match="include cycle"):
+        _gen_tmp(tmp_path, """
+            tables:
+              - family: inet
+                name: filter
+                chains:
+                  - name: input
+                    hook: input
+                    rules:
+                      - include: self.yaml
+        """)

@@ -6,13 +6,32 @@ from nftgen.ir import BuildError
 from nftgen.rules import RuleRenderer
 
 R = RuleRenderer(Definitions.from_mappings({}), {})
+# per-device dispatch happens through one-device groups (strict: no literals)
+RD = RuleRenderer(
+    Definitions.from_mappings({"interfaces": {"wan0": ["wan0"], "lan0": ["lan0"]}}), {}
+)
 
 
 def test_iif_vmap():
     rule = {"vmap": {"key": "iif", "map": {"wan0": {"jump": "wan_input"}, "lan0": {"jump": "lan_input"}}}}
-    assert R.render(rule) == [
+    assert RD.render(rule) == [
         'iifname vmap { "wan0" : jump wan_input, "lan0" : jump lan_input }'
     ]
+
+
+def test_iif_vmap_unknown_group_errors():
+    with pytest.raises(BuildError, match="not a known interface group"):
+        R.render({"vmap": {"key": "iif", "map": {"wan0": {"jump": "wan_input"}}}})
+
+
+def test_vmap_needs_map():
+    with pytest.raises(BuildError, match="needs a non-empty `map:`"):
+        R.render({"vmap": {"key": "iif"}})
+
+
+def test_vmap_unknown_spec_key_errors():
+    with pytest.raises(BuildError, match="unknown vmap key"):
+        R.render({"vmap": {"key": "proto", "maps": {"tcp": "accept"}}})  # typo'd `map:`
 
 
 def test_proto_vmap_unquoted_keys_and_verdicts():
@@ -52,9 +71,10 @@ def test_concat_vmap_iif_oif_expands_groups():
     ]
 
 
-def test_concat_vmap_literal_devices():
+def test_concat_vmap_unknown_device_errors():
     rule = {"vmap": {"key": ["iif", "oif"], "map": [{"match": ["eth0", "eth1"], "goto": "x"}]}}
-    assert R.render(rule) == ['iifname . oifname vmap { "eth0" . "eth1" : goto x }']
+    with pytest.raises(BuildError, match="not a known interface group"):
+        R.render(rule)
 
 
 def test_concat_vmap_match_arity_error():
@@ -113,10 +133,9 @@ def test_dport_vmap_resolves_service_bundle():
     assert RN.render(rule) == ["th dport vmap { 80 : jump w, 443 : jump w, 53 : jump d }"]
 
 
-def test_dport_vmap_unknown_name_passes_through():
-    assert RN.render({"vmap": {"key": "dport", "map": {"weird": "drop"}}}) == [
-        "th dport vmap { weird : drop }"
-    ]
+def test_dport_vmap_unknown_name_errors():
+    with pytest.raises(BuildError, match="not a known service group"):
+        RN.render({"vmap": {"key": "dport", "map": {"weird": "drop"}}})
 
 
 def test_iif_vmap_expands_group_single_key():

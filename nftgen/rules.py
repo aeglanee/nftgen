@@ -3,8 +3,10 @@
 A rule is a mapping of match keys + an ``action`` (or a ``raw:`` passthrough).
 Address matching is family-aware: a rule with address matches renders once per
 IP family common to all of them. A named group referenced in a rule becomes
-``@name`` when it's a declared set, otherwise it's inlined as an anonymous set;
-a literal stays literal.
+``@name`` when it's a declared set, otherwise it's inlined as an anonymous set.
+Literals are only accepted where they're unambiguous (an IP/CIDR address, a
+numeric port/range); interface and service names must be defined groups so a
+typo fails the build instead of silently never matching.
 """
 from __future__ import annotations
 
@@ -12,7 +14,7 @@ import itertools
 import ipaddress
 
 from nftgen.definitions import Definitions
-from nftgen.ir import BuildError, Chain, Flowtable, NamedSet
+from nftgen.ir import BuildError, Chain, Flowtable, NamedSet, _PORT_LITERAL
 
 PRIORITIES = {"raw": -300, "mangle": -150, "dstnat": -100, "filter": 0, "security": 50, "srcnat": 100}
 
@@ -20,7 +22,12 @@ PRIORITIES = {"raw": -300, "mangle": -150, "dstnat": -100, "filter": 0, "securit
 def resolve_priority(value) -> int:
     if isinstance(value, str) and value in PRIORITIES:
         return PRIORITIES[value]
-    return int(value)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise BuildError(
+            f"priority {value!r} is not a number or one of {sorted(PRIORITIES)}"
+        ) from None
 
 
 def _anon(items: list[str]) -> str:
@@ -245,20 +252,39 @@ class RuleRenderer:
         if isinstance(value, str) and value.startswith("@"):
             raise BuildError(f"unknown set reference {value!r}")
         if value in self.defs.networks:
+            addrs = self.defs.network(value)
+            if not addrs:
+                raise BuildError(f"network group {value!r} resolves to no addresses")
             buckets: dict[str, list[str]] = {}
-            for a in self.defs.network(value):
+            for a in addrs:
                 fam = "ip" if ipaddress.ip_network(a, strict=False).version == 4 else "ip6"
                 buckets.setdefault(fam, []).append(a)
             return {fam: _anon(addrs) for fam, addrs in buckets.items()}
-        fam = "ip" if ipaddress.ip_network(value, strict=False).version == 4 else "ip6"
+        try:
+            fam = "ip" if ipaddress.ip_network(value, strict=False).version == 4 else "ip6"
+        except ValueError:
+            raise BuildError(
+                f"address {value!r} is not a known network group, set, or IP/CIDR"
+            ) from None
         return {fam: value}
 
     def _iface(self, value: str) -> str:
+        # Strict: an unknown name would otherwise render as a literal device and
+        # silently never match — a typo'd group must fail the build instead. A
+        # genuine one-off device gets a one-device group under `interfaces:`.
         if value in self.named:
+            s = self.named[value]
+            if s.type != "ifname":
+                raise BuildError(f"set @{value} is {s.type}, not an interface set")
             return f"@{value}"
         if value in self.defs.interfaces:
-            return _anon([f'"{d}"' for d in self.defs.interface(value)])
-        return f'"{value}"'
+            devices = self.defs.interface(value)
+            if not devices:
+                raise BuildError(f"interface group {value!r} resolves to no devices")
+            return _anon([f'"{d}"' for d in devices])
+        raise BuildError(
+            f"unknown interface group {value!r} (define it under `interfaces:`)"
+        )
 
     def _proto_ports(self, rule: dict) -> list[str]:
         proto = rule.get("proto")
@@ -277,13 +303,21 @@ class RuleRenderer:
 
     def _port(self, value, proto: str) -> str:
         if value in self.named:
+            s = self.named[value]
+            if s.type != "inet_service":
+                raise BuildError(f"set @{value} is {s.type}, not a port set")
             return f"@{value}"
         if isinstance(value, str) and value in self.defs.services:
             ports = self.defs.service_ports(value, proto)
             if not ports:
                 raise BuildError(f"service {value!r} has no {proto} ports")
             return _anon(ports)
-        return str(value)
+        if isinstance(value, int) or (isinstance(value, str) and _PORT_LITERAL.match(value)):
+            return str(value)
+        raise BuildError(
+            f"port {value!r} is not a known service group or a port/range "
+            f"(define it under `services:`)"
+        )
 
     _VMAP_KEYS = {
         "iif": "iifname", "oif": "oifname", "proto": "meta l4proto",
@@ -294,6 +328,11 @@ class RuleRenderer:
     _VMAP_HELP = "iif/oif/proto/dport/sport/mark/state/saddr/daddr"
 
     def _vmap(self, spec: dict) -> str:
+        if not isinstance(spec, dict):
+            raise BuildError(f"`vmap:` needs a mapping with `key:` and `map:`, got {spec!r}")
+        unknown = set(spec) - {"key", "map"}
+        if unknown:
+            raise BuildError(f"unknown vmap key(s) {sorted(unknown)}: {spec!r}")
         key = spec.get("key")
         if isinstance(key, list):                       # concatenated key
             return self._concat_vmap(spec, key)
@@ -302,8 +341,11 @@ class RuleRenderer:
         keyexpr = self._VMAP_KEYS.get(key)
         if keyexpr is None:
             raise BuildError(f"vmap key {key!r} not supported (use {self._VMAP_HELP})")
+        mapping = spec.get("map")
+        if not isinstance(mapping, dict) or not mapping:
+            raise BuildError(f"a {key} vmap needs a non-empty `map:` of value -> verdict: {spec!r}")
         entries = []
-        for k, verdict in spec["map"].items():
+        for k, verdict in mapping.items():
             v = self._verdict(verdict)
             entries.extend(f"{tok} : {v}" for tok in self._vmap_lit_tokens(key, k))
         return f"{keyexpr} vmap {{ {', '.join(entries)} }}"
@@ -328,6 +370,8 @@ class RuleRenderer:
     def _vmap_addr_tokens(self, key: str, value) -> tuple:
         """One address vmap key -> (family, [cidrs]); a network group expands."""
         cidrs = self.defs.network(value) if value in self.defs.networks else [str(value)]
+        if not cidrs:
+            raise BuildError(f"vmap {key} group {value!r} resolves to no addresses")
         fams = set()
         for a in cidrs:
             try:
@@ -390,11 +434,26 @@ class RuleRenderer:
         """Non-address vmap element tokens for one key — groups and services expand."""
         if keytype in ("iif", "oif"):
             if value in self.defs.interfaces:
-                return [f'"{d}"' for d in self.defs.interface(value)]
-            return [f'"{value}"']                       # literal device name
-        if keytype in ("dport", "sport") and isinstance(value, str) and value in self.defs.services:
-            return list(dict.fromkeys(port for _proto, port in self.defs.service(value)))
-        return [str(value)]                             # number / proto / mark / state / unknown
+                devices = self.defs.interface(value)
+                if not devices:
+                    raise BuildError(f"vmap {keytype} group {value!r} resolves to no devices")
+                return [f'"{d}"' for d in devices]
+            raise BuildError(
+                f"vmap {keytype} value {value!r} is not a known interface group "
+                f"(define it under `interfaces:`)"
+            )
+        if keytype in ("dport", "sport"):
+            if isinstance(value, str) and value in self.defs.services:
+                ports = list(dict.fromkeys(port for _proto, port in self.defs.service(value)))
+                if not ports:
+                    raise BuildError(f"vmap {keytype} service {value!r} resolves to no ports")
+                return ports
+            if isinstance(value, int) or (isinstance(value, str) and _PORT_LITERAL.match(value)):
+                return [str(value)]
+            raise BuildError(
+                f"vmap {keytype} value {value!r} is not a known service group or a port/range"
+            )
+        return [str(value)]                             # proto / mark / state literal
 
     def _one_family(self, key: str, fam, kfam: str) -> str:
         if fam is None:
@@ -498,15 +557,28 @@ class RuleRenderer:
         return val
 
 
+_FLOWTABLE_KEYS = frozenset({"name", "hook", "priority", "devices"})
+_CHAIN_KEYS = frozenset({"name", "hook", "type", "priority", "policy", "rules"})
+
+
 def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:
     out = []
     for spec in specs or []:
+        unknown = set(spec) - _FLOWTABLE_KEYS
+        if unknown:
+            raise BuildError(f"unknown flowtable key(s) {sorted(unknown)}: {spec!r}")
+        if "name" not in spec:
+            raise BuildError(f"flowtable needs a `name:`: {spec!r}")
         devices: list[str] = []
         for dev in spec.get("devices", []):
-            if dev in defs.interfaces:
-                devices.extend(f'"{d}"' for d in defs.interface(dev))
-            else:
-                devices.append(f'"{dev}"')
+            if dev not in defs.interfaces:
+                raise BuildError(
+                    f"flowtable {spec['name']!r}: device {dev!r} is not a known "
+                    f"interface group (define it under `interfaces:`)"
+                )
+            devices.extend(f'"{d}"' for d in defs.interface(dev))
+        if not devices:
+            raise BuildError(f"flowtable {spec['name']!r} resolves to no devices")
         out.append(
             Flowtable(
                 name=spec["name"],
@@ -519,6 +591,11 @@ def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:
 
 
 def build_chain(spec: dict, renderer: RuleRenderer) -> Chain:
+    unknown = set(spec) - _CHAIN_KEYS
+    if unknown:
+        raise BuildError(f"unknown chain key(s) {sorted(unknown)}: {spec!r}")
+    if "name" not in spec:
+        raise BuildError(f"chain needs a `name:`: {spec!r}")
     rule_lines: list[str] = []
     for r in spec.get("rules", []):
         if isinstance(r, dict) and "include" in r:
@@ -529,5 +606,7 @@ def build_chain(spec: dict, renderer: RuleRenderer) -> Chain:
         chain.hook = spec["hook"]
         chain.type = spec.get("type", "filter")
         chain.priority = resolve_priority(spec.get("priority", 0))
-        chain.policy = spec.get("policy", "drop")
+        # drop is only a sane default for filter chains: on a nat/route chain it
+        # would drop every flow the chain's rules don't match.
+        chain.policy = spec.get("policy", "drop" if chain.type == "filter" else "accept")
     return chain
