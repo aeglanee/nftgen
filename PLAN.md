@@ -43,11 +43,16 @@ safe, then land the role on sessrumnir main and wire nftgen-built rulesets into
 the `feat/bright-future` enterprise router platform (its docs name the firewall
 as the one architectural gap — "aerleon-style rule generator planned" = us).
 
-### R0 — Release & sync (unblocks everything)
-- [ ] Push nftgen master + tag **v0.2.0** (breaking: strict surface).
-- [ ] sessrumnir `feat/nftgen-integration`: bump `requirements.txt` pin
+### R0 — Release & sync (unblocks everything)  ✓ done 2026-07-05
+- [x] Push nftgen master + tag **v0.2.0** (breaking: strict surface).
+- [x] sessrumnir `feat/nftgen-integration`: bump `requirements.txt` pin
       `@v0.1.0` → `@v0.2.0`; **rebase onto origin/main (0.7.0)**; re-run the
-      docker-nftables molecule scenario green.
+      docker-nftables molecule scenario green. (Also: ansible-lint + yamllint
+      green after conforming the nftgen YAML style; artifacts byte-identical;
+      the v0.2.0 pin verified installing from the pushed tag. Branch at
+      14f4dc1, force-pushed. Note: `vagrant-libvirt-enterprise` already
+      exists on sessrumnir main — R6 targets it there, bright-future adds
+      the container/HA roles on top.)
 
 ### R1 — Small tests first: netns behavioral harness (in this repo)
 The real-trust layer `nft -c` can't give. No VM needed: user+net namespaces
