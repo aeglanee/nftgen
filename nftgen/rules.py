@@ -504,11 +504,26 @@ class RuleRenderer:
             if kind in ("dnat", "snat"):
                 if isinstance(target, dict):  # map form: dnat to <proto> dport map {…}
                     return self._nat_map(kind, target)
+                target = self._nat_target(kind, target)
                 # inet tables require a family qualifier (`dnat ip to`); infer it
                 # from the target address. Required in inet, accepted in ip/ip6.
                 return f"{kind} {_nat_family(target)} to {target}"
             raise BuildError(f"unknown action: {action!r}")
         return str(action)
+
+    def _nat_target(self, kind: str, target) -> str:
+        """A bare dnat/snat target: a network group resolves to its one address
+        (site overlays put the per-site NAT address behind a shared name)."""
+        t = str(target)
+        if t in self.defs.networks:
+            addrs = self.defs.network(t)
+            if len(addrs) != 1:
+                raise BuildError(
+                    f"{kind} target {t!r} resolves to {len(addrs)} addresses; "
+                    f"a nat target takes one"
+                )
+            return addrs[0]
+        return t
 
     def _nat_map(self, kind: str, spec: dict) -> str:
         """`dnat/snat: {proto, map, key?}` -> `dnat ip to tcp dport map { k : v, … }`."""

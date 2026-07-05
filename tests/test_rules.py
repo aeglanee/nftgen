@@ -98,6 +98,16 @@ def test_dnat_target_without_ip_errors():
         R.render({"proto": "tcp", "dport": "8443", "action": {"dnat": "not-an-ip"}})
 
 
+def test_nat_target_resolves_single_element_group():
+    d = Definitions.from_mappings(
+        {"networks": {"wan_ip": ["203.0.113.10"], "pair": ["10.0.0.1", "10.0.0.2"]}}
+    )
+    r = RuleRenderer(d, {})
+    assert r.render({"action": {"snat": "wan_ip"}}) == ["snat ip to 203.0.113.10"]
+    with pytest.raises(BuildError, match="resolves to 2 addresses"):
+        r.render({"action": {"snat": "pair"}})
+
+
 def test_dnat_map():
     d = Definitions.from_mappings(
         {
