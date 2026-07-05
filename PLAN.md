@@ -57,6 +57,12 @@ as the one architectural gap — "aerleon-style rule generator planned" = us).
 ### R1 — Small tests first: netns behavioral harness (in this repo)
 The real-trust layer `nft -c` can't give. No VM needed: user+net namespaces
 (`unshare -rn` already proven here) + veth pairs.
+**Progress 2026-07-05:** the *what* is specced — full behavioral matrix in
+[docs/testing-plan.md](docs/testing-plan.md) (B01–B26 primitives + P01–P20
+PoC truth table), and the showcase fixture exists:
+[example-poc/](example-poc/) (two-site best-practice pair, README-narrated,
+built + `nft -c` clean + drift-pinned by `tests/test_poc.py`; bare nat
+targets now resolve site-overlay groups). Next: the harness itself.
 - [ ] pytest fixture: 3-namespace topology (client ↔ router ↔ server), apply a
       fixture ruleset in the router ns, probe with `nc`/ping.
 - [ ] Assert the *semantics* of each primitive: ct established/related return

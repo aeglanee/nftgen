@@ -2,7 +2,7 @@
 
 Durable orientation: where nftgen is, what's decided, what's next. The
 conversation holds nuance; this holds the map. Update on milestones, not every
-turn. Last updated: 2026-06-28.
+turn. Last updated: 2026-07-05.
 
 ## Status
 - **Phases 0–6 done** — standalone generator works (defs → named sets →
@@ -36,8 +36,28 @@ turn. Last updated: 2026-06-28.
   ship one nftgen-built `.nft` per host (`feat!`), a two-play example playbook, and
   a realistic `gw1a`/`gw1b`/`gw2` fleet + baseline scrub/zone includes — all
   `nft -c` clean. nftgen consumed as a pinned dependency.
-- **⟶ Next:** tag **`v0.1.0`**; Step 3b apply role (rollback) + Step 4 molecule
-  (deploy a host end-to-end). PLAN Step 3–4.
+- **v0.2.0 released (2026-07-05): the strict authoring surface.** A critical
+  review probed what `nft -c` *cannot* catch (empty rulesets, dead `iifname { }`
+  rules, literal-typo'd interfaces, type-mismatched set refs — all pass!) and
+  closed every hole: unknown keys/names error at every level, empty groups
+  error at use, type-aware chain policy defaults, loud `--check`, clean CLI
+  errors, cycle paths named. **153 tests**; TODO.md §Safety has the list.
+- **R0 done (2026-07-05):** v0.2.0 pushed + tagged; sessrumnir branch rebased
+  onto main 0.7.0, pin bumped and verified installing from the tag; molecule
+  docker-nftables + ansible-lint + yamllint green. The R0–R7 roadmap
+  (behavioral tests → CI → rollback apply → enterprise convergence) is in
+  [../PLAN.md](../PLAN.md) §Roadmap — the authoritative TODO.
+- **R1 specced + fixture built (2026-07-05):** behavioral test matrix in
+  [testing-plan.md](testing-plan.md) (B01–B26 primitive semantics, P01–P20
+  PoC reachability truth table, netns harness design); showcase fixture
+  [../example-poc/](../example-poc/) — a two-site best-practice router pair
+  (zone vmaps incl. `[iif, oif]` pair dispatch, dport service dispatch, dnat
+  data map, concat paired-flows set, live blocklist, site overlays with
+  divergent sites, static-snat vs masquerade) — README-narrated, `nft -c`
+  clean, drift-pinned. Bare `dnat:`/`snat:` targets now resolve
+  single-address network groups (per-site NAT address behind a shared name).
+- **⟶ Next:** the netns harness itself (testing-plan §Execution order), then
+  R2 CI. PLAN §Roadmap.
 
 ## Decided
 - **nftgen ↔ sessrumnir are decoupled.** nftgen replaces the existing nftables
