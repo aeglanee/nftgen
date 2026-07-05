@@ -82,6 +82,9 @@ findings/proposals. Each has one job — don't duplicate across them:
     maps (dnat targets), inline vs named, each as verified nft code blocks.
   - [docs/automation/](docs/automation/) — what nftgen derives vs leaves to you,
     each as define→generate + defaults + overrides (A set-type done; B–D pending).
+  - [docs/testing-plan.md](docs/testing-plan.md) — the behavioral (netns) test
+    matrix: primitive semantics B01–B26 + the [example-poc/](example-poc/)
+    reachability truth table P01–P20; harness design + execution order.
   - [docs/step1-review.md](docs/step1-review.md) — coverage map, test audit,
     the `nft -c` recipe, and the bugs it found.
   - [docs/concatenations.md](docs/concatenations.md) — the concatenation-set design proposal (why).
