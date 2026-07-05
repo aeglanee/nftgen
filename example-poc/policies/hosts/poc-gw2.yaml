@@ -15,6 +15,10 @@ tables:
 
     sets:
       - include: includes/common/sets-bogons.yaml
+      - all_users
+      - all_servers
+      - admins
+      - monitors
       - name: blocklist
         type: ipv4_addr
         flags: [timeout]

@@ -14,7 +14,10 @@ import itertools
 import ipaddress
 
 from nftgen.definitions import Definitions
-from nftgen.ir import BuildError, Chain, Flowtable, NamedSet, _PORT_LITERAL
+from nftgen.ir import (
+    BODY_INDENT, BuildError, Chain, Flowtable, NamedSet, _PORT_LITERAL,
+    render_literal,
+)
 
 PRIORITIES = {"raw": -300, "mangle": -150, "dstnat": -100, "filter": 0, "security": 50, "srcnat": 100}
 
@@ -348,7 +351,7 @@ class RuleRenderer:
         for k, verdict in mapping.items():
             v = self._verdict(verdict)
             entries.extend(f"{tok} : {v}" for tok in self._vmap_lit_tokens(key, k))
-        return f"{keyexpr} vmap {{ {', '.join(entries)} }}"
+        return f"{keyexpr} vmap {render_literal(entries, BODY_INDENT)}"
 
     def _addr_vmap(self, spec: dict, key: str) -> str:
         """Address vmap (`saddr`/`daddr`) -> `ip saddr vmap` / `ip6 saddr vmap`.
@@ -365,7 +368,7 @@ class RuleRenderer:
             fam = self._one_family(key, fam, kfam)
             v = self._verdict(verdict)
             entries.extend(f"{c} : {v}" for c in cidrs)
-        return f"{fam} {key} vmap {{ {', '.join(entries)} }}"
+        return f"{fam} {key} vmap {render_literal(entries, BODY_INDENT)}"
 
     def _vmap_addr_tokens(self, key: str, value) -> tuple:
         """One address vmap key -> (family, [cidrs]); a network group expands."""
@@ -428,7 +431,7 @@ class RuleRenderer:
         if any(k in self._VMAP_ADDR for k in keys) and fam is None:
             raise BuildError(f"concat vmap with an address key needs at least one entry: {spec!r}")
         keyexprs = [f"{fam} {k}" if k in self._VMAP_ADDR else self._VMAP_KEYS[k] for k in keys]
-        return f"{' . '.join(keyexprs)} vmap {{ {', '.join(entries)} }}"
+        return f"{' . '.join(keyexprs)} vmap {render_literal(entries, BODY_INDENT)}"
 
     def _vmap_lit_tokens(self, keytype: str, value) -> list:
         """Non-address vmap element tokens for one key — groups and services expand."""
@@ -558,7 +561,7 @@ class RuleRenderer:
         if len(families) > 1:
             raise BuildError(f"{kind} map mixes v4 and v6 targets: {sorted(families)}")
         fam = families.pop()
-        return f"{kind} {fam} to {proto} {key} map {{ {', '.join(entries)} }}"
+        return f"{kind} {fam} to {proto} {key} map {render_literal(entries, BODY_INDENT)}"
 
     def _map_port_key(self, kind: str, val, proto: str) -> str:
         val = str(val)

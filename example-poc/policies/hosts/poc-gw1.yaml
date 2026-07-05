@@ -15,6 +15,14 @@ tables:
 
     sets:
       - include: includes/common/sets-bogons.yaml
+      # Fleet groups referenced across several chains get *named* — one kernel
+      # object, `nft list set` shows membership, and a subnet change is a
+      # one-line diff in the set instead of N rule lines. One-off references
+      # (the local_* zone nets) stay inline. See README §name-vs-inline.
+      - all_users
+      - all_servers
+      - admins
+      - monitors
       # Live blocklist: starts empty, fed at runtime
       # (`nft add element inet filter blocklist { <ip> timeout 10m }`).
       # Single-family by design — a v6 twin would be blocklist_v6.

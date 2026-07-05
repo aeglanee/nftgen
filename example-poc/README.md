@@ -55,6 +55,16 @@ Build: `nftgen build example-poc --check` → `generated/poc-gw{1,2}.nft`
 - **Includes compose, recursively**: `fwd-xsite.yaml` nests
   `fwd-users-servers.yaml` — the user→server policy is written once and serves
   local traffic on both gateways *and* the inter-site path.
+- **Named vs inline sets — the heuristic**: a definition renders as a named
+  set only where a table's `sets:` declares it; otherwise it inlines
+  (authored choice, per table). Rule of thumb: **name it when it recurs
+  across chains or needs runtime visibility/updates** — `all_users`,
+  `all_servers`, `admins`, `monitors` are declared here, so rules read
+  `ip saddr @all_users … ip daddr @all_servers` and a site's subnet change
+  is a one-line diff inside one set block. **Inline the one-offs** — the
+  `local_*` zone nets stay anonymous so the reviewed rule shows its values
+  directly. When an inline set starts repeating, that's the signal to name
+  it.
 - **Paired flows vs cartesian** (best-practices §2): `mon_flows` is a
   concatenation set of exact `(saddr, daddr, dport)` tuples — the monitor may
   scrape both DMZ hosts, with no cartesian bleed. Contrast with the

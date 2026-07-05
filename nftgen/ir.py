@@ -17,6 +17,19 @@ _PORT_LITERAL = re.compile(r"^\d+(-\d+)?$")  # port or port-range
 SET_INDENT = "    "
 BODY_INDENT = "        "
 
+_WRAP_AT = 4  # a { … } literal with this many entries renders one per line
+
+
+def render_literal(entries: list[str], base_indent: str) -> str:
+    """Render a ``{ … }`` literal — single-line while small, one entry per
+    line from ``_WRAP_AT`` entries up. Large dispatch tables and element lists
+    stay readable, and a membership change is a one-line git diff in the
+    committed artifact instead of an opaque long-line change."""
+    if len(entries) < _WRAP_AT:
+        return "{ " + ", ".join(entries) + " }"
+    body = ",\n".join(f"{base_indent}    {e}" for e in entries)
+    return "{\n" + body + "\n" + base_indent + "}"
+
 
 class BuildError(Exception):
     """A policy/definition combination cannot be turned into valid IR."""
@@ -42,7 +55,7 @@ class NamedSet:
         if self.flags:
             lines.append(f"{BODY_INDENT}flags {', '.join(self.flags)}")
         if self.elements:
-            lines.append(f"{BODY_INDENT}elements = {{ {', '.join(self.elements)} }}")
+            lines.append(f"{BODY_INDENT}elements = {render_literal(self.elements, BODY_INDENT)}")
         lines.append(f"{SET_INDENT}}}")
         return lines
 

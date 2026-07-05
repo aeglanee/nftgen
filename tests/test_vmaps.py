@@ -153,3 +153,18 @@ def test_concat_saddr_dport_family_aware():
     assert RN.render(rule) == [
         "ip saddr . th dport vmap { 192.168.10.8/29 . 22 : jump admin_ssh }"
     ]
+
+
+def test_large_vmap_wraps_one_entry_per_line():
+    rule = {"vmap": {"key": "proto", "map": {
+        "tcp": {"jump": "t"}, "udp": {"jump": "u"},
+        "icmp": {"jump": "i"}, "sctp": {"jump": "s"},
+    }}}
+    assert R.render(rule) == [
+        "meta l4proto vmap {\n"
+        "            tcp : jump t,\n"
+        "            udp : jump u,\n"
+        "            icmp : jump i,\n"
+        "            sctp : jump s\n"
+        "        }"
+    ]

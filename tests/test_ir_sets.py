@@ -118,3 +118,20 @@ def test_named_set_render_unit():
         "        elements = { 10.0.0.0/8 }",
         "    }",
     ]
+
+
+def test_named_set_large_elements_wrap_one_per_line():
+    # four elements is the wrap threshold — membership changes diff line-by-line
+    s = NamedSet("x", "ipv4_addr", ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8"], ["interval"])
+    assert s.render() == [
+        "    set x {",
+        "        type ipv4_addr",
+        "        flags interval",
+        "        elements = {\n"
+        "            10.0.0.0/8,\n"
+        "            172.16.0.0/12,\n"
+        "            192.168.0.0/16,\n"
+        "            127.0.0.0/8\n"
+        "        }",
+        "    }",
+    ]
