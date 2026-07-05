@@ -28,13 +28,91 @@ output is [docs/step1-review.md](docs/step1-review.md); pick up the open items b
   parametrize the nft-check over *all* hosts (not just router1/router2).
 
 ## Status
-- **Done:** Phases 0–6 — skeleton → definitions → named sets → rules/chains →
-  host→`.nft` + includes + site overlay → `nft -c` validation → primitives A–E
-  (statements, counters, flowtables, vmaps, tcp-flags). **80 passed, 3 skipped**
-  (the 3 are `nft -c` tests that skip in this sandbox; they run on a real box).
-- **Standalone generator works.** No Ansible/CI integration exists yet.
+- **Done:** Phases 0–6 (skeleton → defs → sets → rules/chains → host→`.nft` →
+  `nft -c` → primitives A–E), Step 2 `build()`, Step 3a (sessrumnir role rewrite,
+  two-play flow), and the **v0.2.0 strict authoring surface** (2026-07-05: unknown
+  keys/names/empty groups fail the build; type-aware chain policy; loud `--check`;
+  clean CLI errors — see TODO.md §Safety). **153 tests.**
+- **Not done:** behavioral (traffic) testing, nftgen CI, Step 3b apply-rollback,
+  Step 4 molecule end-to-end, enterprise (bright-future) firewall integration.
 
-## The plan
+## Roadmap — 2026-07-05 (authoritative TODO; follow in order)
+
+Goal: prove the generated firewalls *behave* (not just parse), make the deploy
+safe, then land the role on sessrumnir main and wire nftgen-built rulesets into
+the `feat/bright-future` enterprise router platform (its docs name the firewall
+as the one architectural gap — "aerleon-style rule generator planned" = us).
+
+### R0 — Release & sync (unblocks everything)
+- [ ] Push nftgen master + tag **v0.2.0** (breaking: strict surface).
+- [ ] sessrumnir `feat/nftgen-integration`: bump `requirements.txt` pin
+      `@v0.1.0` → `@v0.2.0`; **rebase onto origin/main (0.7.0)**; re-run the
+      docker-nftables molecule scenario green.
+
+### R1 — Small tests first: netns behavioral harness (in this repo)
+The real-trust layer `nft -c` can't give. No VM needed: user+net namespaces
+(`unshare -rn` already proven here) + veth pairs.
+- [ ] pytest fixture: 3-namespace topology (client ↔ router ↔ server), apply a
+      fixture ruleset in the router ns, probe with `nc`/ping.
+- [ ] Assert the *semantics* of each primitive: ct established/related return
+      path; default-drop; accepted dport reachable, others refused; dnat
+      port-forward rewrites; vmap dispatch (per-interface chains hit); icmp
+      policy; concat-set pair matching.
+- [ ] Marked/skipped cleanly where namespaces are unavailable (mirrors
+      `requires_nft`).
+- [ ] Then run the same harness over `example/` host policies (gateway dnat,
+      router1/2 zones) — golden *behavior*, not just golden text.
+
+### R2 — nftgen CI + last safety guard
+- [ ] Own venv (drop the aerleon `.venv` borrow); GitHub Actions: pytest +
+      `nft -c` (ubuntu runner) + `nftgen build example --check` + golden-drift
+      (`git diff --exit-code` after regenerate) + the R1 netns suite.
+- [ ] TODO item: reject nft-keyword set/map names (`fwd`, `last`, …) at build.
+
+### R3 — sessrumnir Step 3b: apply-with-rollback (deploy safety)
+- [ ] Role gains the apply sequence (DEPLOYMENT §10.3): `systemd-run` dead-man
+      revert (restore last-good + re-enable) → apply to live → Ansible
+      reconnect-confirm → persist to `/etc/nftables.conf` → cancel revert;
+      `serial: 1`.
+- [ ] Molecule test that *proves the revert*: deploy a ruleset, skip the
+      confirm, assert the timer restored the previous ruleset.
+
+### R4 — sessrumnir Step 4: molecule verifies behavior, not files
+- [ ] docker-nftables `verify.yml` today asserts file contents only — add:
+      `nft list ruleset` matches the shipped config (kernel state, not just
+      the file), counters increment on probe traffic, disallowed port refused
+      (probe from a second container or the host netns).
+- [ ] CI drift gate: regenerate `examples/nftgen` + molecule project, `git
+      diff --exit-code` (committed artifacts always reproducible).
+
+### R5 — router service-contract policies (the bright-future gap)
+Author as reusable nftgen includes + defs (test here first — R1 harness):
+- [ ] `services.yaml`: bgp 179/tcp, dns 53/udp+tcp, dhcp 67-68/udp, ntp
+      123/udp, vrrp = proto 112 (rule, not port), conntrackd sync, ssh mgmt.
+- [ ] `policies/includes/router/`: in-mgmt, vrrp-peers (proto 112 +
+      224.0.0.18), bgp-peers (saddr-scoped), dhcp-serve (+relay), dns-serve,
+      conntrackd-sync (peer-link scoped), chrony.
+- [ ] Example HA-router pair host mirroring the enterprise `router1`/`router2`
+      shape; `nft -c` + netns behavioral pass.
+
+### R6 — land on main, then converge with bright-future
+- [ ] PR `feat/nftgen-integration` → sessrumnir main (breaking role rewrite;
+      release-please bumps minor).
+- [ ] Spike branch **off bright-future**: merge main (or cherry-pick the role),
+      drop its fragment-role tweaks, add an `nftgen/` project to the
+      `vagrant-libvirt-enterprise` inventory (per-router policies from R5),
+      deploy via the R3 rollback flow.
+- [ ] Run the enterprise scenario's verify + failover drills (VRRP failover,
+      BGP session, DHCP lease, DNS resolve, conntrackd sync) **with firewalls
+      active on both routers** — fix what breaks; that list is the real
+      service contract. Done = enterprise verify green, firewalled.
+
+### R7 — backlog after convergence (unordered)
+JSON emitter revival (`nft -j` apply / drift detection), named/reusable maps,
+`set-dscp`, CI change-detection apply-set (DEPLOYMENT model B), JSON schema
+for editor validation.
+
+## The plan (original phases — kept for history)
 
 ### Step 1 — Walkthrough + critical structure review  ✓ done → [docs/step1-review.md](docs/step1-review.md)
 Module by module (`definitions → ir → rules → generate → validate → cli`): what
