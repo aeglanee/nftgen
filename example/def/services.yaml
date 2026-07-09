@@ -1,0 +1,13 @@
+# Service groups. Each port carries its protocol (22/tcp). They emit as a
+# proto-agnostic nft set of ports; the rule states the protocol (tcp dport @web).
+# A group can compose other groups.
+services:
+  ssh: [22/tcp]
+  http: [80/tcp]
+  https: [443/tcp]
+  dns: [53/tcp, 53/udp]
+
+  # composition: a bundle of other services
+  web:
+    - http
+    - https

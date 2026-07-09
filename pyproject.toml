@@ -1,15 +1,15 @@
 [project]
 name = "nftgen"
-version = "0.3.0"
+version = "0.0.1"
 description = "A small, nftables-only firewall-as-code generator (YAML -> .nft)."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 authors = [{ name = "aeglanee" }]
-dependencies = ["PyYAML>=6.0"]
+dependencies = ["PyYAML>=6.0.3"]
 
 [project.optional-dependencies]
-test = ["pytest>=8.0"]
+test = ["pytest>=9.1.1"]
 
 [project.scripts]
 nftgen = "nftgen.cli:main"
@@ -23,3 +23,7 @@ packages = ["nftgen"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]

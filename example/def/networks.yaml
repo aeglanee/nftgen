@@ -1,0 +1,24 @@
+# Network groups. A value is a CIDR/IP literal, or the name of another group
+# (composition). Used in rules as saddr / daddr.
+networks:
+  # ----- site subnets (the real addresses; all sites known everywhere) -----
+  users_site1: [192.168.10.0/24]
+  users_site2: [192.168.20.0/24]
+  servers_site1: [192.168.11.0/24]
+  servers_site2: [192.168.21.0/24]
+  mgmt: [192.168.9.0/24]
+  webhosts: [192.0.2.10, 192.0.2.11]
+
+  # ----- bogons / special-use (RFC 6890), for scrubbing -----
+  bogon_ipv4:
+    - 192.0.0.0/24
+    - 192.0.2.0/24
+    - 198.51.100.0/24
+    - 203.0.113.0/24
+    - 240.0.0.0/4
+  no_forward_ipv4:
+    - 0.0.0.0/8
+    - 127.0.0.0/8
+    - 169.254.0.0/16
+    - 224.0.0.0/4
+    - 255.255.255.255/32
