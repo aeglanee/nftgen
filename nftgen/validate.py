@@ -42,7 +42,7 @@ def _run(prefix: list[str], text: str) -> CheckResult:
         fh.write(text)
         path = fh.name
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
             [*prefix, "nft", "-c", "-f", path],
             capture_output=True,
             text=True,

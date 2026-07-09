@@ -46,8 +46,14 @@ select = [
   "C4",  # flake8-comprehensions
   "RET", # flake8-return
   "PL",  # pylint
+  "S",   # flake8-bandit
 ]
 ignore = [
   "E501",    # formatter owns line-length wrapping
   "PLR2004", # magic values are fine in tests and rendering tables
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest asserts; the netns harness runs fixed PATH-resolved commands
+# (ip/nft/unshare) and binds inside throwaway namespaces
+"tests/**" = ["S101", "S603", "S607", "S104"]
