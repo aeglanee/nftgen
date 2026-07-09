@@ -65,6 +65,14 @@ rules:
   - raw: "tcp dport 25 log group 2 queue-threshold 16"
 ```
 
+## Trace a packet's path (debugging)
+
+```yaml
+rules:
+  # temporary: arm tracing for one test source, watch `nft monitor trace`
+  - raw: "ip saddr 192.168.10.55 meta nftrace set 1"
+```
+
 ## Meta matches beyond mark
 
 ```yaml

@@ -351,3 +351,64 @@ forward chain, so your policy fully applies to connection setup.
 - [3] [Flowtables — nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Flowtables)
 - [4] [Flowtables Part 1: a Netfilter/nftables fastpath — thermalcircle.de](https://thermalcircle.de/doku.php?id=blog%3Alinux%3Aflowtables_1_a_netfilter_nftables_fastpath)
 - [5] [Netfilter's flowtable infrastructure — kernel docs](https://docs.kernel.org/networking/nf_flowtable.html)
+
+### 8d. Zone dispatch: where drops happen and how to see them
+
+The multi-zone forward layout (§6) dispatches with one `[iif, oif]` vmap
+lookup: key found → `jump` to that zone-pair chain; key not found → the
+vmap rule is a no-match and the packet falls through to the *next* rule
+in the base chain. Structure the drops so every one is attributed:
+
+- **Every zone-pair chain ends with its own tail** — the §8b split with
+  the chain's name in the prefix:
+
+  ```yaml
+  - limit: 6/minute
+    log:
+      prefix: "fwd-user2wan-drop: "
+  - counter: true
+    action: drop
+  ```
+
+  `journalctl -k | grep fwd-user2wan-drop` then shows exactly the flows
+  that zone pair rejected — what you need to author the missing allow
+  rule — and the counter keeps the true drop count when the log is
+  rate-capped.
+- **After the vmap, a catch-all tail** (same two rules, no match keys —
+  a rule with no matches matches everything that reaches it) with its
+  own prefix, e.g. `"fwd-unmatched-pair: "`. Only traffic whose
+  interface pair isn't in the vmap ever reaches it: "unknown zone pair"
+  and "known pair, rule missing" land in different buckets.
+- **Dispatch with `jump`, not `goto`.** With disciplined tails they
+  behave identically; the difference is the mistake case (a chain that
+  ends without a verdict). `jump` returns such packets to the base
+  chain, where the catch-all logs them. `goto` never returns — the
+  packet dies against the base chain's `policy:`, and a policy is a
+  chain attribute, not a rule: **no `log` or `counter` can attach to
+  it**. `policy: drop` stays as the backstop that should see zero
+  traffic.
+- **Per-source log sampling (meters).** A tail's `limit:` is global to
+  the rule — one noisy host can crowd the sample. nft's current idiom
+  for per-key limits is a `dynamic` set plus an `add`/`update`
+  expression; each key (e.g. saddr) gets its own token bucket, idle
+  entries expire via `timeout`:
+
+  ```nft
+  set log_meter {
+      type ipv4_addr
+      flags dynamic
+      timeout 1m
+  }
+  ```
+
+  ```yaml
+  - raw: 'add @log_meter { ip saddr limit rate 6/minute } log prefix "fwd-user2wan-drop: "'
+  ```
+
+  Raw-only today; promotion queued ([TODO.md](../TODO.md)) — the rule
+  key will mirror nft's `add`/`update` verbs (the standalone `meter`
+  keyword is deprecated upstream).
+- **Live debugging beats logs for "why":** arm `meta nftrace set 1` on
+  the traffic you're testing (a `raw:` rule, temporary) and watch
+  `nft monitor trace` — it prints every chain and rule the packet
+  traverses and the exact rule that issued the verdict.
