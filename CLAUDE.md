@@ -50,7 +50,9 @@ deployer — Ansible (later) ships and applies the output.
 - **Checks:** `make verify` (lint + tests) must be green before every
   commit. Individually: `make lint`, `make test`, `make format`;
   `pytest tests/test_foo.py -v` for one file (venv on PATH via make, or
-  activate it).
+  activate it). `make lint-trunk` is an optional breadth sweep
+  (shellcheck/shfmt/taplo/trufflehog/checkov via the trunk CLI) — not
+  part of the gate.
 - **Maintain the progress tracker.** [`docs/progress.md`](docs/progress.md) is
   the durable picture of where the project is. Update on milestones (decision
   accepted, feature landed, phase complete) — not on every turn. Conversation
