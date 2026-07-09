@@ -2,7 +2,7 @@
 
 Durable orientation: where nftgen is, what's decided, what's next. The
 conversation holds nuance; this holds the map. Update on milestones, not every
-turn. Last updated: 2026-07-05.
+turn. Last updated: 2026-07-09.
 
 ## Status
 
@@ -65,8 +65,25 @@ turn. Last updated: 2026-07-05.
   that distinguish connected/refused/timeout (self-validated). B01–B03 pass
   in ~5s, rootless; suite **164**. Layer 4 exists — next is filling the
   matrix (B04+) and the PoC truth table (P01–P20).
-- **⟶ Next:** §1 matrix breadth, then the P-matrix over example-poc, then
-  R2 CI. PLAN §Roadmap.
+- **Dev tooling adopted (2026-07-09), mirroring sessrumnir main:** own
+  `.venv` via `make install-dev` (R2's venv half, done early), ruff
+  (incl. flake8-bandit `S`), yamllint (flow mappings forbidden —
+  enforces the block-style rule), markdownlint at 80 cols, gitleaks,
+  all SHA-pinned in pre-commit; `make verify` = lint + tests, green
+  gate for every commit. Tree conformed (one real bug: DESIGN.md's
+  priority table row split by unescaped pipes). Working agreement split:
+  behavior/workflow layer in `.claude/CLAUDE.md`, repo layer in
+  `CLAUDE.md`. The stray `origin/dev` branch was dispositioned: its two
+  policy-layer draft docs imported (below), the rest superseded or
+  discarded.
+- **Policy-layer drafts imported, pending review:**
+  [policy-design.md](policy-design.md) (opt-in typed zones/policies
+  compiling to the mirror layer) + [implementation-phases.md](implementation-phases.md)
+  (N1–N8). Self-described drafts — deliberately *not* linked from the
+  docs map until discussed. N1 overlaps the open
+  [concat-authoring.md](concat-authoring.md) decision.
+- **⟶ Next:** §1 matrix breadth (B04+), then the P-matrix over
+  example-poc, then R2 CI (venv half already done). PLAN §Roadmap.
 
 ## Decided
 
