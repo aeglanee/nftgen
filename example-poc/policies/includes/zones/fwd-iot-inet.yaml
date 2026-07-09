@@ -7,7 +7,9 @@ rules:
     dport: ntp
     action: accept
   - saddr: local_iot
+    limit: 6/minute
     log:
       prefix: "iot-egress-drop "
+  - saddr: local_iot
     counter: true
     action: drop

@@ -72,6 +72,9 @@ nft -c validation → primitives A–E). What's left, à la carte:
       [PLAN.md](PLAN.md) §R1 / [docs/testing-plan.md](docs/testing-plan.md).
 - [x] **own venv** — `make install-dev` (2026-07-09), plus the lint suite +
       pre-commit (`make verify`).
+- [ ] **opt-in `iif`/`oif` index matching** — faster 32-bit compare for
+      static-NIC hosts; unsafe for dynamic interfaces (index changes on
+      recreate), so name form stays the default. See best-practices §8a.
 - [ ] **CI** — GitHub Actions: `pytest` + `nft -c` + `nftgen build example
       --check` + golden drift + `make lint` (PLAN §R2).
 

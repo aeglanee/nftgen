@@ -65,7 +65,8 @@ table inet filter {
         tcp flags & (fin|syn) == (fin|syn) counter name bad_tcp drop
         tcp flags & (fin|ack) == fin counter name bad_tcp drop
         ct state new tcp dport @ssh limit rate 4/minute accept
-        tcp dport @ssh log prefix "ssh-excess " level info counter name ssh_excess drop
+        tcp dport @ssh limit rate 6/minute log prefix "ssh-excess " level info
+        tcp dport @ssh counter name ssh_excess drop
         tcp dport @web counter name web_hits accept
     }
 

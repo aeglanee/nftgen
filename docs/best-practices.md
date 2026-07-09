@@ -279,3 +279,74 @@ from the service. nftgen **errors** if the service has **zero** ports for
 the chosen proto, but it won't second-guess a *partial* match — so a
 grab-bag service silently gives you only the matching-proto subset. Keep
 services coherent and that never surprises you.
+
+---
+
+## 8. Operational hygiene (verified upstream)
+
+Practices that keep a generated router firewall healthy in operation.
+Sourced — numbered links at the end of the section.
+
+### 8a. `iifname` (name) vs `iif` (index)
+
+nftgen renders interface matches as `iifname`/`oifname` — a per-packet
+string compare on the interface *name*. nft also offers `iif`/`oif`,
+matching the interface *index*: a 32-bit integer resolved from the name
+once at ruleset load — "faster than iifname as it only has to compare a
+32-bit unsigned integer instead of a string" [1].
+
+The index is dynamically allocated, and the same page warns not to use
+`iif` "for interfaces that are dynamically created and destroyed, eg.
+ppp0" [1]: delete + recreate an interface (PPP reconnect, WireGuard
+restart, USB NIC replug) and the rule silently stops matching until the
+ruleset is reloaded. That failure mode is why nftgen defaults to the name
+form; an opt-in index form for static-NIC, PPS-critical hosts is on the
+backlog ([TODO.md](../TODO.md)). Claims that `iifname` "performs system
+calls per packet" (seen in optimization writeups) are false — it is an
+in-kernel string compare.
+
+### 8b. Rate-limit your log rules
+
+A rule's statements evaluate **left to right** [2], and `log` writes a
+kernel log entry for every packet that reaches it — so a drop rule that
+logs a flood *logs at flood rate*; the logger becomes the amplifier.
+nftgen renders `limit:` before `log:` precisely so the limit gates the
+log. The safe idiom (common practice) splits logging from the verdict:
+
+```yaml
+rules:
+  - saddr: local_iot        # log a sample of the drops…
+    limit: 6/minute
+    log:
+      prefix: "iot-egress-drop "
+  - saddr: local_iot        # …drop unconditionally, count everything
+    counter: true
+    action: drop
+```
+
+Putting `limit:` in the *same* rule as the verdict gates the verdict too
+— over-limit packets fall through the rule — which is only safe when the
+chain `policy:` already drops. The two-rule split keeps the drop
+unconditional and the counter accurate. For high-rate auditing, nft can
+log to userspace instead of the kernel ring (`log group N` → NFLOG,
+consumed by e.g. ulogd2, with `queue-threshold` batching) [2] — raw-only
+today ([RAW.md](../RAW.md)).
+
+### 8c. Flowtables — what the fast path actually skips
+
+`flowtables:` + `flow-offload:` are structured ([DESIGN.md](../DESIGN.md)).
+Once a conntrack-established flow is offloaded, its packets are picked up
+at the **ingress** hook and "bypass the classic forwarding path" [3]:
+no per-packet routing lookup (the flowtable caches the routing decision —
+output device + next hop) and no forward-chain traversal [4] [5]. L3
+semantics are preserved (TTL is still decremented) [4]. Only established
+flows offload — every connection's *first* packets still traverse the
+forward chain, so your policy fully applies to connection setup.
+
+### Sources
+
+- [1] [Matching packet metainformation — nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Matching_packet_metainformation)
+- [2] [Logging traffic — nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Logging_traffic)
+- [3] [Flowtables — nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Flowtables)
+- [4] [Flowtables Part 1: a Netfilter/nftables fastpath — thermalcircle.de](https://thermalcircle.de/doku.php?id=blog%3Alinux%3Aflowtables_1_a_netfilter_nftables_fastpath)
+- [5] [Netfilter's flowtable infrastructure — kernel docs](https://docs.kernel.org/networking/nf_flowtable.html)

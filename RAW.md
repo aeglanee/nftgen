@@ -55,6 +55,14 @@ rules:
   - raw: 'tcp dport ssh accept comment "mgmt access, ticket #123"'
 ```
 
+## Log to userspace (NFLOG) instead of the kernel ring
+
+```yaml
+rules:
+  # high-rate auditing: deliver to nflog group 2 (e.g. ulogd2), batched
+  - raw: "tcp dport 25 log group 2 queue-threshold 16"
+```
+
 ## Meta matches beyond mark
 
 ```yaml

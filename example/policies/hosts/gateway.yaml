@@ -68,11 +68,14 @@ tables:
             ct: [new]
             limit: 4/minute
             action: accept
-          - proto: tcp                          # ...then log + drop the excess
+          - proto: tcp                          # ...log a sample of the excess...
             dport: ssh
+            limit: 6/minute
             log:
               prefix: "ssh-excess "
               level: info
+          - proto: tcp                          # ...and drop all of it, counted
+            dport: ssh
             counter: ssh_excess
             action: drop
           - proto: tcp
