@@ -5,15 +5,7 @@ The agreed order of work from here. Rationale and decisions live in
 
 ---
 
-## ⟶ Resuming in a fresh nftgen session (start here)
-
-This plan was written while the working session was still rooted in the *aerleon*
-repo (the build happened cross-repo). The intended next move is to **root a
-Claude session in this repo** so `CLAUDE.md` auto-loads and history files here.
-To resume: read [CLAUDE.md](CLAUDE.md) + this file. **Step 1 is done** — its
-output is [docs/step1-review.md](docs/step1-review.md); pick up the open items below.
-
-**Step 1 outcome (2026-06-26) — see [docs/step1-review.md](docs/step1-review.md):**
+**Step 1 outcome (2026-06-26, historical) — see [docs/step1-review.md](docs/step1-review.md):**
 
 - All three artifacts produced: coverage map, test audit, `nft -c` path.
 - **Confidence gap resolved:** `nft -c` *does* run on this dev box via
@@ -34,8 +26,10 @@ output is [docs/step1-review.md](docs/step1-review.md); pick up the open items b
   `nft -c` → primitives A–E), Step 2 `build()`, Step 3a (sessrumnir role rewrite,
   two-play flow), and the **v0.2.0 strict authoring surface** (2026-07-05: unknown
   keys/names/empty groups fail the build; type-aware chain policy; loud `--check`;
-  clean CLI errors — see TODO.md §Safety). **153 tests.**
-- **Not done:** behavioral (traffic) testing, nftgen CI, Step 3b apply-rollback,
+  clean CLI errors — see TODO.md §Safety), and **v0.3.0** (wrapped large
+  literals, named PoC fleet groups, netns harness B01–B03). **166 tests.**
+- **Not done:** behavioral matrix breadth (harness live, B01–B03 green;
+  B04+ and P01–P20 open), nftgen CI, Step 3b apply-rollback,
   Step 4 molecule end-to-end, enterprise (bright-future) firewall integration.
 
 ## Roadmap — 2026-07-05 (authoritative TODO; follow in order)
@@ -68,13 +62,14 @@ PoC truth table), and the showcase fixture exists:
 built + `nft -c` clean + drift-pinned by `tests/test_poc.py`; bare nat
 targets now resolve site-overlay groups). Next: the harness itself.
 
-- [ ] pytest fixture: 3-namespace topology (client ↔ router ↔ server), apply a
-      fixture ruleset in the router ns, probe with `nc`/ping.
+- [x] pytest fixture: 3-namespace topology (client ↔ router ↔ server), apply a
+      fixture ruleset in the router ns, probe with `nc`/ping. (Done 2026-07-05:
+      `tests/behavioral/`, rootless.)
 - [ ] Assert the *semantics* of each primitive: ct established/related return
-      path; default-drop; accepted dport reachable, others refused; dnat
-      port-forward rewrites; vmap dispatch (per-interface chains hit); icmp
-      policy; concat-set pair matching.
-- [ ] Marked/skipped cleanly where namespaces are unavailable (mirrors
+      path; default-drop; accepted dport reachable, others refused (B01–B03
+      **done**); dnat port-forward rewrites; vmap dispatch (per-interface
+      chains hit); icmp policy; concat-set pair matching (B04+ **open**).
+- [x] Marked/skipped cleanly where namespaces are unavailable (mirrors
       `requires_nft`).
 - [ ] Then run the same harness over `example/` host policies (gateway dnat,
       router1/2 zones) — golden *behavior*, not just golden text.

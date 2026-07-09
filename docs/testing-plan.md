@@ -7,7 +7,7 @@ rulesets, and type-mismatched set references — syntax is not semantics.
 
 | # | Layer | Proves | Where |
 | --- | --- | --- | --- |
-| 1 | unit + golden | YAML → exact expected text | `tests/` (153) |
+| 1 | unit + golden | YAML → exact expected text | `tests/` |
 | 2 | `nft -c` | the text is a valid ruleset | `tests/test_validate.py` etc. |
 | 3 | drift | committed artifacts == regeneration | CI (R2), manual today |
 | 4 | **behavioral** | packets are accepted/dropped **as authored** | this plan |

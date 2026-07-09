@@ -1,119 +1,81 @@
 # Raw recipes (escape-hatch cookbook)
 
 Things nftgen doesn't model with structured keys *yet* — written today with the
-`raw:` escape hatch (a literal nft fragment), to be given structured forms later.
-`raw:` is **not validated by nftgen** — `nft -c -f` catches mistakes. Verify
-exact syntax against your nft version.
+`raw:` escape hatch (a literal nft fragment), promoted to structured keys when
+they earn it (see the log at the bottom). `raw:` is **not validated by
+nftgen** — `nft -c -f` catches mistakes. Verify exact syntax against your nft
+version.
 
-A table can also carry a top-level `raw:` list for object *declarations*
-(flowtables, named counters, ct helpers) that have no structured form yet:
+A table can also carry a top-level `raw:` list for object *declarations* that
+have no structured form yet (ct helpers, named quotas, synproxy):
 
 ```yaml
 tables:
   - family: inet
     name: filter
     raw:
-      - 'flowtable ft { hook ingress priority filter; devices = { "wan0", "lan0" } }'
-      - 'counter http_hits { }'
+      - 'ct helper ftp-standard { type "ftp" protocol tcp; }'
+      - 'quota user_cap { over 10 gbytes }'
     sets: [...]
     chains: [...]
 ```
 
 ---
 
-## Concatenations  (match several fields as one key)
-
-Match `(source, dest-port)` *pairs* in a single lookup against a concat-typed
-set — far better than a rule per pair.
-
-```yaml
-# the set is a concatenation type (declared via table raw: for now)
-#   set allow_pairs { type ipv4_addr . inet_service ;
-#                     elements = { 192.168.1.5 . 22, 192.168.1.6 . 443 } }
-rules:
-  - raw: "ip saddr . tcp dport @allow_pairs counter accept"
-```
-
-*Future structured idea:* a `match-pairs:` key referencing a concat set.
-
-## TCP flags
+## DSCP / QoS marking
 
 ```yaml
 rules:
-  - raw: "tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 counter drop"   # null scan
-  - raw: "tcp flags & (fin|syn) == (fin|syn) counter drop"             # syn+fin
-  - raw: "tcp flags syn counter accept"                                # new-conn syn
-```
-
-*Future:* a `flags:` / `flags-mask:` key (like the aerleon fork's `tcp-flags`).
-
-## Mangle — mark / dscp / mss
-
-```yaml
-rules:
-  # fwmark for policy routing (multi-WAN, etc.)
-  - raw: "ip daddr 10.0.0.0/8 meta mark set 0x1"
-  # DSCP / QoS marking (mark SIP as Expedited Forwarding)
+  # mark SIP as Expedited Forwarding
   - raw: "udp dport 5060 ip dscp set ef"
-  # MSS clamp to path MTU for forwarded TCP
-  - raw: "tcp flags syn tcp option maxseg size set rt mtu"
 ```
 
-*Future:* `mark: 0x1`, `dscp: ef`, `mss: pmtu` keys.
+*Promotion queue:* a family-aware `set-dscp:` key (see
+[docs/capabilities.md](docs/capabilities.md) §9).
 
-## log / limit / quota
+## Dynamic set ops (populate a set from a rule)
 
 ```yaml
 rules:
-  # log matching packets with a prefix
-  - raw: 'tcp dport ssh log prefix "ssh-attempt " level info accept'
-  # rate-limit new SSH (passes while under rate; over-rate falls through)
-  - raw: "tcp dport ssh ct state new limit rate 10/minute accept"
-  # drop a host once it has pushed > 1 GiB
-  - raw: "ip saddr 192.0.2.50 quota over 1 gbytes drop"
+  # track sources into a live set (pairs with a bare `sets:` entry)
+  - raw: "tcp dport ssh ct state new update @ssh_meters { ip saddr }"
 ```
 
-*Future:* `log:` (bool/opts), `limit:` (rate), `quota:` keys.
-
-## Flowtables  (offload established flows off the slow path)
-
-Declare the flowtable on the table (table `raw:`), then add flows in `forward`.
+## redirect / tproxy
 
 ```yaml
-tables:
-  - family: inet
-    name: filter
-    raw:
-      - 'flowtable ft { hook ingress priority filter; devices = { "wan0", "lan0" } }'
-    chains:
-      - name: forward
-        hook: forward
-        priority: filter
-        policy: drop
-        rules:
-          - ct: [established, related]
-            action: accept
-          - raw: "ip protocol { tcp, udp } flow add @ft"   # offload established
+rules:
+  - raw: "tcp dport 80 redirect to :8080"
 ```
 
-*Future:* a `flowtable:` block on the table + a `flow-offload: ft` rule key.
-
-## Named counters  (per-rule stats you can read by name)
+## Rule comments
 
 ```yaml
-tables:
-  - family: inet
-    name: filter
-    raw:
-      - 'counter http_hits { }'
-    chains:
-      - name: input
-        hook: input
-        priority: filter
-        policy: drop
-        rules:
-          - raw: "tcp dport 80 counter name http_hits accept"
+rules:
+  - raw: 'tcp dport ssh accept comment "mgmt access, ticket #123"'
 ```
 
-Read with `nft list counter inet filter http_hits`.
-*Future:* `counter: http_hits` (a name instead of `true`).
+## Meta matches beyond mark
+
+```yaml
+rules:
+  - raw: "meta pkttype broadcast drop"
+  - raw: "meta skuid 1000 accept"
+```
+
+---
+
+## Promoted (now structured — don't use raw for these)
+
+| Was a raw recipe here | Structured form today |
+| --- | --- |
+| concatenated lookups | set `concat:`+`proto:`+`tuples:`, rule `set: <name>` |
+| tcp flags | `flags: {match: [...], mask: [...]}` |
+| fwmark match / set | `mark:` / `set-mark:` |
+| MSS clamp | `set-mss: pmtu` (or a number) |
+| log / limit / quota | `log:` / `limit:` / `quota:` |
+| flowtables | table `flowtables:` + rule `flow-offload: <ft>` |
+| named counters | table `counters: [name]` + rule `counter: <name>` |
+
+Full render reference: [docs/capabilities.md](docs/capabilities.md); schema:
+[DESIGN.md](DESIGN.md).

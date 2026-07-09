@@ -96,7 +96,7 @@ appears.
 | --- | --- | --- |
 | many **exact** IPs/ports, large N | **hash set** (no interval) → O(1) | networks always get `interval` (tree); services w/o ranges already hash |
 | **CIDRs / ranges** | **interval set** (no choice) | ✅ correct |
-| **multi-field, specific flows** (saddr+daddr+dport tuples) | **concatenated set** → *one* combined lookup | ⚠ via `raw:` today ([concatenations.md](concatenations.md)) |
+| **multi-field, specific flows** (saddr+daddr+dport tuples) | **concatenated set** → *one* combined lookup | ✅ `concat:`/`tuples:` set + `set:` rule |
 | a handful of things | doesn't matter — inline or a few rules | ✅ author's choice |
 
 On the concatenated set: a `saddr . daddr . dport` lookup is **one**
@@ -105,7 +105,7 @@ flows is either **many rules** (O(N), linear) or **independent set
 matches** — which are 3 separate lookups *and* semantically wrong (they
 allow the cartesian cross-product). So a concat set is both **more
 correct** (paired tuples) **and** a single efficient lookup. That's why
-it's the #1 promotion.
+it was promoted to a structured key (`concat:`).
 
 ---
 

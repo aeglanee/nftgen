@@ -162,15 +162,27 @@ Now **only** the two exact flows are allowed; A→Y is denied. This is your
 "list of x,y,z machines, each with its own saddr→daddr:dport" case — it is a
 concatenation, **not** independent matches.
 
-**This is the one place nftgen isn't structured yet** — concatenation works only
-via `raw:` + a hand-written bare set (above). It's the **#1 promotion**
-([docs/concatenations.md](concatenations.md)): a
-`match: [saddr, daddr, {dport: tcp}]`
+**Structured since the concat promotion** — define the set with `concat:`
+fields + `tuples:` rows (values resolve from definitions) and reference it
+with a `set:` rule key:
 
-- `set:` key that builds the tuple set *from definitions*. Note the pairing is
-**author-defined** — the tool can't infer which source pairs with which
-destination (that's policy, not derivable), so a concat key would let you *compose*
-the tuples, not guess them.
+```yaml
+sets:
+  - name: flows
+    concat: [saddr, daddr, dport]
+    proto: tcp
+    tuples:
+      - [10.0.1.10, 192.0.2.10, 443]     # A → X:443  only
+      - [10.0.1.11, 192.0.2.11, 5432]    # B → Y:5432 only
+rules:
+  - set: flows
+    action: accept
+```
+
+The pairing stays **author-defined** — the tool can't infer which source
+pairs with which destination (that's policy, not derivable); the concat set
+lets you *compose* the tuples, never guess them. Decision + options:
+[concat-authoring.md](concat-authoring.md).
 
 ---
 
@@ -183,7 +195,7 @@ the tuples, not guess them.
 | CIDR → CIDR, dport | any-in-range → any-in-range | ✅ independent (§2a) |
 | set × set × dport | cartesian (any-to-any) | ✅ independent (§2a) |
 | `sport` + `dport` | source-port + dest-port match | ✅ (`proto:` + `sport:`/`dport:`, same as dport) |
-| **specific (saddr→daddr:dport) flows** | **paired tuples** | ⚠️ `raw:` + bare concat set (§2b) — promotion #1 |
+| **specific (saddr→daddr:dport) flows** | **paired tuples** | ✅ `concat:`/`tuples:` set + `set:` rule (§2b) |
 
 ---
 
@@ -206,10 +218,9 @@ those."
 
 ## 5. What this means for nftgen
 
-Everything in §1–§3 except paired flows is **structured and validated today**.
-Paired flows are reachable via `raw:` (verified above) but lose
-validation/family-awareness/definition-composition — which is exactly why
-concatenation is the top promotion on the [roadmap](../TODO.md). See
+Everything in §1–§3, **including paired flows**, is structured and
+validated today — paired flows via `concat:`/`tuples:` sets and the `set:`
+rule key (family-aware, definition-composing). See
 [capabilities.md](capabilities.md) for the full render reference.
 
 ---

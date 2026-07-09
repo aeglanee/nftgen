@@ -2,7 +2,7 @@
 
 A small, **nftables-only** firewall-as-code generator. YAML definitions +
 host policies → a native `.nft` ruleset you commit to git and apply with
-`nft -f`. Draft — we iterate on this before writing code.
+`nft -f`. The living spec — kept in lockstep with the code.
 
 ## Philosophy
 
@@ -203,7 +203,7 @@ A **verdict map** (a native primitive, authored — not inferred):
 | verdict maps | a `vmap:` rule |
 | few base chains, branch via regular | author base chains with `hook:`; put the rest in hookless chains and `jump` |
 | named priorities | `priority: raw \| mangle \| filter \| srcnat…` or a number |
-| flowtables | a `flowtable:` block on the table (later phase) |
+| flowtables | a table `flowtables:` block + a `flow-offload:` rule key |
 | live blocklists | a bare `sets:` entry with no elements + `flags: [timeout]`; push with `nft add element` |
 | counters selectively | `counter: true` only where you want it (never auto) |
 
@@ -213,13 +213,8 @@ A **verdict map** (a native primitive, authored — not inferred):
 - No multi-vendor abstraction (nftables only).
 - No auto-generated chains or auto-injected rules.
 
-## Open decisions (to settle before code)
+## Formerly open decisions (all settled as proposed)
 
-1. **Rule form** — structured mapping + `raw:` (proposed), vs a terser nft-like
-   string DSL. Proposed: structured, because it's readable, validatable, and
-   composable, with `raw:` covering the rest.
-2. **`sets:` entries** — flat names (auto-categorised by which definition table
-   they're in; names unique per table, as nft requires) + dict form for bare
-   sets. Proposed as above.
-3. **Multi-host variables** (per-site `local_*`) — a later phase, modelled on
-   the aerleon-fork `local-definitions` idea.
+Rule form (structured mapping + `raw:`), `sets:` entry shapes (flat names +
+dict form for bare sets), and per-site `local_*` overlays (`sites/`) all
+shipped as proposed. Rationale lives in [DECISIONS.md](DECISIONS.md).

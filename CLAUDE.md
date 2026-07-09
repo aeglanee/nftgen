@@ -95,8 +95,7 @@ findings/proposals. Each has one job — don't duplicate across them:
     data maps (dnat targets), inline vs named, each as verified nft code
     blocks.
   - [docs/automation/](docs/automation/) — what nftgen derives vs leaves to you,
-    each as define→generate + defaults + overrides (A set-type done; B–D
-    pending).
+    each as define→generate + defaults + overrides (A–D + not-automated).
   - [docs/testing-plan.md](docs/testing-plan.md) — the behavioral (netns) test
     matrix: primitive semantics B01–B26 + the [example-poc/](example-poc/)
     reachability truth table P01–P20; harness design + execution order.
@@ -105,7 +104,7 @@ findings/proposals. Each has one job — don't duplicate across them:
   - [docs/concatenations.md](docs/concatenations.md) — the concatenation-set
     design proposal (why).
   - [docs/concat-authoring.md](docs/concat-authoring.md) — concatenation
-    tuple-authoring options + recommendation (decision pending).
+    tuple-authoring options (decided + built: Option 1, `concat:`/`tuples:`).
 
 When you produce a substantial review/finding, add a `docs/<topic>.md` and link
 it here so the structure stays discoverable.

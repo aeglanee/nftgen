@@ -59,18 +59,21 @@ nft -c validation → primitives A–E). What's left, à la carte:
 
 ## Output
 
-- [ ] **JSON emitter** — a second emitter on the same IR (libnftables JSON), for
+- [ ] **JSON emitter** (experimented, shelved on branch `json-emitter` — see
+      [docs/progress.md](docs/progress.md)) — a second emitter on the same IR
+      (libnftables JSON), for
       `nft -j` apply + round-tripping + live `add element`. The IR was built so
       this is additive (Table/Set/Chain/Rule already model the objects).
 
 ## Testing & infra
 
-- [ ] **Vagrant behavioral harness** — spin a VM, apply the generated `.nft`,
-      probe with nc/curl/nmap. This validates *semantics* (does the firewall
-      behave), not just `nft -c` syntax. The real-trust test.
-- [ ] **own venv + CI** — the repo currently borrows the aerleon `.venv` for
-      dev. Give it its own venv; add CI that runs `pytest` and `nft -c` (the 3
-      skipped validation tests light up on a box with nftables).
+- [x] **Behavioral harness** — done rootless via netns (`tests/behavioral/`,
+      B01–B03 green; no VM needed). Matrix breadth (B04+, P01–P20) tracked in
+      [PLAN.md](PLAN.md) §R1 / [docs/testing-plan.md](docs/testing-plan.md).
+- [x] **own venv** — `make install-dev` (2026-07-09), plus the lint suite +
+      pre-commit (`make verify`).
+- [ ] **CI** — GitHub Actions: `pytest` + `nft -c` + `nftgen build example
+      --check` + golden drift + `make lint` (PLAN §R2).
 
 ## DX / polish
 

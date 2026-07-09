@@ -61,7 +61,8 @@ lists) are *easy defaults you choose*, not things forced on you — see
 
 The concatenation tuples are the canonical "not automated": **you** define which
 source pairs with which destination:port (intent), and nftgen automates the set
-*type*, *family split*, and *match syntax* around them (A, B, D). So promoting
-concatenation to a structured key is "let you express the intent cleanly with
+*type*, *family split*, and *match syntax* around them (A, B, D). So the
+structured key (shipped: `concat:`/`tuples:` + `set:`) is "let you express the intent
+cleanly with
 validation + composition," **never** "guess the pairings." See
 [concatenations.md](../concatenations.md).

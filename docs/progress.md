@@ -65,6 +65,9 @@ turn. Last updated: 2026-07-09.
   that distinguish connected/refused/timeout (self-validated). B01–B03 pass
   in ~5s, rootless; suite **164**. Layer 4 exists — next is filling the
   matrix (B04+) and the PoC truth table (P01–P20).
+- **v0.3.0 released (2026-07-05):** large set/map literals wrap
+  one-per-line (diff-stable artifacts); example-poc names its fleet groups.
+  Suite **166**. sessrumnir pin bumped to v0.3.0 on its branch.
 - **Dev tooling adopted (2026-07-09), mirroring sessrumnir main:** own
   `.venv` via `make install-dev` (R2's venv half, done early), ruff
   (incl. flake8-bandit `S`), yamllint (flow mappings forbidden —
@@ -80,8 +83,10 @@ turn. Last updated: 2026-07-09.
   [policy-design.md](policy-design.md) (opt-in typed zones/policies
   compiling to the mirror layer) + [implementation-phases.md](implementation-phases.md)
   (N1–N8). Self-described drafts — deliberately *not* linked from the
-  docs map until discussed. N1 overlaps the open
-  [concat-authoring.md](concat-authoring.md) decision.
+  docs map until discussed. Caveat for that review: N1's premise (no
+  structured paired lookups) predates the shipped `concat:`/`tuples:`/`set:`
+  surface — re-verify; the [concat-authoring.md](concat-authoring.md)
+  decision itself is closed (Option 1, built).
 - **⟶ Next:** §1 matrix breadth (B04+), then the P-matrix over
   example-poc, then R2 CI (venv half already done). PLAN §Roadmap.
 

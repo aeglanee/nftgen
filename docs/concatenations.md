@@ -1,10 +1,12 @@
 # Finding: structured rules can't emit concatenated set lookups
 
-> **Maintainer note (2026-06-26).** This is the design proposal for the deferred
-> **concatenations** feature — see [TODO.md](../TODO.md) and Step 5 in
-> [PLAN.md](../PLAN.md). It is **not a bug**: concatenated lookups work *today*
-> via `raw:` + a bare concat set (confirmed in this doc); promoting them to a
-> structured key is an enhancement, not a fix. The root cause below was **verified
+> **Superseded — the feature shipped (2026-07).** This was the design
+> proposal for the then-deferred **concatenations** feature. It was
+> implemented with a *different* authoring surface than proposed below:
+> set-level `concat:`+`proto:`+`tuples:` plus a `set:` rule key — see
+> [concat-authoring.md](concat-authoring.md) (the decision) and
+> [DESIGN.md](../DESIGN.md)/[capabilities.md](capabilities.md) (the result).
+> Kept as history for the *why*. The root cause below was **verified
 > accurate** against `rules.py` (`render()` appends matches as independent
 > space-joined parts; `_addr`/`_port` resolve independently; no `.`-join path).
 > Two corrections to the proposal:

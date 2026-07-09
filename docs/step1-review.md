@@ -2,7 +2,9 @@
 
 The output of [PLAN.md](../PLAN.md) **Step 1**: a module-by-module review plus the
 three required artifacts (coverage map, test audit, real `nft -c` path). Written
-2026-06-26. Two real bugs surfaced the moment `nft -c` actually ran — see below.
+2026-06-26. **Historical** — the coverage map is superseded by
+[capabilities.md](capabilities.md); the `nft -c` recipe (§Deliverable 3)
+remains current. Two real bugs surfaced the moment `nft -c` actually ran — see below.
 
 ---
 
@@ -12,7 +14,7 @@ three required artifacts (coverage map, test audit, real `nft -c` path). Written
   source of truth for what's structured).
 - **Getting `nft -c` to actually run found two invalid-nft strings the 80-green
   suite had pinned**: `quota over … gbytes` (**fixed**) and `dnat to …` in an
-  `inet` table (**fix pending** — see §Bugs).
+  `inet` table (**fixed** — see §Bugs).
 - A `nft -c` path **exists on this dev box** via `unshare -rn` (no VM needed).
 - Ranked against a real multi-zone router, the top promotion is
   **concatenations**, then `reject with` and `icmp type`.

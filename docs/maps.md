@@ -6,8 +6,9 @@ flavours, by *what the value is*. Every nft block below is `nft -c`-verified.
 
 > nftgen status: **inline verdict maps are done** (Phase 6D), keyed on
 > `iif`/`oif`/`proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`, plus
-> **concatenated** keys (`key: [iif, oif]`). **Named maps** and **data maps** are
-> the open "named/reusable maps" backlog item.
+> **concatenated** keys (`key: [iif, oif]`). **Inline dnat data maps** are done
+> too; **named/reusable** maps (verdict + data) are the open
+> "named/reusable maps" backlog item.
 
 ---
 

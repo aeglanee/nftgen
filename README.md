@@ -5,9 +5,11 @@ host policies → a native `.nft` ruleset you keep in git and apply with `nft -f
 
 > Status: **working standalone generator** (Phases 0–6: definitions, named sets,
 > rules/chains, host→`.nft` with includes + per-site overlay, `nft -c` validation,
-> primitives — statements, counters, flowtables, vmaps, tcp-flags; strict
+> primitives — statements, counters, flowtables, vmaps, concatenations,
+> tcp-flags; strict
 > authoring surface — unknown keys/names and empty groups fail the build).
-> 153 tests. Ansible integration: the sessrumnir `nftables` role consumes
+> Latest release **v0.3.0**; 166 tests. Ansible integration: the sessrumnir
+> `nftables` role consumes
 > `nftgen build` (Step 3a done; 3b/4 remain — see [PLAN.md](PLAN.md)).
 >
 > **Docs:** [DESIGN.md](DESIGN.md) (spec) · [DECISIONS.md](DECISIONS.md) (why) ·
@@ -42,7 +44,7 @@ See [example/](example/) for a worked multi-host example.
 
 ```bash
 # one host (composition primitive, no flush)
-nftgen policies/hosts/router1.yaml --defs def --out generated/router1.nft
+nftgen policies/hosts/router1.yaml --defs definitions --out generated/router1.nft
 
 # whole fleet from a directory (convention layout) — the deploy artifacts
 nftgen build <root>                 # → generated/<host>.nft for every policies/hosts/*.yaml
