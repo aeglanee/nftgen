@@ -55,11 +55,13 @@ rules:
   - raw: 'tcp dport ssh accept comment "mgmt access, ticket #123"'
 ```
 
-## Log to userspace (NFLOG) instead of the kernel ring
+## NFLOG batching knobs
+
+`log: {group: N}` is structured; the batching/snap options are not:
 
 ```yaml
 rules:
-  # high-rate auditing: deliver to nflog group 2 (e.g. ulogd2), batched
+  # deliver to nflog group 2 (e.g. ulogd2), batched 16 packets at a time
   - raw: "tcp dport 25 log group 2 queue-threshold 16"
 ```
 

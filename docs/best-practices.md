@@ -329,8 +329,9 @@ Putting `limit:` in the *same* rule as the verdict gates the verdict too
 chain `policy:` already drops. The two-rule split keeps the drop
 unconditional and the counter accurate. For high-rate auditing, nft can
 log to userspace instead of the kernel ring (`log group N` → NFLOG,
-consumed by e.g. ulogd2, with `queue-threshold` batching) [2] — raw-only
-today ([RAW.md](../RAW.md)).
+consumed by e.g. ulogd2) [2] — structured as `log: {group: N}`; only the
+batching knobs (`queue-threshold` etc.) still need `raw:`
+([RAW.md](../RAW.md)).
 
 ### 8c. Flowtables — what the fast path actually skips
 

@@ -67,7 +67,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | --- | --- | --- |
 | `limit` | `limit: 4/minute` | `limit rate 4/minute` |
 | `quota` | `quota: over 10240 mbytes` | `quota over 10240 mbytes` |
-| `log` | `log: {prefix: "ssh ", level: info}` | `log prefix "ssh " level info` (or bare `log`) |
+| `log` | `log: {prefix: "ssh ", level: info, group: 2}` | `log prefix "ssh " level info group 2` (or bare `log`; `group` = NFLOG) |
 | `set-mark` | `set-mark: "0x1"` | `meta mark set 0x1` |
 | `set-mss` | `set-mss: pmtu` / `set-mss: 1460` | `tcp flags syn tcp option maxseg size set rt mtu` / `… set 1460` |
 | `flow-offload` | `flow-offload: ft` | `flow add @ft` |
