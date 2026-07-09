@@ -7,6 +7,7 @@ three required artifacts (coverage map, test audit, real `nft -c` path). Written
 ---
 
 ## TL;DR
+
 - The generator's structure is sound (IR-in-the-middle holds; renderer is the
   source of truth for what's structured).
 - **Getting `nft -c` to actually run found two invalid-nft strings the 80-green
@@ -24,6 +25,7 @@ Source of truth: [`nftgen/rules.py`](../nftgen/rules.py) (`RuleRenderer`) +
 [`nftgen/ir.py`](../nftgen/ir.py).
 
 ### Generates structured (native, family-aware, validated)
+
 | Area | Keys |
 | --- | --- |
 | Match | `iif`/`oif`, `saddr`/`daddr` (family-aware; named `@set` / inline anon / literal), `ct`, `proto`, `sport`/`dport` (service→ports), `flags` (match/mask, list multiplies) |
@@ -32,13 +34,15 @@ Source of truth: [`nftgen/rules.py`](../nftgen/rules.py) (`RuleRenderer`) +
 | Structure | tables; base+regular chains; named sets (`ipv4_addr`/`ipv6_addr`/`inet_service`/`ifname`; `interval`/`timeout`); bare/live sets; `counters:`; `flowtables:` (devices from iface groups); inline `vmap:` (iif/oif/proto); per-table + per-rule `raw:`; includes; `site:` overlay; recursive definitions |
 
 ### Works only via `raw:` (no structured key yet)
-DSCP set (deferred, DECISIONS §4.2) · **concatenations** (`daddr . dport @set`) ·
-`reject with <type>` · meta matches beyond mark (`pkttype`/`skuid`/`mark` match) ·
-ct mark/helper/label · `redirect`/`tproxy` · non-verdict **maps** (dnat-target
-maps) · dynamic set ops (`add @set {…}`) · `icmp type …` matching · vmap on keys
-≠ iif/oif/proto · rule `comment`.
+
+DSCP set (deferred, DECISIONS §4.2) · **concatenations** (`daddr . dport @set`)
+· `reject with <type>` · meta matches beyond mark (`pkttype`/`skuid`/`mark`
+match) · ct mark/helper/label · `redirect`/`tproxy` · non-verdict **maps**
+(dnat-target maps) · dynamic set ops (`add @set {…}`) · `icmp type …` matching ·
+vmap on keys ≠ iif/oif/proto · rule `comment`.
 
 ### Can't express even via `raw:` (structural gaps)
+
 `netdev`-family per-device ingress base chains (no `device:` on `Chain`) · set
 tuning (`size`/`gc-interval`/per-element timeout) · the `map` object type (only
 inline vmap) · named stateful objects other than counters (named quota, synproxy,
@@ -60,7 +64,8 @@ suite regression-protects but assumes nft-validity — and twice that assumption
 wrong (see Bugs). Goldens stay as drift-detection; the **real gate** must be
 `generate(host) → nft -c` over **every** host.
 
-**Recommendations**
+### Recommendations
+
 1. Make `nft -c` run in dev (wire the `unshare` fallback into `validate.py`), so
    the 3 skipped tests become active here, not just on a future CI box.
 2. Parametrize the nft-check over **all** hosts (incl. gateway), not a subset.

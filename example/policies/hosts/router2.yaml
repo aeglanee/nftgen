@@ -1,3 +1,4 @@
+---
 # router2 — site2 edge router. Nearly identical to router1: same COMMON includes,
 # only `site:` (and any UNIQUE rules) differ. The shared rules resolve to site2's
 # groups via local_users.

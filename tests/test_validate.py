@@ -3,6 +3,7 @@
 The nft checks skip automatically when `nft -c` isn't usable here (no binary, or
 unprivileged sandbox). Run them on a box with nftables to actually validate.
 """
+
 import pathlib
 
 import pytest

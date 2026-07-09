@@ -13,20 +13,24 @@ flavours, by *what the value is*. Every nft block below is `nft -c`-verified.
 
 ## 1. Verdict maps (vmaps) — value is a *verdict*
 
-Key → a verdict (`jump`/`goto`/`accept`/`drop`/…). This is **dispatch**: branch to
-the right chain in one lookup.
+Key → a verdict (`jump`/`goto`/`accept`/`drop`/…). This is **dispatch**:
+branch to the right chain in one lookup.
 
 **Inline (anonymous)** — what nftgen emits today:
+
 ```nft
 iifname vmap { "wan0" : jump wan_in, "lan0" : jump lan_in }
 ```
+
 replaces the rule ladder:
+
 ```nft
 iifname "wan0" jump wan_in
 iifname "lan0" jump lan_in
 ```
 
 **Named (declared once, referenced anywhere, live-updatable):**
+
 ```nft
 map zone {
     type ifname : verdict
@@ -51,12 +55,15 @@ Key → a value that a **statement** consumes. The headline use is **dnat target
 (multi-port-forward).
 
 **Inline:**
+
 ```nft
 dnat to tcp dport map { 80 : 10.0.0.10, 443 : 10.0.0.20 }
 ```
+
 "forward incoming :80 → the web box, :443 → the other box" — **one** map lookup.
 
 **Named:**
+
 ```nft
 map portmap {
     type inet_service : ipv4_addr
@@ -79,13 +86,16 @@ and the forward table reads as a single reviewable list. The same machinery does
 
 A map key can itself be a **concatenation**, combining tuple-matching with a
 lookup — e.g. dispatch by `(saddr, dport)`:
+
 ```nft
 ip saddr . tcp dport vmap { 10.0.0.1 . 22 : jump admin_in }
 ```
+
 nftgen supports this for verdict maps via a **list key** — `key: [iif, oif]` →
 `iifname . oifname vmap`. The `map:` becomes a list of `{match: [...], <verdict>}`
 entries; each match value resolves like a normal `iif`/`oif`, so **interface
 groups expand** and cartesian-product into elements:
+
 ```yaml
 - vmap:
     key: [iif, oif]
@@ -119,8 +129,10 @@ groups expand** and cartesian-product into elements:
 - ✅ **Concat verdict maps** — `vmap: {key: [iif, oif], map: [{match, verdict}]}`
   → `iifname . oifname vmap { … }`; groups/services expand, and `saddr`/`daddr`
   positions are allowed (family inferred, single-family enforced). (done.)
-- ✅ **Inline dnat data map** — `action: {dnat: {proto: tcp, map: {80: web, 443: db}}}`
-  → `dnat ip to tcp dport map { … }` (multi-port-forward; address-only targets for now).
+- ✅ **Inline dnat data map** —
+  `action: {dnat: {proto: tcp, map: {80: web, 443: db}}}`
+  → `dnat ip to tcp dport map { … }` (multi-port-forward; address-only
+  targets for now).
 - ☐ **Named verdict maps** — a table-level `maps:` declaration referenced from rules
   (DRY + live-update). Low value at our scale.
 - ☐ **Named data maps + port-translation** in a map (concat value `addr . port`).

@@ -4,6 +4,7 @@ YAML -> IR (Table / NamedSet / Chain) -> text. Keeping the model in the middle
 (rather than building strings ad hoc) is what makes the output robust and lets a
 JSON emitter drop in later from the same objects.
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -55,7 +56,9 @@ class NamedSet:
         if self.flags:
             lines.append(f"{BODY_INDENT}flags {', '.join(self.flags)}")
         if self.elements:
-            lines.append(f"{BODY_INDENT}elements = {render_literal(self.elements, BODY_INDENT)}")
+            lines.append(
+                f"{BODY_INDENT}elements = {render_literal(self.elements, BODY_INDENT)}"
+            )
         lines.append(f"{SET_INDENT}}}")
         return lines
 
@@ -114,7 +117,9 @@ class Table:
         blocks: list[list[str]] = []
         blocks += [[f"{SET_INDENT}{r}"] for r in self.raw]
         blocks += [ft.render() for ft in self.flowtables]
-        blocks += [[f"{SET_INDENT}counter {c} {{", f"{SET_INDENT}}}"] for c in self.counters]
+        blocks += [
+            [f"{SET_INDENT}counter {c} {{", f"{SET_INDENT}}}"] for c in self.counters
+        ]
         blocks += [s.render() for s in self.sets]
         blocks += [c.render() for c in self.chains]
         for i, block in enumerate(blocks):
@@ -146,11 +151,15 @@ def build_sets(sets_spec: list, defs: Definitions) -> list[NamedSet]:
 
 
 def _set_from_definition(name: str, defs: Definitions) -> NamedSet:
-    matches = [c for c in ("networks", "services", "interfaces") if name in getattr(defs, c)]
+    matches = [
+        c for c in ("networks", "services", "interfaces") if name in getattr(defs, c)
+    ]
     if not matches:
         raise BuildError(f"set {name!r}: not a defined network, service, or interface")
     if len(matches) > 1:
-        raise BuildError(f"set {name!r}: ambiguous — defined in {matches}; names must be unique")
+        raise BuildError(
+            f"set {name!r}: ambiguous — defined in {matches}; names must be unique"
+        )
 
     category = matches[0]
     if category == "networks":
@@ -191,14 +200,17 @@ def _bare_set(entry: dict) -> NamedSet:
 
 # concat field -> nft set-type component ("addr" resolves to ipv4_addr/ipv6_addr)
 _CONCAT_FIELD_TYPE = {
-    "saddr": "addr", "daddr": "addr",
-    "sport": "inet_service", "dport": "inet_service",
-    "iif": "ifname", "oif": "ifname",
+    "saddr": "addr",
+    "daddr": "addr",
+    "sport": "inet_service",
+    "dport": "inet_service",
+    "iif": "ifname",
+    "oif": "ifname",
     "mark": "mark",
 }
 
 
-def _concat_set(entry: dict, defs: Definitions) -> NamedSet:
+def _concat_set(entry: dict, defs: Definitions) -> NamedSet:  # noqa: PLR0912 - one branch per field kind
     """Build a concatenated (tuple) set from `concat:` fields + `tuples:` rows."""
     name = entry.get("name")
     fields = entry.get("concat")
@@ -209,7 +221,9 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:
         raise BuildError(f"unknown concat set key(s) {sorted(unknown)}: {entry!r}")
     for f in fields:
         if f not in _CONCAT_FIELD_TYPE:
-            raise BuildError(f"concat set {name!r}: unknown field {f!r} (use {sorted(_CONCAT_FIELD_TYPE)})")
+            raise BuildError(
+                f"concat set {name!r}: unknown field {f!r} (use {sorted(_CONCAT_FIELD_TYPE)})"
+            )
     proto = entry.get("proto")
     if any(f in ("sport", "dport") for f in fields) and not proto:
         raise BuildError(f"concat set {name!r}: a port field needs `proto:`")
@@ -224,7 +238,7 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:
                 f"(one per field {fields})"
             )
         parts = []
-        for f, val in zip(fields, tup):
+        for f, val in zip(fields, tup, strict=True):
             token, fam, is_iv = _resolve_concat_value(name, f, val, proto, defs)
             parts.append(token)
             if fam:
@@ -271,7 +285,9 @@ def _resolve_concat_value(setname, field, val, proto, defs):
                 )
             val = vals[0]
         try:
-            fam = "ip" if ipaddress.ip_network(val, strict=False).version == 4 else "ip6"
+            fam = (
+                "ip" if ipaddress.ip_network(val, strict=False).version == 4 else "ip6"
+            )
         except ValueError:
             raise BuildError(
                 f"concat set {setname!r}: field {field}={val!r} is not a known "

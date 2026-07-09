@@ -19,6 +19,7 @@ safely guessed. Guessing it *is* the footgun, so nftgen refuses to invent it.
 
 One authored rule → exactly one rule. No auto conntrack, no auto loopback-accept,
 no auto counters:
+
 ```yaml
 chains:
   - name: input
@@ -30,14 +31,18 @@ chains:
         dport: 22
         action: accept
 ```
+
 →
+
 ```nft
 chain input {
     type filter hook input priority 0; policy drop;
     tcp dport 22 accept
 }
 ```
+
 An empty chain stays empty (no invented structure):
+
 ```nft
 chain forward {
     type filter hook forward priority 0; policy drop;

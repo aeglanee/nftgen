@@ -12,10 +12,13 @@ networks:
   web1:    [192.0.2.10]
   group_a: [web1, 192.0.2.10, 192.0.2.11]   # web1 -> .10, then literal .10 again, then .11
 ```
+
 ```yaml
 sets: [group_a]
 ```
+
 →
+
 ```nft
 set group_a {
     type ipv4_addr
@@ -23,6 +26,7 @@ set group_a {
     elements = { 192.0.2.10, 192.0.2.11 }    # the duplicate .10 collapsed; order kept
 }
 ```
+
 The composition pulled `192.0.2.10` in twice (via `web1` and the literal); the
 duplicate is dropped, first-seen order preserved (`list(dict.fromkeys(...))`).
 

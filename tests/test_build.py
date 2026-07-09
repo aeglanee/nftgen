@@ -1,4 +1,5 @@
 """Step 2 — build(<root>): fleet generation + flush-ruleset deploy artifact."""
+
 import pathlib
 
 import pytest
@@ -18,9 +19,9 @@ requires_nft = pytest.mark.skipif(
 def test_build_all_hosts():
     out = build(EXAMPLE)
     assert set(out) == {"gateway", "router1", "router2"}
-    for name, text in out.items():
+    for text in out.values():
         assert text.startswith("#!/usr/sbin/nft -f")
-        assert "flush ruleset" in text          # deploy artifact (Shape A)
+        assert "flush ruleset" in text  # deploy artifact (Shape A)
 
 
 def test_build_single_host():
@@ -43,7 +44,9 @@ def test_build_body_matches_generate_golden():
     # build is generate() + the deploy header, nothing else changes.
     text = build(EXAMPLE, host="router1")["router1"]
     golden = (ROOT / "tests" / "golden" / "router1.nft").read_text()
-    assert text == golden.replace("\n\ntable inet raw", "\n\nflush ruleset\n\ntable inet raw", 1)
+    assert text == golden.replace(
+        "\n\ntable inet raw", "\n\nflush ruleset\n\ntable inet raw", 1
+    )
 
 
 def test_cli_build_writes_files(tmp_path):

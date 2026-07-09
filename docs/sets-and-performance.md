@@ -19,20 +19,22 @@ see DECISIONS §1.2 ("no optimizer").
 Worst-case comparisons per packet:
 
 | N | hash O(1) | interval O(log₂N) | N rules O(N) |
-|---:|---:|---:|---:|
+| ---: | ---: | ---: | ---: |
 | 1 | 1 | ~1 | 1 |
 | 3 | 1 | ~2 | 3 |
 | 50 | 1 | ~6 | 50 |
 | 1,000 | 1 | ~10 | 1,000 |
 
 Two caveats that stop this being "always use hash":
-- **Big-O is *scaling*, not absolute speed.** O(1) means "doesn't grow with N," not
-  "fastest." At small N the constant factor (hashing + memory indirection) can make
-  a hash lookup *slower* in wall-clock than scanning 3 items.
+
+- **Big-O is *scaling*, not absolute speed.** O(1) means "doesn't grow with
+  N," not "fastest." At small N the constant factor (hashing + memory
+  indirection) can make a hash lookup *slower* in wall-clock than scanning 3
+  items.
 - **hash can't hold prefixes/ranges.** A plain set literally rejects
-  `192.168.0.0/24` (`nft` error: *"must add 'flags interval' for prefix elements"*).
-  Firewalls match subnets constantly, so for that data interval isn't a choice — it's
-  required.
+  `192.168.0.0/24` (`nft` error: *"must add 'flags interval' for prefix
+  elements"*). Firewalls match subnets constantly, so for that data interval
+  isn't a choice — it's required.
 
 ---
 
@@ -44,28 +46,34 @@ Two caveats that stop this being "always use hash":
   **O(log N)**, holds **ranges and CIDR prefixes** (`10.0.0.0/8`, `1024-65535`).
   Mandatory the moment an element isn't an exact value.
 
-(Both beat **N separate rules** (O(N)) at scale — that linear scan is the thing sets
-exist to replace.)
+(Both beat **N separate rules** (O(N)) at scale — that linear scan is the
+thing sets exist to replace.)
 
 ---
 
 ## 3. How you define a set in nftgen (the two places)
 
 A `@named` set comes from **two** author actions:
+
 1. **`definitions/networks.yaml`** (or services/interfaces) defines the *members*:
+
    ```yaml
    networks:
      web_servers: [192.0.2.10, 192.0.2.11]
    ```
-2. **the table's `sets:`** lists the name → it emits as a `@named` set; omit it and the
-   same reference **inlines** as an anonymous `{ … }`:
+
+2. **the table's `sets:`** lists the name → it emits as a `@named` set; omit
+   it and the same reference **inlines** as an anonymous `{ … }`:
+
    ```yaml
    tables:
      - family: inet
        name: filter
        sets: [web_servers]        # <-- makes @web_servers a named set
    ```
+
 → generated nft (note `flags interval`, added by nftgen, *not* by you):
+
 ```nft
 set web_servers {
     type ipv4_addr
@@ -91,11 +99,12 @@ appears.
 | **multi-field, specific flows** (saddr+daddr+dport tuples) | **concatenated set** → *one* combined lookup | ⚠ via `raw:` today ([concatenations.md](concatenations.md)) |
 | a handful of things | doesn't matter — inline or a few rules | ✅ author's choice |
 
-On the concatenated set: a `saddr . daddr . dport` lookup is **one** O(1)/O(log N)
-hit over the combined key. The alternative for *specific* flows is either **many
-rules** (O(N), linear) or **independent set matches** — which are 3 separate lookups
-*and* semantically wrong (they allow the cartesian cross-product). So a concat set is
-both **more correct** (paired tuples) **and** a single efficient lookup. That's why
+On the concatenated set: a `saddr . daddr . dport` lookup is **one**
+O(1)/O(log N) hit over the combined key. The alternative for *specific*
+flows is either **many rules** (O(N), linear) or **independent set
+matches** — which are 3 separate lookups *and* semantically wrong (they
+allow the cartesian cross-product). So a concat set is both **more
+correct** (paired tuples) **and** a single efficient lookup. That's why
 it's the #1 promotion.
 
 ---

@@ -1,3 +1,4 @@
+---
 # Common host input — diagnostics + management access. Shared by all hosts.
 # SSH is restricted to mgmt (never open).
 rules:

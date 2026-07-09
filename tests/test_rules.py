@@ -1,4 +1,5 @@
 """Phase 3 — structured rule rendering + chain building."""
+
 import pytest
 
 from nftgen.definitions import Definitions
@@ -13,7 +14,12 @@ DEFS = Definitions.from_mappings(
             "dual": ["192.0.2.10", "2001:db8::10"],
             "v6only": ["2001:db8::/48"],
         },
-        "services": {"http": ["80/tcp"], "https": ["443/tcp"], "web": ["http", "https"], "dns": ["53/tcp", "53/udp"]},
+        "services": {
+            "http": ["80/tcp"],
+            "https": ["443/tcp"],
+            "web": ["http", "https"],
+            "dns": ["53/tcp", "53/udp"],
+        },
         "interfaces": {"wan": ["wan0", "wwan0"], "lan_if": ["lan0"]},
     }
 )
@@ -29,18 +35,35 @@ def one(rule):
 
 
 def test_named_sets_referenced_by_at():
-    line = one({"saddr": "webhosts", "proto": "tcp", "dport": "web", "counter": True, "action": "accept"})
+    line = one(
+        {
+            "saddr": "webhosts",
+            "proto": "tcp",
+            "dport": "web",
+            "counter": True,
+            "action": "accept",
+        }
+    )
     assert line == "ip saddr @webhosts tcp dport @web counter accept"
 
 
 def test_inline_group_not_declared():
-    line = one({"saddr": "mgmt", "proto": "tcp", "dport": "ssh".replace("ssh", "22"), "action": "accept"})
+    line = one(
+        {
+            "saddr": "mgmt",
+            "proto": "tcp",
+            "dport": "ssh".replace("ssh", "22"),
+            "action": "accept",
+        }
+    )
     assert line == "ip saddr 192.168.9.0/24 tcp dport 22 accept"
 
 
 def test_interface_named_and_unknown():
-    assert one({"iif": "lan_if", "oif": "wan", "action": "accept"}) == \
-        'iifname @lan_if oifname @wan accept'
+    assert (
+        one({"iif": "lan_if", "oif": "wan", "action": "accept"})
+        == "iifname @lan_if oifname @wan accept"
+    )
     # an unknown name must error, not silently render a literal device that
     # never matches (a typo'd group on a drop rule would fail open)
     with pytest.raises(BuildError, match="unknown interface group"):
@@ -48,14 +71,18 @@ def test_interface_named_and_unknown():
 
 
 def test_ct_state():
-    assert one({"ct": ["established", "related"], "action": "accept"}) == \
-        "ct state established,related accept"
+    assert (
+        one({"ct": ["established", "related"], "action": "accept"})
+        == "ct state established,related accept"
+    )
 
 
 def test_mark_match():
     assert one({"mark": "0x1", "action": "accept"}) == "meta mark 0x1 accept"
-    assert one({"saddr": "mgmt", "mark": "0x1", "action": "drop"}) == \
-        "ip saddr 192.168.9.0/24 meta mark 0x1 drop"
+    assert (
+        one({"saddr": "mgmt", "mark": "0x1", "action": "drop"})
+        == "ip saddr 192.168.9.0/24 meta mark 0x1 drop"
+    )
 
 
 def test_service_inline_is_proto_correct():
@@ -70,13 +97,32 @@ def test_standalone_proto():
 
 def test_icmp_type():
     # single type, and the meta l4proto is suppressed (icmp type implies the proto)
-    assert one({"proto": "icmp", "icmp-type": "echo-request", "limit": "5/second", "action": "accept"}) == \
-        "icmp type echo-request limit rate 5/second accept"
+    assert (
+        one(
+            {
+                "proto": "icmp",
+                "icmp-type": "echo-request",
+                "limit": "5/second",
+                "action": "accept",
+            }
+        )
+        == "icmp type echo-request limit rate 5/second accept"
+    )
     # v6 + a list of types -> anon set
-    assert one({"proto": "icmpv6",
-                "icmp-type": ["nd-neighbor-solicit", "nd-neighbor-advert", "nd-router-advert"],
-                "action": "accept"}) == \
-        "icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert } accept"
+    assert (
+        one(
+            {
+                "proto": "icmpv6",
+                "icmp-type": [
+                    "nd-neighbor-solicit",
+                    "nd-neighbor-advert",
+                    "nd-router-advert",
+                ],
+                "action": "accept",
+            }
+        )
+        == "icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert } accept"
+    )
 
 
 def test_icmp_type_needs_icmp_proto():
@@ -86,10 +132,18 @@ def test_icmp_type_needs_icmp_proto():
 
 def test_actions_jump_dnat():
     # inet tables need a family qualifier; it's inferred from the target address
-    assert one({"proto": "tcp", "dport": "8443", "action": {"dnat": "192.168.1.50:443"}}) == \
-        "tcp dport 8443 dnat ip to 192.168.1.50:443"
-    assert one({"action": {"dnat": "[2001:db8::5]:443"}}) == "dnat ip6 to [2001:db8::5]:443"
-    assert one({"oif": "wan", "action": {"snat": "203.0.113.7"}}) == "oifname @wan snat ip to 203.0.113.7"
+    assert (
+        one({"proto": "tcp", "dport": "8443", "action": {"dnat": "192.168.1.50:443"}})
+        == "tcp dport 8443 dnat ip to 192.168.1.50:443"
+    )
+    assert (
+        one({"action": {"dnat": "[2001:db8::5]:443"}})
+        == "dnat ip6 to [2001:db8::5]:443"
+    )
+    assert (
+        one({"oif": "wan", "action": {"snat": "203.0.113.7"}})
+        == "oifname @wan snat ip to 203.0.113.7"
+    )
     assert one({"action": {"jump": "common_input"}}) == "jump common_input"
 
 
@@ -117,12 +171,18 @@ def test_dnat_map():
         }
     )
     r = RuleRenderer(d, {})
-    assert r.render({"iif": "eth0", "action": {"dnat": {"proto": "tcp", "map": {80: "web", "https": "db"}}}}) == \
-        ['iifname "eth0" dnat ip to tcp dport map { 80 : 10.0.0.10, 443 : 10.0.0.20 }']
+    assert r.render(
+        {
+            "iif": "eth0",
+            "action": {"dnat": {"proto": "tcp", "map": {80: "web", "https": "db"}}},
+        }
+    ) == ['iifname "eth0" dnat ip to tcp dport map { 80 : 10.0.0.10, 443 : 10.0.0.20 }']
 
 
 def test_dnat_map_errors():
-    d = Definitions.from_mappings({"networks": {"web": ["10.0.0.10"], "grp": ["10.0.0.1", "10.0.0.2"]}})
+    d = Definitions.from_mappings(
+        {"networks": {"web": ["10.0.0.10"], "grp": ["10.0.0.1", "10.0.0.2"]}}
+    )
     r = RuleRenderer(d, {})
     with pytest.raises(BuildError):  # target carries a port (address-only)
         r.render({"action": {"dnat": {"proto": "tcp", "map": {80: "10.0.0.10:8080"}}}})
@@ -133,13 +193,16 @@ def test_dnat_map_errors():
 
 
 def test_masquerade():
-    assert one({"oif": "wan", "saddr": "mgmt", "action": "masquerade"}) == \
-        "oifname @wan ip saddr 192.168.9.0/24 masquerade"
+    assert (
+        one({"oif": "wan", "saddr": "mgmt", "action": "masquerade"})
+        == "oifname @wan ip saddr 192.168.9.0/24 masquerade"
+    )
 
 
 def test_raw_passthrough():
-    assert R.render({"raw": "tcp flags & (fin|syn) == (fin|syn) counter drop"}) == \
-        ["tcp flags & (fin|syn) == (fin|syn) counter drop"]
+    assert R.render({"raw": "tcp flags & (fin|syn) == (fin|syn) counter drop"}) == [
+        "tcp flags & (fin|syn) == (fin|syn) counter drop"
+    ]
 
 
 # -- strict key validation (typos must fail loudly, not silently weaken) ----- #
@@ -182,9 +245,14 @@ def test_port_without_proto_errors():
 
 
 def test_port_literals_and_unknown_service():
-    assert one({"proto": "tcp", "dport": 8080, "action": "accept"}) == "tcp dport 8080 accept"
-    assert one({"proto": "tcp", "dport": "8080-8090", "action": "accept"}) == \
-        "tcp dport 8080-8090 accept"
+    assert (
+        one({"proto": "tcp", "dport": 8080, "action": "accept"})
+        == "tcp dport 8080 accept"
+    )
+    assert (
+        one({"proto": "tcp", "dport": "8080-8090", "action": "accept"})
+        == "tcp dport 8080-8090 accept"
+    )
     with pytest.raises(BuildError, match="not a known service group"):
         R.render({"proto": "tcp", "dport": "htttp", "action": "accept"})
 
@@ -229,7 +297,9 @@ def test_build_base_chain():
 
 
 def test_build_regular_chain_has_no_header():
-    chain = build_chain({"name": "common", "rules": [{"proto": "icmp", "action": "accept"}]}, R)
+    chain = build_chain(
+        {"name": "common", "rules": [{"proto": "icmp", "action": "accept"}]}, R
+    )
     assert chain.hook is None
     assert chain.render() == [
         "    chain common {",
@@ -242,15 +312,21 @@ def test_chain_policy_default_is_type_aware():
     # filter chains fail closed; a nat/route chain must not drop unmatched flows
     filt = build_chain({"name": "input", "hook": "input"}, R)
     assert filt.policy == "drop"
-    nat = build_chain({"name": "post", "hook": "postrouting", "type": "nat", "priority": "srcnat"}, R)
+    nat = build_chain(
+        {"name": "post", "hook": "postrouting", "type": "nat", "priority": "srcnat"}, R
+    )
     assert nat.policy == "accept"
-    explicit = build_chain({"name": "post", "hook": "postrouting", "type": "nat", "policy": "drop"}, R)
+    explicit = build_chain(
+        {"name": "post", "hook": "postrouting", "type": "nat", "policy": "drop"}, R
+    )
     assert explicit.policy == "drop"
 
 
 def test_chain_unknown_key_errors():
     with pytest.raises(BuildError, match="unknown chain key"):
-        build_chain({"name": "input", "hook": "input", "rule": []}, R)  # typo'd `rules:`
+        build_chain(
+            {"name": "input", "hook": "input", "rule": []}, R
+        )  # typo'd `rules:`
 
 
 def test_chain_needs_name():

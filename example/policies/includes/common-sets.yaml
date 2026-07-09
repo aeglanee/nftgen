@@ -1,3 +1,4 @@
+---
 # Named sets every router materialises. Pulled into a table's `sets:` with
 # `- include:`. Each host can still add its own.
 sets:

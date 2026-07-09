@@ -1,3 +1,4 @@
+---
 # Common early scrubbing — drop obviously-bad packets. Shared by all routers,
 # pulled into a raw-priority chain. All structured (the TCP-flag combos use the
 # `flags:` key, list form — each clause renders one drop line).

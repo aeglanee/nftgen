@@ -1,3 +1,4 @@
+---
 # router1 — site1 edge router.
 # Layers: COMMON (shared includes) + LOCAL (site1 via `site:`) + UNIQUE (this host).
 # `site:` selects the per-site definitions the generator merges over def/ (later

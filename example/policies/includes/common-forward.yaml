@@ -1,3 +1,4 @@
+---
 # Common forward rules — never-forwardable drops + MSS clamp. Shared by routers.
 rules:
   - daddr: no_forward_ipv4

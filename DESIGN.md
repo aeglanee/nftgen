@@ -106,6 +106,7 @@ networks:
   webhosts: [192.0.2.10, 192.0.2.11]
   trusted:  [lan, mgmt]            # composition: names expand, literals stay
 ```
+
 ```yaml
 # definitions/services.yaml   (port carries proto; emitted as a proto-agnostic set,
 #                      the protocol is stated on the rule — kills tcp/udp mixups)
@@ -114,6 +115,7 @@ services:
   web: [80/tcp, 443/tcp]
   dns: [53/tcp, 53/udp]
 ```
+
 ```yaml
 # definitions/interfaces.yaml
 interfaces:
@@ -200,7 +202,7 @@ A **verdict map** (a native primitive, authored — not inferred):
 | sets over rule lists | list the group under `sets:` → emitted as a named set, referenced `@name` |
 | verdict maps | a `vmap:` rule |
 | few base chains, branch via regular | author base chains with `hook:`; put the rest in hookless chains and `jump` |
-| named priorities | `priority: raw|mangle|filter|srcnat…` or a number |
+| named priorities | `priority: raw \| mangle \| filter \| srcnat…` or a number |
 | flowtables | a `flowtable:` block on the table (later phase) |
 | live blocklists | a bare `sets:` entry with no elements + `flags: [timeout]`; push with `nft add element` |
 | counters selectively | `counter: true` only where you want it (never auto) |

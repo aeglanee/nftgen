@@ -6,6 +6,7 @@ nft**, every example verified with `nft -c`. The big idea to internalise is in
 concatenation.** Getting that wrong is the classic firewall footgun.
 
 Definitions used below:
+
 ```yaml
 networks:
   web_clients: [10.0.1.10, 10.0.1.11]
@@ -48,7 +49,9 @@ chains:
         dport: ssh
         action: accept
 ```
+
 →
+
 ```nft
 chain input {
     type filter hook input priority 0; policy drop;
@@ -62,13 +65,15 @@ chain input {
 ```
 
 **Why this order:**
+
 - **`policy drop`** makes the chain default-deny — you list what's *allowed*.
 - **`ct established,related` first** — the vast majority of packets belong to an
   already-allowed flow; accepting them up front means most traffic clears in two
   rules instead of walking the whole chain (the conntrack-early best practice).
 - **`ct invalid drop`** sheds malformed/out-of-state packets before any accept logic.
 - **`iif lo`** — local processes talk over loopback; never filter it.
-- Specific allows (SSH from `mgmt`) come last, **scoped** — never `tcp dport ssh accept` open to the world.
+- Specific allows (SSH from `mgmt`) come last, **scoped** — never
+  `tcp dport ssh accept` open to the world.
 
 > These are *easy defaults you choose*, not magic — nftgen never injects them.
 > You author the conntrack-early rule yourself (DECISIONS §1.5).
@@ -90,7 +95,9 @@ rules:
     dport: https
     action: accept
 ```
+
 →
+
 ```nft
 ip saddr @web_clients ip daddr @web_servers tcp dport @https accept
 ```
@@ -111,7 +118,9 @@ rules:
     dport: web
     action: accept
 ```
-→ `ip saddr @lan ip daddr @dmz tcp dport @web accept` — any LAN host → any DMZ host on 80/443.
+
+→ `ip saddr @lan ip daddr @dmz tcp dport @web accept` — any LAN host → any
+DMZ host on 80/443.
 
 ### 2b. Paired flows = **concatenation**
 
@@ -135,7 +144,9 @@ chains:
     rules:
       - raw: "ip saddr . ip daddr . tcp dport @flows accept"
 ```
+
 →
+
 ```nft
 set flows {
     type ipv4_addr . ipv4_addr . inet_service
@@ -147,14 +158,16 @@ chain forward {
 }
 ```
 
-Now **only** the two exact flows are allowed; A→Y is denied. This is your "list of
-x,y,z machines, each with its own saddr→daddr:dport" case — it is a concatenation,
-**not** independent matches.
+Now **only** the two exact flows are allowed; A→Y is denied. This is your
+"list of x,y,z machines, each with its own saddr→daddr:dport" case — it is a
+concatenation, **not** independent matches.
 
 **This is the one place nftgen isn't structured yet** — concatenation works only
 via `raw:` + a hand-written bare set (above). It's the **#1 promotion**
-([docs/concatenations.md](concatenations.md)): a `match: [saddr, daddr, {dport: tcp}]`
-+ `set:` key that builds the tuple set *from definitions*. Note the pairing is
+([docs/concatenations.md](concatenations.md)): a
+`match: [saddr, daddr, {dport: tcp}]`
+
+- `set:` key that builds the tuple set *from definitions*. Note the pairing is
 **author-defined** — the tool can't infer which source pairs with which
 destination (that's policy, not derivable), so a concat key would let you *compose*
 the tuples, not guess them.
@@ -179,13 +192,15 @@ the tuples, not guess them.
 - **Inline literal** — a one-off host/port. No set ceremony.
 - **Named set + independent matches** — "this group → that group on these ports,"
   *any-to-any within the groups* is acceptable. The 90% case.
-- **Concatenation** — when the cross-combinations would be *too permissive* and you
-  need exact source↔destination↔port tuples. Per-flow allow-lists, micro-segmentation.
-- **vmap** — not for membership but for **dispatch** (branch to a per-zone chain by
-  interface/proto in one lookup) — see the multi-zone example.
+- **Concatenation** — when the cross-combinations would be *too permissive*
+  and you need exact source↔destination↔port tuples. Per-flow allow-lists,
+  micro-segmentation.
+- **vmap** — not for membership but for **dispatch** (branch to a per-zone
+  chain by interface/proto in one lookup) — see the multi-zone example.
 
-Rule of thumb: reach for concatenation the moment you catch yourself wanting to say
-"…but only *these* pairings," not "any of these to any of those."
+Rule of thumb: reach for concatenation the moment you catch yourself
+wanting to say "…but only *these* pairings," not "any of these to any of
+those."
 
 ---
 
@@ -214,6 +229,7 @@ A whole policy is three layers:
 
 **The one question that picks layer 2 vs 3:** *do I want all combinations of the
 fields, or only specific pairings?*
+
 - all combinations → **group-to-group rule with sets** (layer 2).
 - only specific pairings → **concatenation** (layer 3).
 
@@ -222,20 +238,24 @@ the whole cross-product (too permissive). Either give them their own rules or a
 concat set.
 
 **Practical notes on concatenations:**
-- **One set per *shape*** (field combo) — a set's type is fixed. In practice that's
-  usually just `saddr.daddr.dport`; source-port matching is rare. So 1–2 sets, not many.
-- **tcp vs udp splits at the match** (`tcp dport` / `udp dport`) — separate rules/sets.
-- **A few specific flows?** Plain separate rules are just as fine; a concat set
-  earns its keep when there are **many**.
-- **Ranges/CIDRs in a concat are fine** — stored as ranges (interval/pipapo), not
-  expanded into individual addresses. No memory blowup; same as a normal interval set.
+
+- **One set per *shape*** (field combo) — a set's type is fixed. In practice
+  that's usually just `saddr.daddr.dport`; source-port matching is rare. So
+  1–2 sets, not many.
+- **tcp vs udp splits at the match** (`tcp dport` / `udp dport`) — separate
+  rules/sets.
+- **A few specific flows?** Plain separate rules are just as fine; a concat
+  set earns its keep when there are **many**.
+- **Ranges/CIDRs in a concat are fine** — stored as ranges (interval/pipapo),
+  not expanded into individual addresses. No memory blowup; same as a
+  normal interval set.
 
 ---
 
 ## 7. Defining services — keep them coherent
 
-A service's ports should be **one proto**, or the **same port(s) across protos** —
-not a grab-bag of unrelated ports:
+A service's ports should be **one proto**, or the **same port(s) across
+protos** — not a grab-bag of unrelated ports:
 
 ```yaml
 https: [443/tcp]            # ok — single proto
@@ -243,7 +263,8 @@ dns:   [53/tcp, 53/udp]     # ok — same port, both protos
 mixed: [53/udp, 80/tcp]     # avoid — unrelated ports under one name
 ```
 
-Why: a rule/concat states one `proto:`, which selects *that proto's* ports from the
-service. nftgen **errors** if the service has **zero** ports for the chosen proto,
-but it won't second-guess a *partial* match — so a grab-bag service silently gives
-you only the matching-proto subset. Keep services coherent and that never surprises you.
+Why: a rule/concat states one `proto:`, which selects *that proto's* ports
+from the service. nftgen **errors** if the service has **zero** ports for
+the chosen proto, but it won't second-guess a *partial* match — so a
+grab-bag service silently gives you only the matching-proto subset. Keep
+services coherent and that never surprises you.

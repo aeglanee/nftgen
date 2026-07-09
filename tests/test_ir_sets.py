@@ -1,4 +1,5 @@
 """Phase 2 — IR + named-set emission."""
+
 import pytest
 
 from nftgen.definitions import Definitions
@@ -60,7 +61,9 @@ def test_interface_set_quotes_devices():
 
 
 def test_bare_set_live_blocklist_has_no_elements():
-    spec = [{"name": "blocklist", "type": "ipv4_addr", "flags": ["interval", "timeout"]}]
+    spec = [
+        {"name": "blocklist", "type": "ipv4_addr", "flags": ["interval", "timeout"]}
+    ]
     s = build_sets(spec, DEFS)[0]
     assert s.name == "blocklist"
     assert s.elements == []
@@ -78,7 +81,16 @@ def test_include_entry_is_skipped_for_now():
 
 def test_table_render_golden():
     sets = build_sets(
-        ["webhosts", "web", "wan", {"name": "blocklist", "type": "ipv4_addr", "flags": ["interval", "timeout"]}],
+        [
+            "webhosts",
+            "web",
+            "wan",
+            {
+                "name": "blocklist",
+                "type": "ipv4_addr",
+                "flags": ["interval", "timeout"],
+            },
+        ],
         DEFS,
     )
     out = Table(family="inet", name="filter", sets=sets).render()
@@ -122,7 +134,12 @@ def test_named_set_render_unit():
 
 def test_named_set_large_elements_wrap_one_per_line():
     # four elements is the wrap threshold — membership changes diff line-by-line
-    s = NamedSet("x", "ipv4_addr", ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8"], ["interval"])
+    s = NamedSet(
+        "x",
+        "ipv4_addr",
+        ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8"],
+        ["interval"],
+    )
     assert s.render() == [
         "    set x {",
         "        type ipv4_addr",

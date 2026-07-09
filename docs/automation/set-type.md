@@ -20,11 +20,14 @@ services:
 interfaces:
   wan: [wan0, wwan0]
 ```
+
 ```yaml
 # in the table
 sets: [hosts4, net4, hosts6, ssh, etcd, wan]
 ```
+
 generates:
+
 ```nft
 set hosts4 { type ipv4_addr
     flags interval
@@ -59,9 +62,9 @@ set wan    { type ifname
 
 **Default rationale:** networks always get `interval` (always correct — a CIDR
 *requires* it, and nftgen doesn't inspect each group to special-case all-exact ones).
-Services get `interval` only when a range is actually present. The type itself is
-uniquely fixed by the members, and `nft -c` rejects any mismatch — so this can't be
-silently wrong.
+Services get `interval` only when a range is actually present. The type itself
+is uniquely fixed by the members, and `nft -c` rejects any mismatch — so this
+can't be silently wrong.
 
 ## Overriding (the escape hatch: a bare set)
 
@@ -74,7 +77,9 @@ sets:
     type: ipv4_addr        # NO interval -> hash backend, O(1)
     elements: [203.0.113.5, 203.0.113.6]
 ```
+
 →
+
 ```nft
 set bighosts {
     type ipv4_addr
@@ -95,14 +100,15 @@ elements) — that's the cost of overriding.
 
 ## Guardrail (where derivation refuses)
 
-A definition-backed set is **single-family**. Mixing v4 and v6 is a loud error, not a
-silent widening:
+A definition-backed set is **single-family**. Mixing v4 and v6 is a loud
+error, not a silent widening:
 
 ```yaml
 networks:
   bad: [192.0.2.1, 2001:db8::1]
 ```
-```
+
+```text
 nftgen.ir.BuildError: set 'bad' mixes IPv4 and IPv6; a named set is
 single-family — split into e.g. bad_v4 / bad_v6
 ```

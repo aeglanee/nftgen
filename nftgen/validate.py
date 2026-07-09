@@ -10,6 +10,7 @@ The check still only *validates* — nothing is ever applied, in any namespace.
 ``can_check()`` probes which mode works (if any) so callers/tests skip cleanly
 when nft can't run here at all (e.g. no binary, or namespaces disabled too).
 """
+
 from __future__ import annotations
 
 import functools
@@ -42,7 +43,10 @@ def _run(prefix: list[str], text: str) -> CheckResult:
         path = fh.name
     try:
         proc = subprocess.run(
-            [*prefix, "nft", "-c", "-f", path], capture_output=True, text=True
+            [*prefix, "nft", "-c", "-f", path],
+            capture_output=True,
+            text=True,
+            check=False,
         )
         return CheckResult(proc.returncode == 0, proc.returncode, proc.stderr.strip())
     finally:

@@ -1,16 +1,26 @@
 """Phase 6C — flowtables (table object, devices from interface groups) + flow-offload."""
+
 import pytest
 
 from nftgen.definitions import Definitions
 from nftgen.ir import BuildError, Table
 from nftgen.rules import RuleRenderer, build_flowtables
 
-DEFS = Definitions.from_mappings({"interfaces": {"wan": ["wan0", "wwan0"], "lan_if": ["lan0"]}})
+DEFS = Definitions.from_mappings(
+    {"interfaces": {"wan": ["wan0", "wwan0"], "lan_if": ["lan0"]}}
+)
 
 
 def test_flowtable_resolves_interface_groups():
     ft = build_flowtables(
-        [{"name": "ft", "hook": "ingress", "priority": "filter", "devices": ["wan", "lan_if"]}],
+        [
+            {
+                "name": "ft",
+                "hook": "ingress",
+                "priority": "filter",
+                "devices": ["wan", "lan_if"],
+            }
+        ],
         DEFS,
     )[0]
     assert ft.devices == ['"wan0"', '"wwan0"', '"lan0"']
@@ -45,7 +55,9 @@ def test_flowtable_unknown_key_errors():
 
 def test_flow_offload_statement():
     r = RuleRenderer(DEFS, {})
-    assert r.render({"proto": "tcp", "flow-offload": "ft"}) == ["meta l4proto tcp flow add @ft"]
+    assert r.render({"proto": "tcp", "flow-offload": "ft"}) == [
+        "meta l4proto tcp flow add @ft"
+    ]
 
 
 def test_table_renders_flowtable_block():

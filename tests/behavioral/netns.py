@@ -6,6 +6,7 @@ it over JSON lines. ``can_netns()`` probes whether that whole stack works
 here (unshare + veth creation + an nft ct rule actually applying), so tests
 skip cleanly on boxes without user namespaces, iproute2, nft, or conntrack.
 """
+
 from __future__ import annotations
 
 import functools
@@ -34,9 +35,19 @@ def can_netns() -> bool:
         return False
     try:
         proc = subprocess.run(
-            ["unshare", "-r", "-n", "sh", "-c",
-             "ip link add name a type veth peer name b && nft -f -"],
-            input=_PROBE_RULESET, capture_output=True, text=True, timeout=15,
+            [
+                "unshare",
+                "-r",
+                "-n",
+                "sh",
+                "-c",
+                "ip link add name a type veth peer name b && nft -f -",
+            ],
+            input=_PROBE_RULESET,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
         return False
@@ -53,8 +64,10 @@ class Harness:
     def __init__(self) -> None:
         self._proc = subprocess.Popen(
             ["unshare", "-r", "-n", sys.executable, "-u", str(AGENT)],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
 
     def _rpc(self, **req) -> dict:
@@ -82,9 +95,13 @@ class Harness:
         """TCP accept-loop in a zone ns (or the router when ns is None)."""
         self._rpc(op="listen", ns=ns, port=port)
 
-    def probe_tcp(self, ns: str | None, dst: str, port: int, timeout: float = 1.5) -> str:
+    def probe_tcp(
+        self, ns: str | None, dst: str, port: int, timeout: float = 1.5
+    ) -> str:
         """-> 'connected' | 'refused' | 'timeout' (drop shows as timeout)."""
-        return self._rpc(op="probe", ns=ns, dst=dst, port=port, timeout=timeout)["result"]
+        return self._rpc(op="probe", ns=ns, dst=dst, port=port, timeout=timeout)[
+            "result"
+        ]
 
     def run(self, ns: str | None, argv: list[str]) -> subprocess.CompletedProcess:
         resp = self._rpc(op="run", ns=ns, argv=argv)

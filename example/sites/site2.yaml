@@ -1,4 +1,5 @@
+---
 # Site-local definitions for SITE2 — same alias names, this site's groups.
 networks:
-  local_users:   [users_site2]
+  local_users: [users_site2]
   local_servers: [servers_site2]

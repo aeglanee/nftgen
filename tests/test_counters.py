@@ -1,4 +1,5 @@
 """Phase 6B — named counters (table object + `counter: <name>`)."""
+
 import pytest
 
 from nftgen.definitions import Definitions
@@ -11,14 +12,16 @@ NAMED = {s.name: s for s in build_sets(["http"], DEFS)}
 
 def test_anonymous_counter_still_works():
     r = RuleRenderer(DEFS, NAMED)
-    assert r.render({"proto": "tcp", "dport": "http", "counter": True, "action": "accept"}) == \
-        ["tcp dport @http counter accept"]
+    assert r.render(
+        {"proto": "tcp", "dport": "http", "counter": True, "action": "accept"}
+    ) == ["tcp dport @http counter accept"]
 
 
 def test_named_counter_renders_when_declared():
     r = RuleRenderer(DEFS, NAMED, counters={"http_hits"})
-    assert r.render({"proto": "tcp", "dport": "http", "counter": "http_hits", "action": "accept"}) == \
-        ["tcp dport @http counter name http_hits accept"]
+    assert r.render(
+        {"proto": "tcp", "dport": "http", "counter": "http_hits", "action": "accept"}
+    ) == ["tcp dport @http counter name http_hits accept"]
 
 
 def test_named_counter_undeclared_errors():

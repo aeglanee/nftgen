@@ -18,11 +18,12 @@
 >     action: accept
 > ```
 >
-> nftgen derives the type, resolves names via definitions, auto-adds `interval` for
-> ranges, family-splits errors on mixed v4/v6, and enforces **one element per field**
-> (multi-value → error → use a regular rule). Single-proto for now; `proto: [tcp,udp]`
-> and per-row `proto` field are follow-ons. The *why* (cartesian vs paired) is in
-> [concatenations.md](concatenations.md) and [best-practices.md](best-practices.md) §2/§6.
+> nftgen derives the type, resolves names via definitions, auto-adds `interval`
+> for ranges, family-splits errors on mixed v4/v6, and enforces **one element
+> per field** (multi-value → error → use a regular rule). Single-proto for now;
+> `proto: [tcp,udp]` and per-row `proto` field are follow-ons. The *why*
+> (cartesian vs paired) is in [concatenations.md](concatenations.md) and
+> [best-practices.md](best-practices.md) §2/§6.
 
 Concatenation expresses **specific paired flows** — "client A may reach server X
 *only* on 443, client B server Y *only* on 5432" — as a single set lookup over a
@@ -44,7 +45,9 @@ rules:
   - set: db_flows        # field order comes from the set declaration
     action: accept
 ```
+
 →
+
 ```nft
 ip saddr . ip daddr . tcp dport @db_flows accept
 ```
@@ -61,7 +64,9 @@ sets:
       - [10.0.1.10, 192.0.2.10, 5432]       # each row = one explicit flow
       - [10.0.1.11, 192.0.2.11, 5432]
 ```
+
 →
+
 ```nft
 set db_flows {
     type ipv4_addr . ipv4_addr . inet_service
@@ -92,6 +97,7 @@ sets:
 ```
 
 With `clients=[A,B]`, `servers=[X,Y]`, `db_ports=[5432]`:
+
 - `pair: zip` → `A.X.5432, B.Y.5432` (positional)
 - `pair: product` → `A.X.5432, A.Y.5432, B.X.5432, B.Y.5432` (cartesian)
 
@@ -112,6 +118,7 @@ flows:
     tuples:
       - [10.0.1.10, 192.0.2.10, 5432]
 ```
+
 ```yaml
 # any host references it
 sets: [db_access]

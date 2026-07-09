@@ -1,4 +1,5 @@
 """Phase 6D — verdict maps (vmap rule type)."""
+
 import pytest
 
 from nftgen.definitions import Definitions
@@ -13,7 +14,12 @@ RD = RuleRenderer(
 
 
 def test_iif_vmap():
-    rule = {"vmap": {"key": "iif", "map": {"wan0": {"jump": "wan_input"}, "lan0": {"jump": "lan_input"}}}}
+    rule = {
+        "vmap": {
+            "key": "iif",
+            "map": {"wan0": {"jump": "wan_input"}, "lan0": {"jump": "lan_input"}},
+        }
+    }
     assert RD.render(rule) == [
         'iifname vmap { "wan0" : jump wan_input, "lan0" : jump lan_input }'
     ]
@@ -35,7 +41,9 @@ def test_vmap_unknown_spec_key_errors():
 
 
 def test_proto_vmap_unquoted_keys_and_verdicts():
-    rule = {"vmap": {"key": "proto", "map": {"tcp": {"goto": "tcp_chain"}, "udp": "drop"}}}
+    rule = {
+        "vmap": {"key": "proto", "map": {"tcp": {"goto": "tcp_chain"}, "udp": "drop"}}
+    }
     assert R.render(rule) == ["meta l4proto vmap { tcp : goto tcp_chain, udp : drop }"]
 
 
@@ -47,7 +55,13 @@ def test_unsupported_vmap_key_errors():
 # -- concatenated (iif . oif) vmap ------------------------------------------ #
 RI = RuleRenderer(
     Definitions.from_mappings(
-        {"interfaces": {"users": ["lan0"], "uplinks": ["wan0", "wwan0"], "servers": ["svc0"]}}
+        {
+            "interfaces": {
+                "users": ["lan0"],
+                "uplinks": ["wan0", "wwan0"],
+                "servers": ["svc0"],
+            }
+        }
     ),
     {},
 )
@@ -72,14 +86,26 @@ def test_concat_vmap_iif_oif_expands_groups():
 
 
 def test_concat_vmap_unknown_device_errors():
-    rule = {"vmap": {"key": ["iif", "oif"], "map": [{"match": ["eth0", "eth1"], "goto": "x"}]}}
+    rule = {
+        "vmap": {
+            "key": ["iif", "oif"],
+            "map": [{"match": ["eth0", "eth1"], "goto": "x"}],
+        }
+    }
     with pytest.raises(BuildError, match="not a known interface group"):
         R.render(rule)
 
 
 def test_concat_vmap_match_arity_error():
     with pytest.raises(BuildError):
-        RI.render({"vmap": {"key": ["iif", "oif"], "map": [{"match": ["users"], "jump": "x"}]}})
+        RI.render(
+            {
+                "vmap": {
+                    "key": ["iif", "oif"],
+                    "map": [{"match": ["users"], "jump": "x"}],
+                }
+            }
+        )
 
 
 # -- more single-key vmaps: ports / mark / state / addresses ----------------- #
@@ -96,7 +122,12 @@ RN = RuleRenderer(
 
 
 def test_dport_vmap_transport_agnostic():
-    rule = {"vmap": {"key": "dport", "map": {22: {"jump": "ssh_in"}, 80: {"jump": "web_in"}}}}
+    rule = {
+        "vmap": {
+            "key": "dport",
+            "map": {22: {"jump": "ssh_in"}, 80: {"jump": "web_in"}},
+        }
+    }
     assert R.render(rule) == ["th dport vmap { 22 : jump ssh_in, 80 : jump web_in }"]
 
 
@@ -105,32 +136,51 @@ def test_mark_and_state_vmaps():
         "meta mark vmap { 0x1 : jump a }"
     ]
     assert R.render(
-        {"vmap": {"key": "state", "map": {"established": "accept", "new": {"jump": "n"}}}}
+        {
+            "vmap": {
+                "key": "state",
+                "map": {"established": "accept", "new": {"jump": "n"}},
+            }
+        }
     ) == ["ct state vmap { established : accept, new : jump n }"]
 
 
 def test_saddr_vmap_resolves_group_keeps_family():
-    rule = {"vmap": {"key": "saddr", "map": {"admins": {"jump": "admin_in"}, "10.0.0.0/8": "drop"}}}
+    rule = {
+        "vmap": {
+            "key": "saddr",
+            "map": {"admins": {"jump": "admin_in"}, "10.0.0.0/8": "drop"},
+        }
+    }
     assert RN.render(rule) == [
         "ip saddr vmap { 192.168.10.8/29 : jump admin_in, 10.0.0.0/8 : drop }"
     ]
 
 
 def test_daddr_vmap_v6():
-    assert RN.render({"vmap": {"key": "daddr", "map": {"trusted6": {"jump": "x"}}}}) == [
-        "ip6 daddr vmap { 2001:db8::/48 : jump x }"
-    ]
+    assert RN.render(
+        {"vmap": {"key": "daddr", "map": {"trusted6": {"jump": "x"}}}}
+    ) == ["ip6 daddr vmap { 2001:db8::/48 : jump x }"]
 
 
 def test_saddr_vmap_mixed_family_errors():
     with pytest.raises(BuildError):
-        RN.render({"vmap": {"key": "saddr", "map": {"10.0.0.0/8": "accept", "2001:db8::/48": "drop"}}})
+        RN.render(
+            {
+                "vmap": {
+                    "key": "saddr",
+                    "map": {"10.0.0.0/8": "accept", "2001:db8::/48": "drop"},
+                }
+            }
+        )
 
 
 def test_dport_vmap_resolves_service_bundle():
     # web -> 80,443 (two elements, same verdict); a number stays literal
     rule = {"vmap": {"key": "dport", "map": {"web": {"jump": "w"}, 53: {"jump": "d"}}}}
-    assert RN.render(rule) == ["th dport vmap { 80 : jump w, 443 : jump w, 53 : jump d }"]
+    assert RN.render(rule) == [
+        "th dport vmap { 80 : jump w, 443 : jump w, 53 : jump d }"
+    ]
 
 
 def test_dport_vmap_unknown_name_errors():
@@ -140,7 +190,9 @@ def test_dport_vmap_unknown_name_errors():
 
 def test_iif_vmap_expands_group_single_key():
     rule = {"vmap": {"key": "iif", "map": {"uplinks": {"jump": "wan_in"}}}}
-    assert RN.render(rule) == ['iifname vmap { "wan0" : jump wan_in, "wwan0" : jump wan_in }']
+    assert RN.render(rule) == [
+        'iifname vmap { "wan0" : jump wan_in, "wwan0" : jump wan_in }'
+    ]
 
 
 def test_concat_saddr_dport_family_aware():
@@ -156,10 +208,17 @@ def test_concat_saddr_dport_family_aware():
 
 
 def test_large_vmap_wraps_one_entry_per_line():
-    rule = {"vmap": {"key": "proto", "map": {
-        "tcp": {"jump": "t"}, "udp": {"jump": "u"},
-        "icmp": {"jump": "i"}, "sctp": {"jump": "s"},
-    }}}
+    rule = {
+        "vmap": {
+            "key": "proto",
+            "map": {
+                "tcp": {"jump": "t"},
+                "udp": {"jump": "u"},
+                "icmp": {"jump": "i"},
+                "sctp": {"jump": "s"},
+            },
+        }
+    }
     assert R.render(rule) == [
         "meta l4proto vmap {\n"
         "            tcp : jump t,\n"

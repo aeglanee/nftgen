@@ -19,7 +19,9 @@ rules:
     dport: web                   #    web service -> @web set
     action: accept
 ```
+
 →
+
 ```nft
 ct state established,related accept
 iifname @wan drop
@@ -40,8 +42,8 @@ ip saddr @mgmt tcp dport @web accept
 
 ## Why it's safe to automate
 
-- **Fixed, deterministic mapping** — each key has exactly one nft spelling; it's a
-  lookup, not a judgement. nft defines the syntax.
+- **Fixed, deterministic mapping** — each key has exactly one nft spelling;
+  it's a lookup, not a judgement. nft defines the syntax.
 - **nft-policed** — a wrong token is an `nft -c` error; it can't silently mislead.
 - **Removes syntax memorization** — `iifname` vs `iif`, ports needing a proto,
   `meta l4proto` — you don't have to remember any of it.
@@ -59,11 +61,13 @@ Both are consistent, correct-for-`inet` defaults. Want the alternative form
 ## Guardrail
 
 Ports require a proto — there's no protocol-less port match in nft:
+
 ```yaml
 - dport: web
   action: accept        # no proto:
 ```
-```
+
+```text
 BuildError: port match needs a proto: {'dport': 'web', 'action': 'accept'}
 ```
 

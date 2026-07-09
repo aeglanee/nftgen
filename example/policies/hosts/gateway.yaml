@@ -1,3 +1,4 @@
+---
 # gateway.yaml — a showcase exercising every nftgen capability (Phases 0–6).
 #   generate:  nftgen example/policies/hosts/gateway.yaml
 site: site1                                     # per-site overlay: local_users -> site1
@@ -43,17 +44,17 @@ tables:
           - saddr: "@blocklist"
             counter: true
             action: drop
-          - vmap:                               # 6D — dispatch by interface group
+          - vmap: # 6D — dispatch by interface group
               key: iif
               map:
-                wan:                            # expands to wan0 + wwan0
+                wan: # expands to wan0 + wwan0
                   jump: input_wan
                 lan_if:
                   jump: input_lan
 
       - name: input_wan                         # regular chain (reached by the vmap)
         rules:
-          - flags:                              # 6E — drop invalid TCP flag combos
+          - flags: # 6E — drop invalid TCP flag combos
               - match: none
                 mask: all
               - match: [fin, syn]

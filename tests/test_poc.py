@@ -1,4 +1,5 @@
 """example-poc — the best-practice showcase pair builds, validates, and never drifts."""
+
 import pathlib
 
 import pytest
@@ -34,14 +35,14 @@ def test_poc_is_valid_nft(host):
 
 def test_poc_showcases_the_surface():
     gw1 = build(POC, host="poc-gw1")["poc-gw1"]
-    assert "iifname vmap {" in gw1                          # input zone dispatch
-    assert "iifname . oifname vmap {" in gw1                # forward pair dispatch
-    assert '"lan0" . "lte0" : jump fwd_users_inet' in gw1   # group row expanded
-    assert "th dport vmap { 22 : jump svc_ssh" in gw1       # service dispatch
+    assert "iifname vmap {" in gw1  # input zone dispatch
+    assert "iifname . oifname vmap {" in gw1  # forward pair dispatch
+    assert '"lan0" . "lte0" : jump fwd_users_inet' in gw1  # group row expanded
+    assert "th dport vmap { 22 : jump svc_ssh" in gw1  # service dispatch
     assert "ip saddr . ip daddr . tcp dport @mon_flows" in gw1  # paired flows
     assert "dnat ip to tcp dport map { 80 : 10.10.40.10" in gw1  # data map
-    assert "snat ip to 203.0.113.10" in gw1                 # site-resolved target
+    assert "snat ip to 203.0.113.10" in gw1  # site-resolved target
     gw2 = build(POC, host="poc-gw2")["poc-gw2"]
-    assert "masquerade" in gw2                              # dynamic-uplink contrast
-    assert "10.20.20.0/24" in gw2                           # site2 overlay values
-    assert "dmz" not in gw2                                 # site2 composes no DMZ
+    assert "masquerade" in gw2  # dynamic-uplink contrast
+    assert "10.20.20.0/24" in gw2  # site2 overlay values
+    assert "dmz" not in gw2  # site2 composes no DMZ

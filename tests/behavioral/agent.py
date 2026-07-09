@@ -19,6 +19,7 @@ Ops:
   {"op": "run", "ns": name|null, "argv": […]}       escape hatch / debugging
   {"op": "quit"}
 """
+
 import ctypes
 import json
 import os
@@ -32,7 +33,7 @@ libc = ctypes.CDLL(None, use_errno=True)
 CLONE_NEWNET = 0x40000000
 
 NAMESPACES: dict[str, int] = {}  # zone name -> holder pid
-CHILDREN: list[int] = []         # holders + listeners, killed on quit
+CHILDREN: list[int] = []  # holders + listeners, killed on quit
 
 
 def _unshare_newnet() -> None:
@@ -67,15 +68,22 @@ def _spawn_holder() -> int:
     return pid
 
 
-def _run(ns: str | None, argv: list[str], input_text: str | None = None) -> subprocess.CompletedProcess:
+def _run(
+    ns: str | None, argv: list[str], input_text: str | None = None
+) -> subprocess.CompletedProcess:
     """Run argv in the router ns (ns=None) or a zone ns (via setns pre-exec)."""
     pre = None
     if ns is not None:
         pid = NAMESPACES[ns]
         pre = lambda: _setns_net(pid)  # noqa: E731 - runs in the forked child
     return subprocess.run(
-        argv, preexec_fn=pre, input=input_text,
-        capture_output=True, text=True, timeout=30,
+        argv,
+        check=False,
+        preexec_fn=pre,
+        input=input_text,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
 
 
@@ -95,8 +103,21 @@ def op_topology(req: dict) -> dict:
         NAMESPACES[name] = pid
         rif = zone["router_if"]
         # iproute2 7.x needs the explicit `name` keyword for veth pairs
-        _sh(None, "ip", "link", "add", "name", rif, "type", "veth",
-            "peer", "name", "eth0", "netns", str(pid))
+        _sh(
+            None,
+            "ip",
+            "link",
+            "add",
+            "name",
+            rif,
+            "type",
+            "veth",
+            "peer",
+            "name",
+            "eth0",
+            "netns",
+            str(pid),
+        )
         _sh(None, "ip", "addr", "add", zone["router_addr"], "dev", rif)
         _sh(None, "ip", "link", "set", rif, "up")
         _sh(name, "ip", "link", "set", "lo", "up")
@@ -145,7 +166,10 @@ def op_listen(req: dict) -> dict:
     os.close(ready_r)
     if not ready:
         os.waitpid(pid, 0)
-        return {"ok": False, "err": f"listener failed to bind :{req['port']} in ns={ns}"}
+        return {
+            "ok": False,
+            "err": f"listener failed to bind :{req['port']} in ns={ns}",
+        }
     CHILDREN.append(pid)
     return {"ok": True, "pid": pid}
 
@@ -165,7 +189,7 @@ def op_probe(req: dict) -> dict:
             os._exit(0)
         except ConnectionRefusedError:
             os._exit(2)
-        except (socket.timeout, TimeoutError):
+        except TimeoutError:
             os._exit(3)
         except Exception:
             os._exit(4)
@@ -188,8 +212,8 @@ def main() -> int:
         "probe": op_probe,
         "run": op_run,
     }
-    for line in sys.stdin:
-        line = line.strip()
+    for raw in sys.stdin:
+        line = raw.strip()
         if not line:
             continue
         req = json.loads(line)

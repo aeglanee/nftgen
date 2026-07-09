@@ -1,3 +1,4 @@
+---
 # Site-local definitions for SITE1. The generator merges def/ (common) + the
 # host's site file, so the shared rules can reference `local_users` and it
 # resolves to this site's group. Many hosts at site1 point at this one file.
@@ -5,5 +6,5 @@
 # NOTE: the per-site/local layer is a later generator phase — shown here for the
 # shape so the YAML format can be evaluated.
 networks:
-  local_users:   [users_site1]
+  local_users: [users_site1]
   local_servers: [servers_site1]

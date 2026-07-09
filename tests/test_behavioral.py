@@ -5,6 +5,7 @@ output, flush form) inside a router namespace. Every negative assertion has a
 positive control in the same topology, so a harness failure can't masquerade
 as a firewall drop.
 """
+
 import pathlib
 
 import pytest
@@ -28,16 +29,28 @@ SERVER = "10.77.2.2"
 def fw():
     harness = Harness()
     try:
-        harness.topology([
-            {"name": "lan", "router_if": "r-lan", "router_addr": f"{ROUTER_LAN}/24",
-             "ns_addr": f"{CLIENT}/24", "gw": ROUTER_LAN},
-            {"name": "wan", "router_if": "r-wan", "router_addr": f"{ROUTER_WAN}/24",
-             "ns_addr": f"{SERVER}/24", "gw": ROUTER_WAN},
-        ])
+        harness.topology(
+            [
+                {
+                    "name": "lan",
+                    "router_if": "r-lan",
+                    "router_addr": f"{ROUTER_LAN}/24",
+                    "ns_addr": f"{CLIENT}/24",
+                    "gw": ROUTER_LAN,
+                },
+                {
+                    "name": "wan",
+                    "router_if": "r-wan",
+                    "router_addr": f"{ROUTER_WAN}/24",
+                    "ns_addr": f"{SERVER}/24",
+                    "gw": ROUTER_WAN,
+                },
+            ]
+        )
         harness.nft_apply(build(FIXTURES / "basic")["router"])
-        harness.listen(None, 22)      # router "ssh"
-        harness.listen("wan", 9000)   # the internet-side service
-        harness.listen("lan", 9000)   # target for the unsolicited-inbound probe
+        harness.listen(None, 22)  # router "ssh"
+        harness.listen("wan", 9000)  # the internet-side service
+        harness.listen("lan", 9000)  # target for the unsolicited-inbound probe
         yield harness
     finally:
         harness.close()

@@ -4,6 +4,7 @@ Phases 0–6 are done (skeleton → defs → named sets → rules/chains → hos
 nft -c validation → primitives A–E). What's left, à la carte:
 
 ## Safety / validation
+
 - [x] **Strict rule-key validation** (done 2026-06-27). `RuleRenderer.render()`
       now rejects unknown rule keys (`unknown = set(rule) - _KNOWN_RULE_KEYS` →
       `BuildError`), so a typo like `dprot:` fails loudly instead of silently
@@ -40,6 +41,7 @@ nft -c validation → primitives A–E). What's left, à la carte:
       Guard against it at build time. (Found while verifying maps; see docs/maps.md.)
 
 ## Promote remaining `raw:` recipes to structured keys
+
 - [ ] **set-dscp** — deferred from Phase 6A because DSCP is family-specific
       (`ip dscp set` vs `ip6 dscp set`). Needs to render per-family (like
       addresses do) or require a family-scoped rule. `raw:` works meanwhile.
@@ -56,11 +58,13 @@ nft -c validation → primitives A–E). What's left, à la carte:
       `daddr` + concat `key: [iif, oif]` — are done; see docs/maps.md.)
 
 ## Output
+
 - [ ] **JSON emitter** — a second emitter on the same IR (libnftables JSON), for
       `nft -j` apply + round-tripping + live `add element`. The IR was built so
       this is additive (Table/Set/Chain/Rule already model the objects).
 
 ## Testing & infra
+
 - [ ] **Vagrant behavioral harness** — spin a VM, apply the generated `.nft`,
       probe with nc/curl/nmap. This validates *semantics* (does the firewall
       behave), not just `nft -c` syntax. The real-trust test.
@@ -69,6 +73,7 @@ nft -c validation → primitives A–E). What's left, à la carte:
       skipped validation tests light up on a box with nftables).
 
 ## DX / polish
+
 - [ ] **bare-set ergonomics (low priority, YAGNI for now).** Idea: let a bare set
       *infer* its `type` from the elements and control the backend with
       `interval: false` (defaults true) instead of restating `type: ipv4_addr`.
@@ -82,13 +87,14 @@ nft -c validation → primitives A–E). What's left, à la carte:
       "Network Definition" errors all over the example). A schema fixes that and
       gives autocompletion.
 - [ ] update **DESIGN.md / RAW.md** to mark which `raw:` recipes are now
-      structured (A–E), and document statements / counters / flowtables / vmaps /
-      flags / per-table `raw:` in the spec.
+      structured (A–E), and document statements / counters / flowtables /
+      vmaps / flags / per-table `raw:` in the spec.
 - [ ] **multi-site / `local`** is built in the defs loader (Phase 1) and wired
       via `site:` (Phase 4). Possible later: layered scopes (`site:` as a list →
       global → region → site), and an inline per-host `local:` override.
 
 ## Notes / decisions already made (don't re-litigate)
+
 - Mirror nftables structure; author your own chains; no optimizer.
 - A definition becomes a **named set** only when listed under a table's `sets:`;
   else it inlines. Named set = single family (mixed → error, split `_v4`/`_v6`).

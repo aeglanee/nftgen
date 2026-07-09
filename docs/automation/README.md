@@ -2,12 +2,13 @@
 
 nftgen automates the **mechanical, always-correct** parts of writing nftables, and
 **refuses** the parts that require intent it can't safely guess. This directory
-documents each automation as **define-it-like-this → generates-like-this**, with the
-defaults and how to override them.
+documents each automation as **define-it-like-this → generates-like-this**,
+with the defaults and how to override them.
 
 ## The principle
 
 Something is **safe to automate** when its output is:
+
 1. **uniquely determined** by what you wrote (no judgement call), and
 2. **always correct** — if it were ever wrong, `nft -c` rejects it loudly (it can't
    silently mislead, unlike a wrong-but-valid rule), and

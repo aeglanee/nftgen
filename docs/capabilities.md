@@ -9,15 +9,16 @@ The authoritative reference for what the generator turns YAML into, grounded in
 
 > Deploy-side capabilities (the `.nft` → apply pipeline) live in
 > [DEPLOYMENT.md](../DEPLOYMENT.md), not here. This file is **generation only**.
-
-> **Strict authoring surface (v0.2.0):** unknown keys are a `BuildError` at every
-> level — policy (`tables:`/`site:`), table, chain, set entry, vmap spec, and rule
-> (e.g. `dprot:` for `dport:`) — never a silently-weaker or empty ruleset. A policy
-> with no `tables:` refuses to generate (the flushing deploy artifact would wipe the
-> firewall). `raw:`/`vmap:` must be a rule's only key. Name resolution is strict
-> too: `iif`/`oif`/flowtable devices must be defined interface groups (a one-off
-> device gets a one-device group, e.g. `eth0: [eth0]`); a non-numeric `dport:` must
-> be a defined service; a group that resolves to no elements errors at use.
+>
+> **Strict authoring surface (v0.2.0):** unknown keys are a `BuildError` at
+> every level — policy (`tables:`/`site:`), table, chain, set entry, vmap spec,
+> and rule (e.g. `dprot:` for `dport:`) — never a silently-weaker or empty
+> ruleset. A policy with no `tables:` refuses to generate (the flushing deploy
+> artifact would wipe the firewall). `raw:`/`vmap:` must be a rule's only key.
+> Name resolution is strict too: `iif`/`oif`/flowtable devices must be defined
+> interface groups (a one-off device gets a one-device group, e.g. `eth0:
+> [eth0]`); a non-numeric `dport:` must be a defined service; a group that
+> resolves to no elements errors at use.
 
 ---
 
@@ -146,12 +147,15 @@ the cost, and the reason to promote a recipe once it earns a key.
 - ✅ **concatenations** · **`icmp type`** · **inline dnat data map** · **`mark`**
   (read+write) · **expanded vmap keys** (`dport`/`sport`/`mark`/`state`/`saddr`/
   `daddr` + concat `key: [iif, oif]`; groups/services resolve) — **done**.
+
 1. **`reject with <type>`** — nicer zone-boundary rejects than silent drop.
 2. **set-dscp** (family-aware) — promote the deferred DSCP statement.
-3. **named / reusable maps** — table-level `maps:`; reusable vmaps + named data maps.
+3. **named / reusable maps** — table-level `maps:`; reusable vmaps + named
+   data maps.
 4. **more meta matches** (`pkttype`/`skuid`), `redirect`, ct mark.
 5. **JSON emitter** — second emitter on the same IR (libnftables JSON).
-6. **concat follow-ons** — `proto: [tcp,udp]` list, per-row `proto` field, family auto-split.
+6. **concat follow-ons** — `proto: [tcp,udp]` list, per-row `proto` field,
+   family auto-split.
 
-See [TODO.md](../TODO.md) for the full backlog; the top ranks came from porting the
-multi-zone router sketch, not speculation.
+See [TODO.md](../TODO.md) for the full backlog; the top ranks came from
+porting the multi-zone router sketch, not speculation.

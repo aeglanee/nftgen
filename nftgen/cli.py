@@ -1,4 +1,5 @@
 """Command-line entry point for nftgen."""
+
 from __future__ import annotations
 
 import argparse
@@ -16,6 +17,7 @@ from nftgen.ir import BuildError
 
 def _clean_errors(fn):
     """Authoring mistakes get a one-line `nftgen: error:` instead of a traceback."""
+
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         try:
@@ -23,6 +25,7 @@ def _clean_errors(fn):
         except (BuildError, DefinitionError, FileNotFoundError, yaml.YAMLError) as e:
             print(f"nftgen: error: {e}", file=sys.stderr)
             return 1
+
     return wrapper
 
 
@@ -45,7 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _defaults(policy: pathlib.Path):
     """For a <root>/policies/hosts/<host>.yaml layout, infer defs/base/sites."""
-    include_base = policy.parent.parent          # .../policies
+    include_base = policy.parent.parent  # .../policies
     root = policy.parents[2] if len(policy.parents) >= 3 else policy.parent
     return root / "definitions", include_base, root / "sites"
 
@@ -76,7 +79,11 @@ def _build_cmd(argv: list[str]) -> int:
         return 2
 
     results = build(args.root, host=args.host)
-    out_dir = pathlib.Path(args.out_dir) if args.out_dir else pathlib.Path(args.root) / "generated"
+    out_dir = (
+        pathlib.Path(args.out_dir)
+        if args.out_dir
+        else pathlib.Path(args.root) / "generated"
+    )
     out_dir.mkdir(parents=True, exist_ok=True)
     rc = 0
     for name, text in sorted(results.items()):
@@ -86,7 +93,9 @@ def _build_cmd(argv: list[str]) -> int:
         if args.check:
             result = validate.check(text)
             if not result.ok:
-                print(f"nftgen: {name}: nft -c FAILED:\n{result.stderr}", file=sys.stderr)
+                print(
+                    f"nftgen: {name}: nft -c FAILED:\n{result.stderr}", file=sys.stderr
+                )
                 rc = 1
     return rc
 

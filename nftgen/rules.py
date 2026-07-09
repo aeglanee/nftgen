@@ -8,18 +8,31 @@ Literals are only accepted where they're unambiguous (an IP/CIDR address, a
 numeric port/range); interface and service names must be defined groups so a
 typo fails the build instead of silently never matching.
 """
+
 from __future__ import annotations
 
-import itertools
 import ipaddress
+import itertools
 
 from nftgen.definitions import Definitions
 from nftgen.ir import (
-    BODY_INDENT, BuildError, Chain, Flowtable, NamedSet, _PORT_LITERAL,
+    _PORT_LITERAL,
+    BODY_INDENT,
+    BuildError,
+    Chain,
+    Flowtable,
+    NamedSet,
     render_literal,
 )
 
-PRIORITIES = {"raw": -300, "mangle": -150, "dstnat": -100, "filter": 0, "security": 50, "srcnat": 100}
+PRIORITIES = {
+    "raw": -300,
+    "mangle": -150,
+    "dstnat": -100,
+    "filter": 0,
+    "security": 50,
+    "srcnat": 100,
+}
 
 
 def resolve_priority(value) -> int:
@@ -45,11 +58,11 @@ def _nat_family(target) -> str:
     `[v6]:port`, and ranges (`a-b`).
     """
     host = str(target)
-    if host.startswith("["):            # [2001:db8::1]:443
+    if host.startswith("["):  # [2001:db8::1]:443
         host = host[1:].split("]", 1)[0]
-    elif host.count(":") == 1:          # 10.0.0.1:443 (single colon => host:port)
+    elif host.count(":") == 1:  # 10.0.0.1:443 (single colon => host:port)
         host = host.split(":", 1)[0]
-    host = host.split("-", 1)[0]        # range a-b => first endpoint
+    host = host.split("-", 1)[0]  # range a-b => first endpoint
     try:
         version = ipaddress.ip_address(host).version
     except ValueError as e:
@@ -68,7 +81,14 @@ def _has_port(addr: str) -> bool:
 
 
 _TCP_FLAGS = ("fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr")
-_TCP_ALL = ("fin", "syn", "rst", "psh", "ack", "urg")  # the 'all' keyword (excludes ecn/cwr)
+_TCP_ALL = (
+    "fin",
+    "syn",
+    "rst",
+    "psh",
+    "ack",
+    "urg",
+)  # the 'all' keyword (excludes ecn/cwr)
 
 
 def _expand_flags(value) -> list[str]:
@@ -99,7 +119,9 @@ def _fmt_flags(flags: list[str]) -> str:
 def _flag_clause(check: dict) -> str:
     """Render one {match, mask} flag check to 'tcp flags & <mask> == <comp>'."""
     match = _expand_flags(check.get("match", []))
-    mask = _expand_flags(check["mask"]) if check.get("mask") is not None else list(match)
+    mask = (
+        _expand_flags(check["mask"]) if check.get("mask") is not None else list(match)
+    )
     if not mask:
         raise BuildError(f"flags check needs a mask (examined flags): {check!r}")
     if not set(match) <= set(mask):
@@ -107,27 +129,59 @@ def _flag_clause(check: dict) -> str:
     return f"tcp flags & {_fmt_flags(mask)} == {_fmt_flags(match)}"
 
 
-_KNOWN_RULE_KEYS = frozenset({
-    "iif", "oif", "saddr", "daddr", "ct", "mark", "proto", "sport", "dport", "flags",
-    "icmp-type", "limit", "quota", "log", "set-mark", "set-mss", "flow-offload",
-    "counter", "action", "raw", "vmap", "set",
-})
+_KNOWN_RULE_KEYS = frozenset(
+    {
+        "iif",
+        "oif",
+        "saddr",
+        "daddr",
+        "ct",
+        "mark",
+        "proto",
+        "sport",
+        "dport",
+        "flags",
+        "icmp-type",
+        "limit",
+        "quota",
+        "log",
+        "set-mark",
+        "set-mss",
+        "flow-offload",
+        "counter",
+        "action",
+        "raw",
+        "vmap",
+        "set",
+    }
+)
 
 # a concat (`set:`) rule may only carry these alongside the set reference
-_CONCAT_RULE_KEYS = frozenset({
-    "set", "action", "counter", "limit", "quota", "log",
-    "set-mark", "set-mss", "flow-offload",
-})
+_CONCAT_RULE_KEYS = frozenset(
+    {
+        "set",
+        "action",
+        "counter",
+        "limit",
+        "quota",
+        "log",
+        "set-mark",
+        "set-mss",
+        "flow-offload",
+    }
+)
 
 
 class RuleRenderer:
-    def __init__(self, defs: Definitions, named: dict[str, NamedSet], counters=frozenset()):
+    def __init__(
+        self, defs: Definitions, named: dict[str, NamedSet], counters=frozenset()
+    ):
         self.defs = defs
         self.named = named
         self.counters = frozenset(counters)
 
     # -- public ------------------------------------------------------------- #
-    def render(self, rule: dict) -> list[str]:
+    def render(self, rule: dict) -> list[str]:  # noqa: PLR0912, PLR0915 - dispatches per rule key
         # Reject typos/unknown keys loudly: an unread key silently weakens a rule
         # (e.g. `dprot:` for `dport:`) and nft -c can't catch it (still valid nft).
         unknown = set(rule) - _KNOWN_RULE_KEYS
@@ -260,11 +314,19 @@ class RuleRenderer:
                 raise BuildError(f"network group {value!r} resolves to no addresses")
             buckets: dict[str, list[str]] = {}
             for a in addrs:
-                fam = "ip" if ipaddress.ip_network(a, strict=False).version == 4 else "ip6"
+                fam = (
+                    "ip"
+                    if ipaddress.ip_network(a, strict=False).version == 4
+                    else "ip6"
+                )
                 buckets.setdefault(fam, []).append(a)
             return {fam: _anon(addrs) for fam, addrs in buckets.items()}
         try:
-            fam = "ip" if ipaddress.ip_network(value, strict=False).version == 4 else "ip6"
+            fam = (
+                "ip"
+                if ipaddress.ip_network(value, strict=False).version == 4
+                else "ip6"
+            )
         except ValueError:
             raise BuildError(
                 f"address {value!r} is not a known network group, set, or IP/CIDR"
@@ -315,7 +377,9 @@ class RuleRenderer:
             if not ports:
                 raise BuildError(f"service {value!r} has no {proto} ports")
             return _anon(ports)
-        if isinstance(value, int) or (isinstance(value, str) and _PORT_LITERAL.match(value)):
+        if isinstance(value, int) or (
+            isinstance(value, str) and _PORT_LITERAL.match(value)
+        ):
             return str(value)
         raise BuildError(
             f"port {value!r} is not a known service group or a port/range "
@@ -323,30 +387,38 @@ class RuleRenderer:
         )
 
     _VMAP_KEYS = {
-        "iif": "iifname", "oif": "oifname", "proto": "meta l4proto",
-        "dport": "th dport", "sport": "th sport",      # transport-agnostic ports
-        "mark": "meta mark", "state": "ct state",
+        "iif": "iifname",
+        "oif": "oifname",
+        "proto": "meta l4proto",
+        "dport": "th dport",
+        "sport": "th sport",  # transport-agnostic ports
+        "mark": "meta mark",
+        "state": "ct state",
     }
-    _VMAP_ADDR = {"saddr", "daddr"}                     # family-aware (single-key only)
+    _VMAP_ADDR = {"saddr", "daddr"}  # family-aware (single-key only)
     _VMAP_HELP = "iif/oif/proto/dport/sport/mark/state/saddr/daddr"
 
     def _vmap(self, spec: dict) -> str:
         if not isinstance(spec, dict):
-            raise BuildError(f"`vmap:` needs a mapping with `key:` and `map:`, got {spec!r}")
+            raise BuildError(
+                f"`vmap:` needs a mapping with `key:` and `map:`, got {spec!r}"
+            )
         unknown = set(spec) - {"key", "map"}
         if unknown:
             raise BuildError(f"unknown vmap key(s) {sorted(unknown)}: {spec!r}")
         key = spec.get("key")
-        if isinstance(key, list):                       # concatenated key
+        if isinstance(key, list):  # concatenated key
             return self._concat_vmap(spec, key)
-        if key in self._VMAP_ADDR:                      # family-aware address vmap
+        if key in self._VMAP_ADDR:  # family-aware address vmap
             return self._addr_vmap(spec, key)
         keyexpr = self._VMAP_KEYS.get(key)
         if keyexpr is None:
             raise BuildError(f"vmap key {key!r} not supported (use {self._VMAP_HELP})")
         mapping = spec.get("map")
         if not isinstance(mapping, dict) or not mapping:
-            raise BuildError(f"a {key} vmap needs a non-empty `map:` of value -> verdict: {spec!r}")
+            raise BuildError(
+                f"a {key} vmap needs a non-empty `map:` of value -> verdict: {spec!r}"
+            )
         entries = []
         for k, verdict in mapping.items():
             v = self._verdict(verdict)
@@ -361,7 +433,9 @@ class RuleRenderer:
         """
         mapping = spec.get("map")
         if not isinstance(mapping, dict):
-            raise BuildError(f"a {key} vmap needs a `map:` of address -> verdict: {spec!r}")
+            raise BuildError(
+                f"a {key} vmap needs a `map:` of address -> verdict: {spec!r}"
+            )
         fam, entries = None, []
         for k, verdict in mapping.items():
             kfam, cidrs = self._vmap_addr_tokens(key, k)
@@ -372,7 +446,9 @@ class RuleRenderer:
 
     def _vmap_addr_tokens(self, key: str, value) -> tuple:
         """One address vmap key -> (family, [cidrs]); a network group expands."""
-        cidrs = self.defs.network(value) if value in self.defs.networks else [str(value)]
+        cidrs = (
+            self.defs.network(value) if value in self.defs.networks else [str(value)]
+        )
         if not cidrs:
             raise BuildError(f"vmap {key} group {value!r} resolves to no addresses")
         fams = set()
@@ -397,7 +473,9 @@ class RuleRenderer:
         """
         for k in keys:
             if k not in self._VMAP_KEYS and k not in self._VMAP_ADDR:
-                raise BuildError(f"vmap key {k!r} not supported (use {self._VMAP_HELP})")
+                raise BuildError(
+                    f"vmap key {k!r} not supported (use {self._VMAP_HELP})"
+                )
         mapping = spec.get("map")
         if not isinstance(mapping, list):
             raise BuildError(
@@ -416,11 +494,13 @@ class RuleRenderer:
                 )
             verdict = {k: v for k, v in entry.items() if k != "match"}
             if len(verdict) != 1:
-                raise BuildError(f"concat vmap entry needs exactly one verdict: {entry!r}")
+                raise BuildError(
+                    f"concat vmap entry needs exactly one verdict: {entry!r}"
+                )
             v = self._verdict(verdict)
             cols = []
             for i, kt in enumerate(keys):
-                if kt in self._VMAP_ADDR:                # family-aware position
+                if kt in self._VMAP_ADDR:  # family-aware position
                     kfam, toks = self._vmap_addr_tokens(kt, match[i])
                     fam = self._one_family(kt, fam, kfam)
                     cols.append(toks)
@@ -429,8 +509,12 @@ class RuleRenderer:
             for combo in itertools.product(*cols):
                 entries.append(f"{' . '.join(combo)} : {v}")
         if any(k in self._VMAP_ADDR for k in keys) and fam is None:
-            raise BuildError(f"concat vmap with an address key needs at least one entry: {spec!r}")
-        keyexprs = [f"{fam} {k}" if k in self._VMAP_ADDR else self._VMAP_KEYS[k] for k in keys]
+            raise BuildError(
+                f"concat vmap with an address key needs at least one entry: {spec!r}"
+            )
+        keyexprs = [
+            f"{fam} {k}" if k in self._VMAP_ADDR else self._VMAP_KEYS[k] for k in keys
+        ]
         return f"{' . '.join(keyexprs)} vmap {render_literal(entries, BODY_INDENT)}"
 
     def _vmap_lit_tokens(self, keytype: str, value) -> list:
@@ -439,7 +523,9 @@ class RuleRenderer:
             if value in self.defs.interfaces:
                 devices = self.defs.interface(value)
                 if not devices:
-                    raise BuildError(f"vmap {keytype} group {value!r} resolves to no devices")
+                    raise BuildError(
+                        f"vmap {keytype} group {value!r} resolves to no devices"
+                    )
                 return [f'"{d}"' for d in devices]
             raise BuildError(
                 f"vmap {keytype} value {value!r} is not a known interface group "
@@ -447,16 +533,22 @@ class RuleRenderer:
             )
         if keytype in ("dport", "sport"):
             if isinstance(value, str) and value in self.defs.services:
-                ports = list(dict.fromkeys(port for _proto, port in self.defs.service(value)))
+                ports = list(
+                    dict.fromkeys(port for _proto, port in self.defs.service(value))
+                )
                 if not ports:
-                    raise BuildError(f"vmap {keytype} service {value!r} resolves to no ports")
+                    raise BuildError(
+                        f"vmap {keytype} service {value!r} resolves to no ports"
+                    )
                 return ports
-            if isinstance(value, int) or (isinstance(value, str) and _PORT_LITERAL.match(value)):
+            if isinstance(value, int) or (
+                isinstance(value, str) and _PORT_LITERAL.match(value)
+            ):
                 return [str(value)]
             raise BuildError(
                 f"vmap {keytype} value {value!r} is not a known service group or a port/range"
             )
-        return [str(value)]                             # proto / mark / state literal
+        return [str(value)]  # proto / mark / state literal
 
     def _one_family(self, key: str, fam, kfam: str) -> str:
         if fam is None:
@@ -478,8 +570,14 @@ class RuleRenderer:
             raise BuildError(
                 f"a concat rule (`set: {name}`) can't carry match keys {sorted(extra)}: {rule!r}"
             )
-        if "action" not in rule and not self._statements(rule) and not rule.get("counter"):
-            raise BuildError(f"concat rule has neither an action nor a statement: {rule!r}")
+        if (
+            "action" not in rule
+            and not self._statements(rule)
+            and not rule.get("counter")
+        ):
+            raise BuildError(
+                f"concat rule has neither an action nor a statement: {rule!r}"
+            )
 
         exprs = []
         for f in s.concat_fields:
@@ -501,7 +599,7 @@ class RuleRenderer:
 
     def _verdict(self, action) -> str:
         if isinstance(action, dict):
-            (kind, target), = action.items()
+            ((kind, target),) = action.items()
             if kind in ("jump", "goto"):
                 return f"{kind} {target}"
             if kind in ("dnat", "snat"):
@@ -561,7 +659,9 @@ class RuleRenderer:
         if len(families) > 1:
             raise BuildError(f"{kind} map mixes v4 and v6 targets: {sorted(families)}")
         fam = families.pop()
-        return f"{kind} {fam} to {proto} {key} map {render_literal(entries, BODY_INDENT)}"
+        return (
+            f"{kind} {fam} to {proto} {key} map {render_literal(entries, BODY_INDENT)}"
+        )
 
     def _map_port_key(self, kind: str, val, proto: str) -> str:
         val = str(val)
@@ -626,5 +726,7 @@ def build_chain(spec: dict, renderer: RuleRenderer) -> Chain:
         chain.priority = resolve_priority(spec.get("priority", 0))
         # drop is only a sane default for filter chains: on a nat/route chain it
         # would drop every flow the chain's rules don't match.
-        chain.policy = spec.get("policy", "drop" if chain.type == "filter" else "accept")
+        chain.policy = spec.get(
+            "policy", "drop" if chain.type == "filter" else "accept"
+        )
     return chain

@@ -33,6 +33,7 @@ set — far better than a rule per pair.
 rules:
   - raw: "ip saddr . tcp dport @allow_pairs counter accept"
 ```
+
 *Future structured idea:* a `match-pairs:` key referencing a concat set.
 
 ## TCP flags
@@ -43,6 +44,7 @@ rules:
   - raw: "tcp flags & (fin|syn) == (fin|syn) counter drop"             # syn+fin
   - raw: "tcp flags syn counter accept"                                # new-conn syn
 ```
+
 *Future:* a `flags:` / `flags-mask:` key (like the aerleon fork's `tcp-flags`).
 
 ## Mangle — mark / dscp / mss
@@ -56,6 +58,7 @@ rules:
   # MSS clamp to path MTU for forwarded TCP
   - raw: "tcp flags syn tcp option maxseg size set rt mtu"
 ```
+
 *Future:* `mark: 0x1`, `dscp: ef`, `mss: pmtu` keys.
 
 ## log / limit / quota
@@ -69,6 +72,7 @@ rules:
   # drop a host once it has pushed > 1 GiB
   - raw: "ip saddr 192.0.2.50 quota over 1 gbytes drop"
 ```
+
 *Future:* `log:` (bool/opts), `limit:` (rate), `quota:` keys.
 
 ## Flowtables  (offload established flows off the slow path)
@@ -91,6 +95,7 @@ tables:
             action: accept
           - raw: "ip protocol { tcp, udp } flow add @ft"   # offload established
 ```
+
 *Future:* a `flowtable:` block on the table + a `flow-offload: ft` rule key.
 
 ## Named counters  (per-rule stats you can read by name)
@@ -109,5 +114,6 @@ tables:
         rules:
           - raw: "tcp dport 80 counter name http_hits accept"
 ```
+
 Read with `nft list counter inet filter http_hits`.
 *Future:* `counter: http_hits` (a name instead of `true`).

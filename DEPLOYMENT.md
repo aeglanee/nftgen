@@ -10,6 +10,7 @@ Ansible/CI integration below exists yet. See [PLAN.md](PLAN.md) for the order.
 ---
 
 ## 1. The shape: GitOps for firewalls
+
 Git is the **desired state**; a reconciler **converges** the machines to it;
 drift gets corrected. (The ArgoCD/Flux model, applied to nftables.)
 
@@ -21,6 +22,7 @@ drift gets corrected. (The ArgoCD/Flux model, applied to nftables.)
   on-change and on a schedule.
 
 ## 2. nftgen and Ansible are decoupled
+
 nftgen **generates files**; Ansible **deploys files**. The Ansible nftables role
 is thin and does not embed nftgen's logic; it ships the committed `.nft`, runs a
 syntax check on the target, and reloads safely. nftgen can be developed and
@@ -32,6 +34,7 @@ Ansible var-layering and avoids Ansible's list-merge pain. So nftgen is a tool
 that emits a reviewed `.nft`; the role's job is the safe apply.
 
 ## 3. The `.nft` is a render, never a source
+
 The committed `.nft` is **generated output**, committed for review and accurate
 state tracking — it is **never hand-edited**. YAML is the only source of truth.
 
@@ -50,6 +53,7 @@ state tracking — it is **never hand-edited**. YAML is the only source of truth
 the human owns the applied bytes, not a bot.
 
 ## 4. Change detection: regenerate all, diff the `.nft`
+
 To decide *who to apply*: **regenerate every host's `.nft`, diff against the
 committed ones; the hosts whose `.nft` changed are the apply set.**
 
@@ -62,8 +66,9 @@ actually changed get applied; identical renders are skipped). This relies on
 **deterministic output** (DECISIONS.md §2.5).
 
 ## 5. Triggers: edge + level
-- **Edge-triggered** (on change to definitions/includes/host policy): regenerate, apply
-  the hosts whose `.nft` changed. The fast path.
+
+- **Edge-triggered** (on change to definitions/includes/host policy):
+  regenerate, apply the hosts whose `.nft` changed. The fast path.
 - **Level-triggered** (scheduled reconcile, e.g. cron): re-converge to git state.
   **This is the *enforcement* of "git wins,"** not just a backstop — it's what
   reverts an out-of-band manual change. Without it, drift persists.
@@ -75,6 +80,7 @@ for a firewall, *seeing* that a box was changed out-of-band is a security signal
 worth surfacing, not silently erasing.
 
 ## 6. Apply safety (where you lock yourself out)
+
 - **`nft -c -f` on the target first** — catches kernel/netlink issues CI can't
   (CI only checks syntax; the box checks the real ruleset).
 - **Apply with a timed rollback** — apply → hold → auto-revert if not confirmed,
@@ -87,8 +93,10 @@ worth surfacing, not silently erasing.
   push-from-CI is the pragmatic start.
 
 ## 7. Manual apply is first-class
+
 CI is the eventual automation, but **everything must be runnable by hand**, with
 the *same* commands CI uses:
+
 - regenerate: `nftgen build <root>` → `git diff` shows YAML **and** `.nft` changes.
 - apply: `ansible-playbook nftables.yml --limit <host>` → ships the committed
   `.nft`, `nft -c` on target, timed rollback.
@@ -100,6 +108,7 @@ are temporary; git is truth.* You can't stop someone SSHing in to run `nft` by
 hand — the periodic reconcile self-heals it.
 
 ## 8. The collection (`sessrumnir`) context
+
 A "router-in-a-box" collection is **one role per daemon**, each the same shape:
 `declarative config → generate → validate → ship + reload safely`
 (networkd, keepalived, kea-dhcp, frr, **nftables**). Most are vars-driven filter
@@ -114,7 +123,8 @@ with a real declarative generator — a clear upgrade — while reusing the role
 ship/validate/reload half almost verbatim.
 
 ## 9. End-to-end (the picture)
-```
+
+```text
 edit YAML  ─┬─ pre-commit: nftgen build → regenerate generated/<host>.nft
             └─ git diff shows BOTH the YAML change and the rule (.nft) change
                                    │  commit + push
@@ -126,15 +136,18 @@ apply changed hosts, one by one ─ ship committed .nft → nft -c on target
                                  → apply with timed rollback → confirm
 scheduled reconcile ─ re-converge every host to git state (revert drift)
 ```
+
 Manual path is the same `nftgen build` + `ansible-playbook --limit`, run by hand.
 
 ## 10. Integration mechanics (agreed 2026-06-26)
+
 nftgen replaces the existing nftables role's *generation* (the hand-written
 common/site/host fragment globbing). nftgen emits **one complete config per
 host**; composition is nftgen's, resolved at build time. Invoked as a **CLI
 (shell out)**, not an in-process plugin (DECISIONS §3.4).
 
 ### 10.1 Deploy artifact (Shape A)
+
 The build output **is** the target's `/etc/nftables.conf`, shipped verbatim:
 shebang + `flush ruleset` + the host's tables (DECISIONS §5.3). So the committed
 `.nft` == the on-box config byte-for-byte, it's directly `nft -f`-applyable, and
@@ -142,8 +155,10 @@ shebang + `flush ruleset` + the host's tables (DECISIONS §5.3). So the committe
 a wrapper `nftables.conf` that `flush`+`include`s a flush-free file (Shape B).
 
 ### 10.2 Two-play playbook + targeting
+
 Naming contract (exact): `inventory_hostname` == `policies/hosts/<name>.yaml` ==
 `generated/<name>.nft`.
+
 - **Play 1 — build:** `hosts: all`, `run_once: true`, `delegate_to: localhost`,
   runs `nftgen build <root>` → all hosts' files. `hosts: all` (not `localhost`)
   so `--limit` can't skip it. `--limit` narrows *apply*, never *build*.
@@ -154,13 +169,19 @@ Naming contract (exact): `inventory_hostname` == `policies/hosts/<name>.yaml` ==
 `ansible-playbook nftables.yml --limit router1` → builds all once, applies router1.
 
 ### 10.3 Apply + rollback (per host, `serial: 1`)
+
 Apply to the *live* ruleset first; persist `/etc/nftables.conf` only after
 confirm — so a lockout reverts AND a reboot stays safe (realises §6).
+
 1. **Ship** → staging `/etc/nftables.conf.new`.
-2. **Validate** `nft -c -f /etc/nftables.conf.new` → failure aborts; live + boot config untouched.
-3. **Snapshot** the running ruleset → `/etc/nftables.rollback.nft` (last-known-good).
-4. **Arm dead-man revert:** `systemd-run --on-active=Ns` → `nft -f /etc/nftables.rollback.nft`, cancellable.
-5. **Apply to live:** `nft -f /etc/nftables.conf.new` (atomic via flush). Boot config not yet changed.
+2. **Validate** `nft -c -f /etc/nftables.conf.new` → failure aborts; live +
+   boot config untouched.
+3. **Snapshot** the running ruleset → `/etc/nftables.rollback.nft`
+   (last-known-good).
+4. **Arm dead-man revert:** `systemd-run --on-active=Ns` →
+   `nft -f /etc/nftables.rollback.nft`, cancellable.
+5. **Apply to live:** `nft -f /etc/nftables.conf.new` (atomic via flush).
+   Boot config not yet changed.
 6. **Confirm** via reconnect (`wait_for_connection`): reachable → cancel timer +
    promote `.new` → `/etc/nftables.conf`; locked out → timer reverts live, boot
    config stays good, play halts.

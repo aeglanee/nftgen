@@ -7,11 +7,13 @@ a host may overlay one or more per-site definition files. Names are unique
 within a category — a duplicate (including a site overlay redefining a common
 name) is an error.
 """
+
 from __future__ import annotations
 
 import ipaddress
 import pathlib
-from typing import Any, Iterable, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 import yaml
 
@@ -30,7 +32,9 @@ class Definitions:
 
     # -- construction -------------------------------------------------------- #
     @classmethod
-    def load(cls, def_dir: str | pathlib.Path, site_files: Iterable[str | pathlib.Path] = ()) -> "Definitions":
+    def load(
+        cls, def_dir: str | pathlib.Path, site_files: Iterable[str | pathlib.Path] = ()
+    ) -> Definitions:
         """Merge every ``*.yaml`` under ``def_dir`` recursively (common), then site overlays."""
         def_dir = pathlib.Path(def_dir)
         if not def_dir.is_dir():
@@ -40,15 +44,14 @@ class Definitions:
         defs = cls()
         for path in sorted(def_dir.rglob("*.y*ml")):
             defs._merge(yaml.safe_load(path.read_text()) or {}, str(path))
-        for sf in site_files:
-            sf = pathlib.Path(sf)
+        for sf in map(pathlib.Path, site_files):
             if not sf.is_file():
                 raise DefinitionError(f"site definitions file not found: {sf}")
             defs._merge(yaml.safe_load(sf.read_text()) or {}, str(sf))
         return defs
 
     @classmethod
-    def from_mappings(cls, *mappings: Mapping[str, Any]) -> "Definitions":
+    def from_mappings(cls, *mappings: Mapping[str, Any]) -> Definitions:
         """Build directly from in-memory mappings (tests / programmatic use)."""
         defs = cls()
         for i, mapping in enumerate(mappings):

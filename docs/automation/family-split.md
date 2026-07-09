@@ -12,6 +12,7 @@ networks:
   lan4: [10.0.0.0/8]                         # v4 only
   lan6: [2001:db8:1::/48]                    # v6 only
 ```
+
 ```yaml
 rules:
   - saddr: dns_servers      # dual-stack
@@ -23,7 +24,9 @@ rules:
   - saddr: lan6             # single family
     action: accept
 ```
+
 →
+
 ```nft
 ip  saddr 192.0.2.53   udp dport 53 accept     # dual-stack group ->
 ip6 saddr 2001:db8::53 udp dport 53 accept     #   two lines, one per family
@@ -47,21 +50,25 @@ A `@named` set carries the family of its `type` (`ipv4_addr` → v4 only).
 ## Guardrails (where it refuses, loudly)
 
 A rule whose address matches share **no** family can never render:
+
 ```yaml
 - saddr: lan6            # v6 only
   daddr: lan4            # v4 only
   action: accept
 ```
-```
+
+```text
 BuildError: rule mixes incompatible address families: {...}
 ```
 
 A definition-backed set must be single-family:
+
 ```yaml
 networks:
   dual: [192.0.2.1, 2001:db8::1]
 ```
-```
+
+```text
 BuildError: set 'dual' mixes IPv4 and IPv6; a named set is single-family —
 split into e.g. dual_v4 / dual_v6
 ```

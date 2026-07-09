@@ -8,6 +8,7 @@
 > accurate** against `rules.py` (`render()` appends matches as independent
 > space-joined parts; `_addr`/`_port` resolve independently; no `.`-join path).
 > Two corrections to the proposal:
+>
 > - **Priority:** framed below as "high for the tiered design," but that tiered
 >   `goto`-dispatch example is illustrative — it is **not in this repo** (our
 >   examples use vmaps). For us this is à-la-carte; rank it via the Step 1
@@ -180,8 +181,8 @@ rules (`svc_pairs_v4` / `svc_pairs_v6`), mirroring the existing
 
 - `rules.py`: `RuleRenderer.render()` — handle `match`/`set`; new `_concat()`
   helper; share key→expr map with `_vmap()`.
-- `ir.py`: `build_sets()` / a new `_concat_set_from_definition()` — derive type +
-  elements for concatenated definition groups.
+- `ir.py`: `build_sets()` / a new `_concat_set_from_definition()` — derive
+  type + elements for concatenated definition groups.
 - `definitions.py`: optionally a paired-tuple group form, or compose from
   existing networks × services with an explicit pairing.
 

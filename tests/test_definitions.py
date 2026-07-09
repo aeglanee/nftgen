@@ -1,4 +1,5 @@
 """Phase 1 — definitions resolver: composition, merge, per-site overlay, errors."""
+
 import pathlib
 
 import pytest
@@ -37,7 +38,9 @@ def test_network_dedupe_overlapping_refs():
 
 def test_self_named_group_is_a_literal():
     # `eth0: [eth0]` is the one-device-group idiom, not a cycle
-    d = Definitions.from_mappings({"interfaces": {"eth0": ["eth0"], "both": ["eth0", "eth1"]}})
+    d = Definitions.from_mappings(
+        {"interfaces": {"eth0": ["eth0"], "both": ["eth0", "eth1"]}}
+    )
     assert d.interface("eth0") == ["eth0"]
     assert d.interface("both") == ["eth0", "eth1"]
 
@@ -136,11 +139,20 @@ def test_value_must_be_list():
 
 # -- per-site overlay (the local-definitions mechanism) --------------------- #
 def test_site_overlay_resolves_local_alias():
-    common = {"networks": {"users_site1": ["192.168.10.0/24"], "users_site2": ["192.168.20.0/24"]}}
+    common = {
+        "networks": {
+            "users_site1": ["192.168.10.0/24"],
+            "users_site2": ["192.168.20.0/24"],
+        }
+    }
     site1 = {"networks": {"local_users": ["users_site1"]}}
     site2 = {"networks": {"local_users": ["users_site2"]}}
-    assert Definitions.from_mappings(common, site1).network("local_users") == ["192.168.10.0/24"]
-    assert Definitions.from_mappings(common, site2).network("local_users") == ["192.168.20.0/24"]
+    assert Definitions.from_mappings(common, site1).network("local_users") == [
+        "192.168.10.0/24"
+    ]
+    assert Definitions.from_mappings(common, site2).network("local_users") == [
+        "192.168.20.0/24"
+    ]
 
 
 def test_site_overlay_collision_with_common_errors():
@@ -152,7 +164,9 @@ def test_site_overlay_collision_with_common_errors():
 
 # -- loading from the example directory ------------------------------------- #
 def test_load_example_dir_and_site_overlay():
-    defs = Definitions.load(EXAMPLE / "definitions", site_files=[EXAMPLE / "sites" / "site1.yaml"])
+    defs = Definitions.load(
+        EXAMPLE / "definitions", site_files=[EXAMPLE / "sites" / "site1.yaml"]
+    )
     assert defs.network("webhosts") == ["192.0.2.10", "192.0.2.11"]
     assert defs.service("web") == [("tcp", "80"), ("tcp", "443")]
     assert defs.interface("wan") == ["wan0", "wwan0"]

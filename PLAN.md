@@ -6,6 +6,7 @@ The agreed order of work from here. Rationale and decisions live in
 ---
 
 ## ⟶ Resuming in a fresh nftgen session (start here)
+
 This plan was written while the working session was still rooted in the *aerleon*
 repo (the build happened cross-repo). The intended next move is to **root a
 Claude session in this repo** so `CLAUDE.md` auto-loads and history files here.
@@ -28,6 +29,7 @@ output is [docs/step1-review.md](docs/step1-review.md); pick up the open items b
   parametrize the nft-check over *all* hosts (not just router1/router2).
 
 ## Status
+
 - **Done:** Phases 0–6 (skeleton → defs → sets → rules/chains → host→`.nft` →
   `nft -c` → primitives A–E), Step 2 `build()`, Step 3a (sessrumnir role rewrite,
   two-play flow), and the **v0.2.0 strict authoring surface** (2026-07-05: unknown
@@ -44,6 +46,7 @@ the `feat/bright-future` enterprise router platform (its docs name the firewall
 as the one architectural gap — "aerleon-style rule generator planned" = us).
 
 ### R0 — Release & sync (unblocks everything)  ✓ done 2026-07-05
+
 - [x] Push nftgen master + tag **v0.2.0** (breaking: strict surface).
 - [x] sessrumnir `feat/nftgen-integration`: bump `requirements.txt` pin
       `@v0.1.0` → `@v0.2.0`; **rebase onto origin/main (0.7.0)**; re-run the
@@ -55,6 +58,7 @@ as the one architectural gap — "aerleon-style rule generator planned" = us).
       the container/HA roles on top.)
 
 ### R1 — Small tests first: netns behavioral harness (in this repo)
+
 The real-trust layer `nft -c` can't give. No VM needed: user+net namespaces
 (`unshare -rn` already proven here) + veth pairs.
 **Progress 2026-07-05:** the *what* is specced — full behavioral matrix in
@@ -63,6 +67,7 @@ PoC truth table), and the showcase fixture exists:
 [example-poc/](example-poc/) (two-site best-practice pair, README-narrated,
 built + `nft -c` clean + drift-pinned by `tests/test_poc.py`; bare nat
 targets now resolve site-overlay groups). Next: the harness itself.
+
 - [ ] pytest fixture: 3-namespace topology (client ↔ router ↔ server), apply a
       fixture ruleset in the router ns, probe with `nc`/ping.
 - [ ] Assert the *semantics* of each primitive: ct established/related return
@@ -75,12 +80,14 @@ targets now resolve site-overlay groups). Next: the harness itself.
       router1/2 zones) — golden *behavior*, not just golden text.
 
 ### R2 — nftgen CI + last safety guard
+
 - [ ] Own venv (drop the aerleon `.venv` borrow); GitHub Actions: pytest +
       `nft -c` (ubuntu runner) + `nftgen build example --check` + golden-drift
       (`git diff --exit-code` after regenerate) + the R1 netns suite.
 - [ ] TODO item: reject nft-keyword set/map names (`fwd`, `last`, …) at build.
 
 ### R3 — sessrumnir Step 3b: apply-with-rollback (deploy safety)
+
 - [ ] Role gains the apply sequence (DEPLOYMENT §10.3): `systemd-run` dead-man
       revert (restore last-good + re-enable) → apply to live → Ansible
       reconnect-confirm → persist to `/etc/nftables.conf` → cancel revert;
@@ -89,6 +96,7 @@ targets now resolve site-overlay groups). Next: the harness itself.
       confirm, assert the timer restored the previous ruleset.
 
 ### R4 — sessrumnir Step 4: molecule verifies behavior, not files
+
 - [ ] docker-nftables `verify.yml` today asserts file contents only — add:
       `nft list ruleset` matches the shipped config (kernel state, not just
       the file), counters increment on probe traffic, disallowed port refused
@@ -97,7 +105,9 @@ targets now resolve site-overlay groups). Next: the harness itself.
       diff --exit-code` (committed artifacts always reproducible).
 
 ### R5 — router service-contract policies (the bright-future gap)
+
 Author as reusable nftgen includes + defs (test here first — R1 harness):
+
 - [ ] `services.yaml`: bgp 179/tcp, dns 53/udp+tcp, dhcp 67-68/udp, ntp
       123/udp, vrrp = proto 112 (rule, not port), conntrackd sync, ssh mgmt.
 - [ ] `policies/includes/router/`: in-mgmt, vrrp-peers (proto 112 +
@@ -107,6 +117,7 @@ Author as reusable nftgen includes + defs (test here first — R1 harness):
       shape; `nft -c` + netns behavioral pass.
 
 ### R6 — land on main, then converge with bright-future
+
 - [ ] PR `feat/nftgen-integration` → sessrumnir main (breaking role rewrite;
       release-please bumps minor).
 - [ ] Spike branch **off bright-future**: merge main (or cherry-pick the role),
@@ -119,6 +130,7 @@ Author as reusable nftgen includes + defs (test here first — R1 harness):
       service contract. Done = enterprise verify green, firewalled.
 
 ### R7 — backlog after convergence (unordered)
+
 JSON emitter revival (`nft -j` apply / drift detection), named/reusable maps,
 `set-dscp`, CI change-detection apply-set (DEPLOYMENT model B), JSON schema
 for editor validation.
@@ -126,6 +138,7 @@ for editor validation.
 ## The plan (original phases — kept for history)
 
 ### Step 1 — Walkthrough + critical structure review  ✓ done → [docs/step1-review.md](docs/step1-review.md)
+
 Module by module (`definitions → ir → rules → generate → validate → cli`): what
 it does, how it fits, what's solid, what to change. **Three concrete deliverables**
 (not just discussion):
@@ -144,28 +157,33 @@ we extend it under a role + CI + new features; it's the "get into better shape"
 prerequisite. Mostly discussion + the three artifacts, maybe tiny fixes.
 
 ### Step 2 — Cleanups + `build(<dir>)` + packaging decision
+
 Apply the review's cleanups; add the fleet mode
 (`build(root) -> {host: nft}` + `nftgen build <dir>` CLI, convention-based per
 DECISIONS.md §5.1); settle the import/single-file question (default: importable
 package; optional bundled form for Ansible is separate). Tests for `build()`.
 
 ### Step 3 — Ansible role + manual apply
+
 Thin role: ship `generated/<host>.nft` → `nft -c -f` on target → apply with timed
 rollback. Manually runnable (`ansible-playbook nftables.yml --limit <host>`). No
 CI required. (Decoupled: role deploys files; nftgen makes them — DEPLOYMENT.md §2.)
 
 ### Step 4 — Proper testing
+
 Own venv; CI (pytest goldens + `nft -c`); a **Molecule scenario** that applies the
 role on a VM/container and probes with testinfra (the behavioral layer).
 *Note:* we golden-test every increment along the way regardless — this step is the
 **infra + behavioral** layer, which needs the role (Step 3) to exist.
 
 ### Step 5 — Feature extras (à la carte, as wanted)
+
 Promote remaining `raw:` recipes and add output formats — each a small,
 independent add like Phase 6 A–E. See [TODO.md](TODO.md): `set-dscp` (family-aware),
 concatenations, named/reusable maps, more meta matches, the JSON emitter.
 
 ## Sequencing (resolved)
+
 nftgen and sessrumnir are **decoupled** — the integration contract is just the
 `build(<dir>) → {host: .nft}` API + the `.nft` file format. So:
 
@@ -183,6 +201,7 @@ nftgen and sessrumnir are **decoupled** — the integration contract is just the
   deepening features.
 
 ## Later (not in this plan yet)
+
 Adopt sessrumnir conventions (`AGENTS.md`, pre-commit hooks, lint/CI), the GitOps
 controller mechanics (CI triggers, reconcile cron), and the nftgen JSON schema for
 editor support. See DEPLOYMENT.md and TODO.md.
