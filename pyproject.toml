@@ -10,6 +10,12 @@ dependencies = ["PyYAML>=6.0"]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0"]
+dev = [
+  "pytest>=8.0",
+  "ruff==0.15.20",     # keep in sync with .pre-commit-config.yaml
+  "yamllint==1.38.0",  # keep in sync with .pre-commit-config.yaml
+  "pre-commit>=4.0",
+]
 
 [project.scripts]
 nftgen = "nftgen.cli:main"
@@ -23,3 +29,25 @@ packages = ["nftgen"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "UP",  # pyupgrade
+  "B",   # flake8-bugbear
+  "SIM", # flake8-simplify
+  "C4",  # flake8-comprehensions
+  "RET", # flake8-return
+  "PL",  # pylint
+]
+ignore = [
+  "E501",    # formatter owns line-length wrapping
+  "PLR2004", # magic values are fine in tests and rendering tables
+]

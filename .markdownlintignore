@@ -1,0 +1,3 @@
+.venv/
+# agent prompt files: harness format (frontmatter + prompt body), not docs
+.claude/agents/
