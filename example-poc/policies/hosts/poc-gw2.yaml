@@ -30,7 +30,7 @@ tables:
         priority: filter
         policy: drop
         rules:
-          - iif: loopback
+          - iifname: loopback
             action: accept
           - include: includes/common/conntrack.yaml
           - saddr: "@blocklist"
@@ -38,7 +38,7 @@ tables:
             action: drop
           - include: includes/common/icmp.yaml
           - vmap:
-              key: iif
+              key: iifname
               map:
                 mgmt:
                   jump: in_mgmt
@@ -81,7 +81,7 @@ tables:
             action: drop
           - include: includes/common/wan-bogons.yaml
           - vmap:
-              key: [iif, oif]
+              key: [iifname, oifname]
               map:
                 - match: [users, uplinks]
                   jump: fwd_users_inet
@@ -127,6 +127,6 @@ tables:
         policy: accept
         rules:
           # Dynamic uplink → masquerade (contrast with gw1's static snat).
-          - oif: uplinks
+          - oifname: uplinks
             saddr: local_site
             action: masquerade

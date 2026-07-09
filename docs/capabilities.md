@@ -15,7 +15,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 > and rule (e.g. `dprot:` for `dport:`) — never a silently-weaker or empty
 > ruleset. A policy with no `tables:` refuses to generate (the flushing deploy
 > artifact would wipe the firewall). `raw:`/`vmap:` must be a rule's only key.
-> Name resolution is strict too: `iif`/`oif`/flowtable devices must be defined
+> Name resolution is strict too: `iifname`/`oifname`/flowtable devices must be defined
 > interface groups (a one-off device gets a one-device group, e.g. `eth0:
 > [eth0]`); a non-numeric `dport:` must be a defined service; a group that
 > resolves to no elements errors at use.
@@ -50,7 +50,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 
 | Key | YAML | nft | Notes |
 | --- | --- | --- | --- |
-| `iif` / `oif` | `iif: wan` | `iifname @wan` / `{ "wan0", … }` / `"wan0"` | named set or interface group (strict — unknown names error); one device inlines bare |
+| `iifname` / `oifname` | `iifname: wan` | `iifname @wan` / `{ "wan0", … }` / `"wan0"` | named set or interface group (strict — unknown names error); one device inlines bare |
 | `saddr` / `daddr` | `saddr: webhosts` | `ip saddr @webhosts` | **family-aware**; named set, group, or IP/CIDR literal; renders once per common family |
 | `ct` | `ct: [established, related]` | `ct state established,related` | authored, never auto-injected |
 | `mark` | `mark: "0x1"` | `meta mark 0x1` | match an fwmark (set one with `set-mark:`) |
@@ -96,7 +96,7 @@ A rule may be **statement-only** (no verdict) — e.g. an MSS clamp or a fwmark.
 | Form | YAML | nft |
 | --- | --- | --- |
 | `raw:` | `raw: "udp dport 5060 ip dscp set ef"` | verbatim (the escape hatch) |
-| `vmap:` (inline) | `vmap: {key: iif, map: {wan0: {jump: wan_in}}}` | `iifname vmap { … }` — keys `iif`/`oif`/`proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`; groups & services resolve; `key: [iif, oif]` concatenates |
+| `vmap:` (inline) | `vmap: {key: iifname, map: {wan0: {jump: wan_in}}}` | `iifname vmap { … }` — keys `iifname`/`oifname`/`proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`; groups & services resolve; `key: [iifname, oifname]` concatenates |
 | `include:` | `- include: includes/common-input.yaml` | inlined rules/sets at build time |
 
 ---
@@ -146,7 +146,7 @@ the cost, and the reason to promote a recipe once it earns a key.
 
 - ✅ **concatenations** · **`icmp type`** · **inline dnat data map** · **`mark`**
   (read+write) · **expanded vmap keys** (`dport`/`sport`/`mark`/`state`/`saddr`/
-  `daddr` + concat `key: [iif, oif]`; groups/services resolve) — **done**.
+  `daddr` + concat `key: [iifname, oifname]`; groups/services resolve) — **done**.
 
 1. **`reject with <type>`** — nicer zone-boundary rejects than silent drop.
 2. **set-dscp** (family-aware) — promote the deferred DSCP statement.

@@ -101,7 +101,7 @@ def test_match_v6_and_iface_and_counter():
         [
             {
                 "name": "f",
-                "concat": ["iif", "saddr", "dport"],
+                "concat": ["iifname", "saddr", "dport"],
                 "proto": "tcp",
                 "tuples": [["wan", "app", "https"]],
             }

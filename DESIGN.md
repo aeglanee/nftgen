@@ -162,14 +162,14 @@ tables:
 A rule is a small mapping of **match keys** + an **action** (the recommended
 form), or a `raw:` string for full nft power.
 
-Match keys: `iif` / `oif` (interface), `saddr` / `daddr` (address),
+Match keys: `iifname` / `oifname` (interface), `saddr` / `daddr` (address),
 `proto`, `sport` / `dport` (service or port), `ct` (state list),
 `counter` (bool), `log` (bool/opts). `action`: `accept` / `drop` / `reject` /
 `masquerade`, or a mapping — `jump: chain` / `goto: chain` /
 `dnat: 10.0.0.5` / `snat: 1.2.3.4` (written as an indented block under `action:`).
 
 ```yaml
-- iif: lan_if
+- iifname: lan_if
   saddr: trusted
   proto: tcp
   dport: web
@@ -185,8 +185,8 @@ Match keys: `iif` / `oif` (interface), `saddr` / `daddr` (address),
 A **verdict map** (a native primitive, authored — not inferred):
 
 ```yaml
-- vmap:                        # key: iif/oif/proto/dport/sport/mark/state/saddr/daddr
-    key: iif                   # a list (key: [iif, oif]) concatenates the lookup
+- vmap:                        # key: iifname/oifname/proto/dport/sport/mark/state/saddr/daddr
+    key: iifname               # a list (key: [iifname, oifname]) concatenates the lookup
     map:
       wan0:
         jump: wan_input

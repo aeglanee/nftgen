@@ -68,7 +68,8 @@ trust. Surprises in generated rules are how you get lockouts and silent holes.
 ### 2.1 Rule "form A" — structured mapping
 
 A rule is a mapping of match keys + statement keys + a verdict
-(`saddr`/`daddr`, `iif`/`oif`, `proto`/`dport`, `ct`, `counter`, `action`, …).
+(`saddr`/`daddr`, `iifname`/`oifname`, `proto`/`dport`, `ct`, `counter`,
+`action`, …).
 *Why:* readable, diffable, validatable; maps 1:1 to how you'd describe the rule
 out loud. The `raw:` form coexists for the tail.
 
@@ -172,7 +173,7 @@ works — a new primitive is a local change).
   *Why named:* readable `nft list counter` output and stable identity across reloads.
 - **Flowtables** — declared at table level (`flowtables:`), devices resolved from
   interface groups; rules opt in with `flow-offload: <ft>`.
-- **vmaps** — inline verdict maps dispatching on `iif`/`oif`/`proto`
+- **vmaps** — inline verdict maps dispatching on `iifname`/`oifname`/`proto`
   (`_VMAP_KEYS`). *Inline only for now;* named/reusable maps are a TODO (§ below).
 - **tcp-flags** — `flags:` is a list of `{match, mask}` clauses; expands and
   multiplies across the family loop. Default mask handling lives in the renderer.

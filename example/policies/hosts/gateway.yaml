@@ -45,7 +45,7 @@ tables:
             counter: true
             action: drop
           - vmap: # 6D — dispatch by interface group
-              key: iif
+              key: iifname
               map:
                 wan: # expands to wan0 + wwan0
                   jump: input_wan
@@ -101,11 +101,11 @@ tables:
             action: accept
           - proto: tcp
             set-mss: pmtu                        # 6A — MSS clamp (statement-only)
-          - iif: lan_if
-            oif: wan
+          - iifname: lan_if
+            oifname: wan
             set-mark: "0x1"                      # 6A — fwmark (statement-only)
-          - iif: lan_if
-            oif: wan
+          - iifname: lan_if
+            oifname: wan
             saddr: local_users                   # per-site overlay -> users_site1
             action: accept
           - saddr: webhosts                      # 6A — quota: cut off after 10 GiB
@@ -122,7 +122,7 @@ tables:
         priority: dstnat
         policy: accept
         rules:
-          - iif: wan                            # dnat port-forward: family qualifier
+          - iifname: wan                            # dnat port-forward: family qualifier
             proto: tcp                          # is inferred from the target (inet
             dport: 443                          # tables require `dnat ip to`)
             action:
@@ -134,6 +134,6 @@ tables:
         priority: srcnat
         policy: accept
         rules:
-          - oif: wan
+          - oifname: wan
             saddr: local_users
             action: masquerade

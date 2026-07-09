@@ -60,6 +60,6 @@ tables:
         priority: srcnat
         policy: accept
         rules:
-          - oif: wan
+          - oifname: wan
             saddr: local_users                      # LOCAL: site1 users
             action: masquerade

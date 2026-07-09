@@ -17,12 +17,12 @@ tables:
             action: accept
           - ct: [invalid]
             action: drop
-          - iif: lan_if
+          - iifname: lan_if
             saddr: lan_net
             proto: tcp
             dport: ssh
             action: accept
-          - iif: lan_if
+          - iifname: lan_if
             saddr: lan_net
             proto: tcp
             dport: open_unused
@@ -38,8 +38,8 @@ tables:
             action: accept
           - ct: [invalid]
             action: drop
-          - iif: lan_if
-            oif: wan_if
+          - iifname: lan_if
+            oifname: wan_if
             saddr: lan_net
             proto: tcp
             dport: testsvc

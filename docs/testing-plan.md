@@ -43,9 +43,9 @@ Small dedicated fixture policies (one concern each) under
 | B02 | ct established/related return path | client→server conn through forward | handshake completes both directions |
 | B03 | unsolicited inbound on same port as B02 | server→client SYN, no prior flow | timeout |
 | B04 | ct invalid drop | out-of-state ACK injection | timeout, `ct state invalid` counter rises |
-| B05 | input vmap `key: iif` dispatch | same dport probed from two zones | zone A accepted, zone B dropped |
+| B05 | input vmap `key: iifname` dispatch | same dport probed from two zones | zone A accepted, zone B dropped |
 | B06 | zone absent from input vmap | probe from unlisted zone | falls to chain policy (drop) |
-| B07 | concat vmap `key: [iif, oif]` pair dispatch | same flow via allowed pair, then reversed pair | allowed passes; reverse times out |
+| B07 | concat vmap `key: [iifname, oifname]` pair dispatch | same flow via allowed pair, then reversed pair | allowed passes; reverse times out |
 | B08 | group expansion in vmap match | probe via both members of a 2-device group | both hit the same verdict chain |
 | B09 | named set membership (`saddr @set`) | member IP vs non-member IP | member matched, non-member falls through |
 | B10 | bogon drop + named counter | spoofed rfc1918 saddr into wan veth | timeout + `counter bogon_drops` incremented |

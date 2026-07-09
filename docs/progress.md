@@ -87,6 +87,13 @@ turn. Last updated: 2026-07-09.
   structured paired lookups) predates the shipped `concat:`/`tuples:`/`set:`
   surface — re-verify; the [concat-authoring.md](concat-authoring.md)
   decision itself is closed (Option 1, built).
+- **`feat!` interface keys renamed (2026-07-09, v0.4.0):** YAML `iif:`/`oif:`
+  → `iifname:`/`oifname:` everywhere (rule keys, vmap keys, concat fields) —
+  the old names collided with nft's *index*-matching `iif`/`oif` expressions
+  (guardrail 1: mirror nftables). Rendered output unchanged; old keys fail
+  the build with a rename hint. Frees `iif:`/`oif:` for the queued opt-in
+  index matching (TODO). sessrumnir's fixtures need the same rename when
+  its pin moves past v0.3.0.
 - **⟶ Next:** §1 matrix breadth (B04+), then the P-matrix over
   example-poc, then R2 CI (venv half already done). PLAN §Roadmap.
 

@@ -16,7 +16,7 @@ RD = RuleRenderer(
 def test_iif_vmap():
     rule = {
         "vmap": {
-            "key": "iif",
+            "key": "iifname",
             "map": {"wan0": {"jump": "wan_input"}, "lan0": {"jump": "lan_input"}},
         }
     }
@@ -27,12 +27,12 @@ def test_iif_vmap():
 
 def test_iif_vmap_unknown_group_errors():
     with pytest.raises(BuildError, match="not a known interface group"):
-        R.render({"vmap": {"key": "iif", "map": {"wan0": {"jump": "wan_input"}}}})
+        R.render({"vmap": {"key": "iifname", "map": {"wan0": {"jump": "wan_input"}}}})
 
 
 def test_vmap_needs_map():
     with pytest.raises(BuildError, match="needs a non-empty `map:`"):
-        R.render({"vmap": {"key": "iif"}})
+        R.render({"vmap": {"key": "iifname"}})
 
 
 def test_vmap_unknown_spec_key_errors():
@@ -70,7 +70,7 @@ RI = RuleRenderer(
 def test_concat_vmap_iif_oif_expands_groups():
     rule = {
         "vmap": {
-            "key": ["iif", "oif"],
+            "key": ["iifname", "oifname"],
             "map": [
                 {"match": ["users", "uplinks"], "jump": "fwd_users_inet"},
                 {"match": ["users", "servers"], "jump": "fwd_users_servers"},
@@ -88,7 +88,7 @@ def test_concat_vmap_iif_oif_expands_groups():
 def test_concat_vmap_unknown_device_errors():
     rule = {
         "vmap": {
-            "key": ["iif", "oif"],
+            "key": ["iifname", "oifname"],
             "map": [{"match": ["eth0", "eth1"], "goto": "x"}],
         }
     }
@@ -101,7 +101,7 @@ def test_concat_vmap_match_arity_error():
         RI.render(
             {
                 "vmap": {
-                    "key": ["iif", "oif"],
+                    "key": ["iifname", "oifname"],
                     "map": [{"match": ["users"], "jump": "x"}],
                 }
             }
@@ -189,7 +189,7 @@ def test_dport_vmap_unknown_name_errors():
 
 
 def test_iif_vmap_expands_group_single_key():
-    rule = {"vmap": {"key": "iif", "map": {"uplinks": {"jump": "wan_in"}}}}
+    rule = {"vmap": {"key": "iifname", "map": {"uplinks": {"jump": "wan_in"}}}}
     assert RN.render(rule) == [
         'iifname vmap { "wan0" : jump wan_in, "wwan0" : jump wan_in }'
     ]

@@ -5,8 +5,9 @@ matched value in **one** operation instead of a ladder of rules. There are two
 flavours, by *what the value is*. Every nft block below is `nft -c`-verified.
 
 > nftgen status: **inline verdict maps are done** (Phase 6D), keyed on
-> `iif`/`oif`/`proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`, plus
-> **concatenated** keys (`key: [iif, oif]`). **Inline dnat data maps** are done
+> `iifname`/`oifname`/`proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`, plus
+> **concatenated** keys (`key: [iifname, oifname]`). **Inline dnat data
+> maps** are done
 > too; **named/reusable** maps (verdict + data) are the open
 > "named/reusable maps" backlog item.
 
@@ -92,14 +93,15 @@ lookup — e.g. dispatch by `(saddr, dport)`:
 ip saddr . tcp dport vmap { 10.0.0.1 . 22 : jump admin_in }
 ```
 
-nftgen supports this for verdict maps via a **list key** — `key: [iif, oif]` →
+nftgen supports this for verdict maps via a **list key** —
+`key: [iifname, oifname]` →
 `iifname . oifname vmap`. The `map:` becomes a list of `{match: [...], <verdict>}`
 entries; each match value resolves like a normal `iif`/`oif`, so **interface
 groups expand** and cartesian-product into elements:
 
 ```yaml
 - vmap:
-    key: [iif, oif]
+    key: [iifname, oifname]
     map:
       - match: [users, uplinks]    # users=lan0, uplinks=wan0+wwan0
         jump: fwd_users_inet        #   -> "lan0"."wan0", "lan0"."wwan0"
@@ -127,7 +129,7 @@ groups expand** and cartesian-product into elements:
   (`th dport`; **services resolve** via `services.yaml`, a bundle expands to its
   ports; a numeric port/range stays literal, anything else errors), `mark`,
   `state` (`ct state`), and `saddr`/`daddr` (network groups, single-family). (done.)
-- ✅ **Concat verdict maps** — `vmap: {key: [iif, oif], map: [{match, verdict}]}`
+- ✅ **Concat verdict maps** — `vmap: {key: [iifname, oifname], map: [{match, verdict}]}`
   → `iifname . oifname vmap { … }`; groups/services expand, and `saddr`/`daddr`
   positions are allowed (family inferred, single-family enforced). (done.)
 - ✅ **Inline dnat data map** —

@@ -204,8 +204,8 @@ _CONCAT_FIELD_TYPE = {
     "daddr": "addr",
     "sport": "inet_service",
     "dport": "inet_service",
-    "iif": "ifname",
-    "oif": "ifname",
+    "iifname": "ifname",
+    "oifname": "ifname",
     "mark": "mark",
 }
 
@@ -221,8 +221,14 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:  # noqa: PLR0912 - 
         raise BuildError(f"unknown concat set key(s) {sorted(unknown)}: {entry!r}")
     for f in fields:
         if f not in _CONCAT_FIELD_TYPE:
+            hint = (
+                " (renamed in v0.4.0: iif->iifname, oif->oifname)"
+                if f in ("iif", "oif")
+                else ""
+            )
             raise BuildError(
-                f"concat set {name!r}: unknown field {f!r} (use {sorted(_CONCAT_FIELD_TYPE)})"
+                f"concat set {name!r}: unknown field {f!r}{hint} "
+                f"(use {sorted(_CONCAT_FIELD_TYPE)})"
             )
     proto = entry.get("proto")
     if any(f in ("sport", "dport") for f in fields) and not proto:

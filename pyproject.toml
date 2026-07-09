@@ -1,6 +1,6 @@
 [project]
 name = "nftgen"
-version = "0.3.0"
+version = "0.4.0"
 description = "A small, nftables-only firewall-as-code generator (YAML -> .nft)."
 readme = "README.md"
 requires-python = ">=3.10"

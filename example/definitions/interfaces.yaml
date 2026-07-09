@@ -1,5 +1,5 @@
 ---
-# Interface groups. Device names (or other groups). Used in rules as iif / oif.
+# Interface groups. Device names (or other groups). Used in rules as iifname / oifname.
 # Note: named distinctly from network groups (lan_if vs the network `lan`) — nft
 # set names are unique per table.
 interfaces:

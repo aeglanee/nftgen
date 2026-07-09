@@ -52,7 +52,7 @@ tables:
         priority: filter
         policy: drop
         rules:
-          - iif: loopback
+          - iifname: loopback
             action: accept
           - include: includes/common/conntrack.yaml
           - saddr: "@blocklist"
@@ -63,7 +63,7 @@ tables:
           # iot has no entry on purpose — an unlisted zone falls straight
           # to the chain policy (drop). uplinks expands to both devices.
           - vmap:
-              key: iif
+              key: iifname
               map:
                 mgmt:
                   jump: in_mgmt
@@ -113,11 +113,11 @@ tables:
           # Paired-flow allowlist rides ahead of the zone dispatch.
           - set: mon_flows
             action: accept
-          # Zone-pair dispatch (concat vmap over iif . oif): enumerate the
+          # Zone-pair dispatch (concat vmap over iifname . oifname): enumerate the
           # *meaningful* pairs, let every other combination fall to the drop
           # policy. Rows with `uplinks` expand over both member devices.
           - vmap:
-              key: [iif, oif]
+              key: [iifname, oifname]
               map:
                 - match: [users, uplinks]
                   jump: fwd_users_inet
@@ -177,7 +177,7 @@ tables:
           # Port-forward data map (docs/maps.md): WAN service port → inside
           # host, one rule. Targets are single-address groups from the site
           # overlay. Unmapped ports fall through untouched — forward drops them.
-          - iif: uplinks
+          - iifname: uplinks
             action:
               dnat:
                 proto: tcp
@@ -193,7 +193,7 @@ tables:
         rules:
           # Static egress NAT: site1 has a fixed address, so snat (not
           # masquerade) — the per-site value lives behind local_snat_ip.
-          - oif: uplinks
+          - oifname: uplinks
             saddr: local_site
             action:
               snat: local_snat_ip

@@ -3,8 +3,8 @@
 # `local_users`, which resolves differently per host's site. Written once, used
 # by every router; each gets its own site's subnet.
 rules:
-  - iif: lan_if
-    oif: wan
+  - iifname: lan_if
+    oifname: wan
     saddr: local_users
     proto: tcp
     dport: web

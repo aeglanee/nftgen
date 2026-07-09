@@ -34,7 +34,7 @@ chains:
     priority: filter
     policy: drop                 # default-deny: anything not accepted is dropped
     rules:
-      - iif: lo                  # 1. trust loopback
+      - iifname: lo               # 1. trust loopback
         action: accept
       - ct: [established, related]   # 2. accept replies to flows we allowed
         action: accept
@@ -354,7 +354,7 @@ forward chain, so your policy fully applies to connection setup.
 
 ### 8d. Zone dispatch: where drops happen and how to see them
 
-The multi-zone forward layout (§6) dispatches with one `[iif, oif]` vmap
+The multi-zone forward layout (§6) dispatches with one `[iifname, oifname]` vmap
 lookup: key found → `jump` to that zone-pair chain; key not found → the
 vmap rule is a no-match and the packet falls through to the *next* rule
 in the base chain. Structure the drops so every one is attributed:

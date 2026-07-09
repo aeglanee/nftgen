@@ -61,13 +61,13 @@ def test_inline_group_not_declared():
 
 def test_interface_named_and_unknown():
     assert (
-        one({"iif": "lan_if", "oif": "wan", "action": "accept"})
+        one({"iifname": "lan_if", "oifname": "wan", "action": "accept"})
         == "iifname @lan_if oifname @wan accept"
     )
     # an unknown name must error, not silently render a literal device that
     # never matches (a typo'd group on a drop rule would fail open)
     with pytest.raises(BuildError, match="unknown interface group"):
-        one({"iif": "eth9", "action": "drop"})
+        one({"iifname": "eth9", "action": "drop"})
 
 
 def test_ct_state():
@@ -141,7 +141,7 @@ def test_actions_jump_dnat():
         == "dnat ip6 to [2001:db8::5]:443"
     )
     assert (
-        one({"oif": "wan", "action": {"snat": "203.0.113.7"}})
+        one({"oifname": "wan", "action": {"snat": "203.0.113.7"}})
         == "oifname @wan snat ip to 203.0.113.7"
     )
     assert one({"action": {"jump": "common_input"}}) == "jump common_input"
@@ -173,7 +173,7 @@ def test_dnat_map():
     r = RuleRenderer(d, {})
     assert r.render(
         {
-            "iif": "eth0",
+            "iifname": "eth0",
             "action": {"dnat": {"proto": "tcp", "map": {80: "web", "https": "db"}}},
         }
     ) == ['iifname "eth0" dnat ip to tcp dport map { 80 : 10.0.0.10, 443 : 10.0.0.20 }']
@@ -194,7 +194,7 @@ def test_dnat_map_errors():
 
 def test_masquerade():
     assert (
-        one({"oif": "wan", "saddr": "mgmt", "action": "masquerade"})
+        one({"oifname": "wan", "saddr": "mgmt", "action": "masquerade"})
         == "oifname @wan ip saddr 192.168.9.0/24 masquerade"
     )
 
@@ -220,7 +220,9 @@ def test_raw_must_be_alone():
 
 def test_vmap_must_be_alone():
     with pytest.raises(BuildError):
-        R.render({"vmap": {"key": "iif", "map": {"wan0": "drop"}}, "action": "accept"})
+        R.render(
+            {"vmap": {"key": "iifname", "map": {"wan0": "drop"}}, "action": "accept"}
+        )
 
 
 def test_explicit_at_reference():
@@ -260,7 +262,7 @@ def test_port_literals_and_unknown_service():
 def test_named_set_type_mismatch_errors():
     # webhosts is an address set; using it as an interface or port must fail
     with pytest.raises(BuildError, match="not an interface set"):
-        R.render({"iif": "webhosts", "action": "accept"})
+        R.render({"iifname": "webhosts", "action": "accept"})
     with pytest.raises(BuildError, match="not a port set"):
         R.render({"proto": "tcp", "dport": "webhosts", "action": "accept"})
 
@@ -332,3 +334,11 @@ def test_chain_unknown_key_errors():
 def test_chain_needs_name():
     with pytest.raises(BuildError, match="needs a `name:`"):
         build_chain({"hook": "input"}, R)
+
+
+def test_renamed_iface_keys_hint():
+    r = RuleRenderer(DEFS, {})
+    with pytest.raises(BuildError, match="iif->iifname"):
+        r.render({"iif": "wan", "action": "accept"})
+    with pytest.raises(BuildError, match="oif->oifname"):
+        r.render({"oif": "wan", "action": "accept"})

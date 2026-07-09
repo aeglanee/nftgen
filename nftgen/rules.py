@@ -131,8 +131,8 @@ def _flag_clause(check: dict) -> str:
 
 _KNOWN_RULE_KEYS = frozenset(
     {
-        "iif",
-        "oif",
+        "iifname",
+        "oifname",
         "saddr",
         "daddr",
         "ct",
@@ -186,7 +186,12 @@ class RuleRenderer:
         # (e.g. `dprot:` for `dport:`) and nft -c can't catch it (still valid nft).
         unknown = set(rule) - _KNOWN_RULE_KEYS
         if unknown:
-            raise BuildError(f"unknown rule key(s) {sorted(unknown)}: {rule!r}")
+            hint = (
+                " (renamed in v0.4.0: iif->iifname, oif->oifname)"
+                if unknown & {"iif", "oif"}
+                else ""
+            )
+            raise BuildError(f"unknown rule key(s) {sorted(unknown)}{hint}: {rule!r}")
         if "raw" in rule:
             if len(rule) != 1:
                 raise BuildError(f"`raw:` must be a rule's only key: {rule!r}")
@@ -214,10 +219,10 @@ class RuleRenderer:
         for fam in families:
             for flag_clause in flag_clauses:
                 parts: list[str] = []
-                if "iif" in rule:
-                    parts.append(f"iifname {self._iface(rule['iif'])}")
-                if "oif" in rule:
-                    parts.append(f"oifname {self._iface(rule['oif'])}")
+                if "iifname" in rule:
+                    parts.append(f"iifname {self._iface(rule['iifname'])}")
+                if "oifname" in rule:
+                    parts.append(f"oifname {self._iface(rule['oifname'])}")
                 if "saddr" in rule:
                     parts.append(f"{fam} saddr {addr['saddr'][fam]}")
                 if "daddr" in rule:
@@ -387,8 +392,8 @@ class RuleRenderer:
         )
 
     _VMAP_KEYS = {
-        "iif": "iifname",
-        "oif": "oifname",
+        "iifname": "iifname",
+        "oifname": "oifname",
         "proto": "meta l4proto",
         "dport": "th dport",
         "sport": "th sport",  # transport-agnostic ports
@@ -396,7 +401,7 @@ class RuleRenderer:
         "state": "ct state",
     }
     _VMAP_ADDR = {"saddr", "daddr"}  # family-aware (single-key only)
-    _VMAP_HELP = "iif/oif/proto/dport/sport/mark/state/saddr/daddr"
+    _VMAP_HELP = "iifname/oifname/proto/dport/sport/mark/state/saddr/daddr"
 
     def _vmap(self, spec: dict) -> str:
         if not isinstance(spec, dict):
@@ -405,7 +410,12 @@ class RuleRenderer:
             )
         unknown = set(spec) - {"key", "map"}
         if unknown:
-            raise BuildError(f"unknown vmap key(s) {sorted(unknown)}: {spec!r}")
+            hint = (
+                " (renamed in v0.4.0: iif->iifname, oif->oifname)"
+                if unknown & {"iif", "oif"}
+                else ""
+            )
+            raise BuildError(f"unknown vmap key(s) {sorted(unknown)}{hint}: {spec!r}")
         key = spec.get("key")
         if isinstance(key, list):  # concatenated key
             return self._concat_vmap(spec, key)
@@ -465,10 +475,10 @@ class RuleRenderer:
         return fams.pop(), cidrs
 
     def _concat_vmap(self, spec: dict, keys: list) -> str:
-        """Concatenated vmap, e.g. ``key: [iif, oif]`` -> ``iifname . oifname vmap``.
+        """Concatenated vmap, e.g. ``key: [iifname, oifname]`` -> ``iifname . oifname vmap``.
 
         ``map`` is a list of ``{match: [v0, v1, …], <verdict>}`` entries; each
-        match value resolves like a normal iif/oif (an interface group expands to
+        match value resolves like a normal iifname/oifname (an interface group expands to
         its devices, cartesian-producting into elements), proto stays literal.
         """
         for k in keys:
@@ -519,7 +529,7 @@ class RuleRenderer:
 
     def _vmap_lit_tokens(self, keytype: str, value) -> list:
         """Non-address vmap element tokens for one key — groups and services expand."""
-        if keytype in ("iif", "oif"):
+        if keytype in ("iifname", "oifname"):
             if value in self.defs.interfaces:
                 devices = self.defs.interface(value)
                 if not devices:
@@ -587,8 +597,8 @@ class RuleRenderer:
                 exprs.append(f"{s.concat_proto} {f}")
             elif f == "mark":
                 exprs.append("meta mark")
-            else:  # iif / oif
-                exprs.append("iifname" if f == "iif" else "oifname")
+            else:  # iifname / oifname: field name is the nft expression
+                exprs.append(f)
         parts = [" . ".join(exprs) + f" @{name}"]
         parts.extend(self._statements(rule))
         if rule.get("counter"):

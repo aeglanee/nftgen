@@ -1,14 +1,14 @@
 ---
 # WAN-ingress scrub: drop martian sources, counted so drops are observable.
 # Contract with the including table: declare the sets (sets-bogons.yaml) and a
-# `bogon_drops` counter. The iif match keeps this fragment self-contained, so
+# `bogon_drops` counter. The iifname match keeps this fragment self-contained, so
 # it reads the same whether included in input or forward.
 rules:
-  - iif: uplinks
+  - iifname: uplinks
     saddr: "@bogons_v4"
     counter: bogon_drops
     action: drop
-  - iif: uplinks
+  - iifname: uplinks
     saddr: "@bogons_v6"
     counter: bogon_drops
     action: drop

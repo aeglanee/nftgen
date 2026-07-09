@@ -18,12 +18,13 @@ nft -c validation → primitives A–E). What's left, à la carte:
         typo'd `tables:`/`chains:` used to generate a valid **empty** ruleset —
         with the deploy flush prefix, a firewall wipe);
       - a policy with no `tables:` refuses to generate;
-      - `iif`/`oif`/flowtable devices must be defined interface groups (a typo'd
+      - `iifname`/`oifname`/flowtable devices must be defined interface
+        groups (a typo'd
         name used to render a literal `iifname "lan_ifacse"` that deploys and
         never matches — `nft -c` passes it); one-device groups (`eth0: [eth0]`)
         are the literal escape hatch (a self-named item reads as a literal);
       - non-numeric ports must be defined services; named-set refs are
-        type-checked (`iif: <addr set>` used to pass `nft -c`!);
+        type-checked (`iifname: <addr set>` used to pass `nft -c`!);
       - groups that resolve to no elements error at use (`iifname { }` passes
         `nft -c` as a dead rule);
       - definition cycles and include cycles error with the chain path
@@ -55,7 +56,7 @@ nft -c validation → primitives A–E). What's left, à la carte:
       dnat map. (Phase 6D did inline vmaps only.)
 - [ ] more meta matches (pkttype, skuid, …), `redirect` action, ct mark. (mark
       match + the expanded **vmap keys** — `dport`/`sport`/`mark`/`state`/`saddr`/
-      `daddr` + concat `key: [iif, oif]` — are done; see docs/maps.md.)
+      `daddr` + concat `key: [iifname, oifname]` — are done; see docs/maps.md.)
 
 ## Output
 
