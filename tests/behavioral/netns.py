@@ -153,6 +153,14 @@ class Harness:
             timeout=timeout,
         )["result"]
 
+    def nflog_capture(
+        self, group: int, ns: str | None, dst: str, port: int, timeout: float = 3.0
+    ) -> str | None:
+        """Bind NFLOG group, trigger a drop-logged probe -> the captured prefix."""
+        return self._rpc(
+            op="nflog_capture", group=group, ns=ns, dst=dst, port=port, timeout=timeout
+        )["prefix"]
+
     def run(self, ns: str | None, argv: list[str]) -> subprocess.CompletedProcess:
         resp = self._rpc(op="run", ns=ns, argv=argv)
         return subprocess.CompletedProcess(argv, resp["rc"], resp["out"], resp["err"])

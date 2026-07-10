@@ -303,3 +303,39 @@ def test_p20_runtime_blocklist_kills_reachability(fw):
 def test_p21_icmp_echo_to_router(fw):
     # the icmp include accepts (rate-limited) echo-request on input
     assert fw.ping("users", "192.168.1.1") == "replied"
+
+
+# --------------------------------------------------------------------------- #
+# P22 — a dropped flow emits its attributed log (NFLOG capture)
+# --------------------------------------------------------------------------- #
+
+FIXTURES = pathlib.Path(__file__).resolve().parent / "behavioral" / "fixtures"
+
+
+@requires_netns
+def test_p22_dropped_flow_emits_attributed_log():
+    # A dedicated fixture whose drop-log ships to NFLOG group 2 (what a real
+    # deployment points a log collector at). Bind the group, send a flow to an
+    # un-allowed port, and confirm the metered drop-log actually emitted with
+    # its prefix — the troubleshoot story proven end to end.
+    h = Harness()
+    try:
+        h.topology(
+            [
+                {
+                    "name": "za",
+                    "router_if": "r-za",
+                    "router_addr": "10.50.0.1/24",
+                    "ns_addr": "10.50.0.2/24",
+                    "gw": "10.50.0.1",
+                }
+            ]
+        )
+        h.nft_apply(build(FIXTURES / "nflog")["router"])
+        h.listen(None, 7000)  # the allowed port — positive control
+        assert h.probe_tcp("za", "10.50.0.1", 7000) == "connected"
+        # a probe to an un-allowed port is dropped and logged to NFLOG group 2
+        prefix = h.nflog_capture(2, "za", "10.50.0.1", 9999)
+        assert prefix == "input-drop ", f"captured {prefix!r}"
+    finally:
+        h.close()

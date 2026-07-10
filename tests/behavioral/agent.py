@@ -30,6 +30,10 @@ Ops:
       "flags": [...], "sport"?, "timeout"?}
                                        raw crafted TCP segment (arbitrary
                                        flags) -> replied | silent
+  {"op": "nflog_capture", "group": N, "ns": name|null, "dst", "port",
+      "timeout"?}                      bind NFLOG group N, trigger a probe to
+                                       dst:port (expected to be dropped+logged),
+                                       -> the captured log prefix (or null)
   {"op": "run", "ns": name|null, "argv": […]}       escape hatch / debugging
   {"op": "quit"}
 """
@@ -38,6 +42,7 @@ import contextlib
 import ctypes
 import json
 import os
+import select
 import signal
 import socket
 import struct
@@ -402,6 +407,83 @@ def op_send_tcp(req: dict) -> dict:
     return {"ok": True, "result": "replied" if got == b"replied" else "silent"}
 
 
+# NFLOG (nfnetlink_log) — subsystem 4, used by `log group N`.
+_NFNL_SUBSYS_ULOG = 4
+_NFULNL_MSG_PACKET = 0
+_NFULNL_MSG_CONFIG = 1
+_NFULA_PREFIX = 10  # the `log prefix` string attribute
+
+
+def _nflog_bind(group: int):
+    s = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 12)  # NETLINK_NETFILTER
+    s.bind((0, 0))
+    nfgen = struct.pack(">BBH", socket.AF_INET, 0, group)  # family, version, res_id
+    attr = struct.pack("HHB", 5, 1, 1) + b"\x00" * 3  # NFULA_CFG_CMD -> CMD_BIND
+    payload = nfgen + attr
+    mtype = (_NFNL_SUBSYS_ULOG << 8) | _NFULNL_MSG_CONFIG
+    s.send(struct.pack("IHHII", 16 + len(payload), mtype, 1, 0, 0) + payload)
+    return s
+
+
+def _nflog_prefix(data: bytes) -> str | None:
+    off = 20  # nlmsghdr(16) + nfgenmsg(4)
+    while off + 4 <= len(data):
+        alen, atype = struct.unpack("HH", data[off : off + 4])
+        if alen < 4:
+            break
+        if (atype & 0x3FFF) == _NFULA_PREFIX:
+            return data[off + 4 : off + alen].rstrip(b"\x00").decode(errors="replace")
+        off += (alen + 3) & ~3
+    return None
+
+
+def op_nflog_capture(req: dict) -> dict:
+    """Prove a dropped flow emits its log: bind the NFLOG group, trigger a
+    probe that should be dropped+logged, return the captured log prefix."""
+    group = int(req["group"])
+    ns = req.get("ns")
+    ns_pid = NAMESPACES[ns] if ns is not None else None
+    timeout = float(req.get("timeout", 3.0))
+    r, w = os.pipe()
+    lpid = os.fork()
+    if lpid == 0:  # listener: capture the first packet's prefix
+        os.close(r)
+        try:
+            sk = _nflog_bind(group)
+            sk.settimeout(timeout)
+            while True:
+                data = sk.recv(16384)
+                mtype = struct.unpack("H", data[4:6])[0]
+                if (mtype >> 8) == _NFNL_SUBSYS_ULOG and (
+                    mtype & 0xFF
+                ) == _NFULNL_MSG_PACKET:
+                    os.write(w, (_nflog_prefix(data) or "").encode())
+                    os._exit(0)
+        except (TimeoutError, OSError):
+            os._exit(0)
+    os.close(w)
+    time.sleep(0.3)  # let the listener bind before we trigger
+    tpid = os.fork()
+    if tpid == 0:  # trigger: a probe that gets dropped+logged
+        try:
+            if ns_pid is not None:
+                _setns_net(ns_pid)
+            sk = socket.socket()
+            sk.settimeout(1.0)
+            with contextlib.suppress(OSError):
+                sk.connect((req["dst"], int(req["port"])))
+        finally:
+            os._exit(0)
+    os.waitpid(tpid, 0)
+    rlist, _, _ = select.select([r], [], [], timeout)
+    prefix = (os.read(r, 256).decode() or None) if rlist else None
+    os.close(r)
+    with contextlib.suppress(OSError):
+        os.kill(lpid, signal.SIGKILL)
+        os.waitpid(lpid, 0)
+    return {"ok": True, "prefix": prefix}
+
+
 def op_run(req: dict) -> dict:
     proc = _run(req.get("ns"), req["argv"])
     return {"ok": True, "rc": proc.returncode, "out": proc.stdout, "err": proc.stderr}
@@ -415,6 +497,7 @@ def main() -> int:
         "probe": op_probe,
         "ping": op_ping,
         "send_tcp": op_send_tcp,
+        "nflog_capture": op_nflog_capture,
         "run": op_run,
     }
     for raw in sys.stdin:

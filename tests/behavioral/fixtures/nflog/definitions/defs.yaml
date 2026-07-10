@@ -1,0 +1,7 @@
+---
+# P22 fixture: a drop-log that ships to an NFLOG group (what a real deployment
+# points a log collector / webui at) instead of the kernel ring.
+interfaces:
+  zone_if: [r-za]
+services:
+  svc: [7000/tcp]

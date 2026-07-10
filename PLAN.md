@@ -34,9 +34,10 @@ The agreed order of work from here. Rationale and decisions live in
   keys/names/empty groups fail the build; type-aware chain policy; loud `--check`;
   clean CLI errors — see TODO.md §Safety), and **v0.3.0** (wrapped large
   literals, named PoC fleet groups, netns harness B01–B03). **166 tests.**
-- **Not done:** P01–P20 PoC reachability truth table (§1 primitive matrix
-  B01–B26 **complete**), nftgen CI, Step 3b apply-rollback,
-  Step 4 molecule end-to-end, enterprise (bright-future) firewall integration.
+- **Not done:** the multi-router harness (true two-router cross-site);
+  §1 (B01–B26) and §2 (P01–P22) behavioral matrices **complete**. nftgen CI,
+  Step 3b apply-rollback, Step 4 molecule end-to-end, enterprise
+  (bright-future) firewall integration.
 
 ## Roadmap — 2026-07-05 (authoritative TODO; follow in order)
 
@@ -77,9 +78,10 @@ it replaced the retired `example-poc/`. Next: the P-matrix over it.
       2026-07-10 — and it caught the flow-offload/verdict footgun.
 - [x] Marked/skipped cleanly where namespaces are unavailable (mirrors
       `requires_nft`).
-- [ ] **P01–P22 over example-fleet** (§2 truth table): the composed policy
-      end-to-end on the single-router harness + one NFLOG log test; the
-      cross-site two-router harness is staged last (reference-fleet.md).
+- [x] **P01–P22 over example-fleet** (§2) — done 2026-07-10: composed policy
+      end-to-end on the single-router harness, incl. real NFLOG capture (P22).
+      Cross-site *arrival* via source-bound transit probes; true two-router
+      end-to-end is the one remaining stage (multi-router harness).
 
 ### R2 — nftgen CI + last safety guard
 

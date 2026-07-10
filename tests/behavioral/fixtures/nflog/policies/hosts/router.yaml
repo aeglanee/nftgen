@@ -1,0 +1,32 @@
+---
+# The drop-log tail logs to NFLOG group 2 (userspace-deliverable) via the
+# structured meter: + log: {group}. A probe to an un-allowed port is metered,
+# logged to the group, and dropped — proving the attributed drop-log actually
+# emits (the troubleshoot story, end to end).
+tables:
+  - family: inet
+    name: filter
+    sets:
+      - name: log_meter
+        type: ipv4_addr
+        flags: [dynamic, timeout]
+    chains:
+      - name: input
+        hook: input
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - proto: tcp
+            dport: svc
+            action: accept
+          - meter:
+              set: log_meter
+              key: saddr
+              rate: 100/second
+            log:
+              group: 2
+              prefix: "input-drop "
+          - action: drop

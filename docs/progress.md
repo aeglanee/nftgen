@@ -173,9 +173,22 @@ turn. Last updated: 2026-07-10.
     concat, data map, jump, meter, interval/pipapo) linking the deep-dives.
   - **CLAUDE.md** — standing instruction to be proactively, substantively
     critical of the user's ideas. Suite **199**.
-- **⟶ Next:** implement P01–P22 over example-fleet on the single-router
-  harness + the one NFLOG log test (P22); stage the multi-router cross-site
-  harness last. Then R2 CI. PLAN §Roadmap / reference-fleet.md.
+- **P01–P22 §2 reachability matrix landed (2026-07-10) — R1 behavioral
+  complete.** The composed example-fleet policy proven end-to-end: hq-r with
+  a veth per zone, the real generated `.nft`, 22 rows — intra-site
+  allow/deny, wan edge (bogon scrub, malformed-flag drop, published-web dnat,
+  fall-through), cross-site arrival over transit (all_users→hq_central,
+  br1_app→hq_db), masquerade peer proof, runtime blocklist, icmp, and **P22
+  real NFLOG capture** (bind the group, trigger a dropped flow, assert the
+  metered drop-log emitted with its prefix). Harness gained source-bind
+  probes, transit-return routing, and an nfnetlink_log reader. Findings:
+  TEST-NET-3 is itself a bogon (sim internet moved to 8.8.8/24 — proves the
+  scrub); `ct invalid` shadows the bad_tcp flag scrub in the stateful path.
+  Suite **221**.
+- **⟶ Next:** R2 — nftgen CI (GitHub Actions: pytest + nft -c + build
+  --check + golden drift + make lint) and the reject-nft-keyword-names guard;
+  the multi-router harness (true two-router cross-site) can slot in
+  alongside. PLAN §Roadmap.
 
 ## Decided
 
