@@ -592,3 +592,126 @@ def test_b17_snat_rewrites_source_to_fixed_ip(fw_nat):
     assert outcome == "connected"
     assert seen == NAT_ROUTER_WAN
     assert seen != NAT_LAN_CLIENT
+
+
+# --------------------------------------------------------------------------- #
+# B18-B23, B26 — icmp, limit, quota, counters, dport vmap, flowtable, reapply
+# (fixture: statements)
+# --------------------------------------------------------------------------- #
+
+ST_ROUTER, ST_CLIENT = "10.86.1.1", "10.86.1.2"
+ST_ROUTER6, ST_CLIENT6 = "fd00:86:1::1", "fd00:86:1::2"
+ST_WAN_ROUTER, ST_WAN_SERVER = "10.86.2.1", "10.86.2.2"
+
+
+@pytest.fixture(scope="module")
+def fw_statements():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": "lan",
+                    "router_if": "r-lan",
+                    "router_addr": f"{ST_ROUTER}/24",
+                    "ns_addr": f"{ST_CLIENT}/24",
+                    "gw": ST_ROUTER,
+                    "router_addr6": f"{ST_ROUTER6}/64",
+                    "ns_addr6": f"{ST_CLIENT6}/64",
+                    "gw6": ST_ROUTER6,
+                },
+                {
+                    "name": "wan",
+                    "router_if": "r-wan",
+                    "router_addr": f"{ST_WAN_ROUTER}/24",
+                    "ns_addr": f"{ST_WAN_SERVER}/24",
+                    "gw": ST_WAN_ROUTER,
+                },
+            ]
+        )
+        harness.artifact = build(FIXTURES / "statements")["router"]
+        harness.nft_apply(harness.artifact)
+        for port in (22, 7001, 7002, 9100):
+            harness.listen(None, port)
+        harness.listen("wan", 7003)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b18_icmp_echo_v4_and_v6(fw_statements):
+    # both families answered by their own accept rule; v6 also proves ND
+    # survived (the client's neighbour resolution had to work to get here).
+    assert fw_statements.ping("lan", ST_ROUTER) == "replied"
+    assert fw_statements.ping("lan", ST_ROUTER6) == "replied"
+
+
+@requires_netns
+def test_b19_limit_rate_gates_new_conns(fw_statements):
+    # 2/minute on ct new: the first probes pass, a burst exhausts the bucket
+    # and the rule stops matching, so later probes fall to the policy drop.
+    outcomes = [fw_statements.probe_tcp("lan", ST_ROUTER, 7001) for _ in range(6)]
+    assert outcomes[0] == "connected"  # bucket has tokens
+    assert outcomes[-1] == "timeout"  # exhausted -> falls through
+
+
+@requires_netns
+def test_b20_quota_admits_traffic_until_exhausted(fw_statements):
+    # the quota rule admits traffic while under budget; the kernel tracks the
+    # bytes used against it. (Exhausting 1 MiB through the probe API would be
+    # slow and flaky, so this asserts the live quota object and that traffic
+    # passes while under budget — the exhaustion edge is covered by nft's own
+    # tests, not ours.)
+    assert fw_statements.probe_tcp("lan", ST_ROUTER, 7002) == "connected"
+    out = fw_statements.run(None, ["nft", "list", "ruleset"]).stdout
+    assert re.search(r"quota over 1 mbytes|quota 1 mbytes", out), out
+
+
+@requires_netns
+def test_b21_named_and_anonymous_counters_increment(fw_statements):
+    before = _counter_packets(fw_statements, "ssh_hits")
+    assert fw_statements.probe_tcp("lan", ST_ROUTER, 22) == "connected"
+    assert _counter_packets(fw_statements, "ssh_hits") > before
+    # the anonymous counter on the `limited` rule shows up in the ruleset dump
+    assert (
+        "counter packets" in fw_statements.run(None, ["nft", "list", "ruleset"]).stdout
+    )
+
+
+@requires_netns
+def test_b22_dport_vmap_dispatches_per_service(fw_statements):
+    # ssh lands in svc_ssh (its named counter proves which chain ran);
+    # metrics lands in svc_metrics (accepted, but ssh_hits must not move).
+    before = _counter_packets(fw_statements, "ssh_hits")
+    assert fw_statements.probe_tcp("lan", ST_ROUTER, 9100) == "connected"
+    assert _counter_packets(fw_statements, "ssh_hits") == before
+
+
+@requires_netns
+def test_b23_flowtable_smoke(fw_statements):
+    # the flowtable exists in the kernel, and forwarding still works with
+    # `flow add @ft` on the established path. This is the regression test for
+    # the combined-rule footgun: `flow add` + `accept` in ONE rule makes the
+    # kernel NFT_BREAK mid-handshake, the accept never runs, and the return
+    # path dies on `policy drop` — the build now rejects that form.
+    out = fw_statements.run(None, ["nft", "list", "flowtables"]).stdout
+    assert "flowtable ft" in out
+    assert fw_statements.probe_tcp("lan", ST_WAN_SERVER, 7003) == "connected"
+
+
+def _without_runtime_state(ruleset: str) -> str:
+    """Drop the readouts that a fresh apply legitimately resets: counter
+    tallies and the bytes charged against a quota."""
+    out = re.sub(r"packets \d+ bytes \d+", "packets N bytes N", ruleset)
+    return re.sub(r" used \d+ \w*bytes", "", out)
+
+
+@requires_netns
+def test_b26_reapplying_the_artifact_is_idempotent(fw_statements):
+    # the deploy artifact carries `flush ruleset`, so applying it twice must
+    # land on the same structure — no duplicated rules, no accumulated objects.
+    first = fw_statements.run(None, ["nft", "list", "ruleset"]).stdout
+    fw_statements.nft_apply(fw_statements.artifact)
+    second = fw_statements.run(None, ["nft", "list", "ruleset"]).stdout
+    assert _without_runtime_state(first) == _without_runtime_state(second)

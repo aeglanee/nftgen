@@ -38,9 +38,11 @@ tables:
         priority: filter
         policy: drop
         rules:
-          - ct: [established, related]
-            flow-offload: ft                    # 6C — offload established flows
-            action: accept
+          - ct: [established, related]        # 6C — offload established flows...
+            flow-offload: ft
+          - ct: [established, related]        # ...then accept them (separate
+            action: accept                   #      rule: `flow add` breaks the
+                                             #      rule when it can't offload)
           - saddr: "@blocklist"
             counter: true
             action: drop

@@ -114,9 +114,27 @@ turn. Last updated: 2026-07-10.
   at the filter (B15), a dnat'd-but-not-forward-allowed port proves the
   forward leg filters post-rewrite (B16), and lan egress leaves as the
   fixed snat_ip (B17). Suite **181**.
-- **⟶ Next:** §1 matrix breadth (B18+ — icmp, limit/quota/counter,
-  dport-vmap, flowtable smoke, reapply idempotence), then the P-matrix
-  over example-poc, then R2 CI. PLAN §Roadmap.
+- **B18–B23 + B26 landed (2026-07-10) — and they found a real bug.**
+  Harness gained dual-stack topology (v6 + DAD wait) and a raw-socket
+  ICMP/ICMPv6 echo op (the `ping` binary can't resolve protocols in the
+  ns; DGRAM-ICMP is gid-gated; raw sockets work as userns root). Rows:
+  icmp echo v4+v6, `limit` gating new conns, `quota` live, named +
+  anonymous counters, dport-vmap service dispatch, flowtable smoke,
+  artifact reapply idempotence (normalising counter/quota readouts, which
+  a fresh apply resets).
+  **The bug:** `flow-offload:` + `action:` in one rule is silently fatal —
+  the kernel's flow-offload expression sets `NFT_BREAK` whenever it
+  declines to offload (mid-handshake, fin/rst, unconfirmed ct), which
+  aborts the rest of the rule, so the `accept` never runs and the
+  handshake's reply dies on `policy: drop`. `nft -c` passes it. Both
+  shipped examples (`example/gateway`, `example-poc/poc-gw1`) had it —
+  those firewalls would have forwarded *nothing*. nftgen now rejects the
+  combined form at build time; docs carry the citation
+  ([best-practices.md](best-practices.md) §8c). Exactly the class of
+  failure the behavioral layer exists to catch. Suite **189**.
+- **⟶ Next:** B24 (crafted tcp-flags scrub — B04's raw-socket technique
+  applies) + B25 (log, structural), then the P01–P20 truth table over
+  example-poc, then R2 CI. PLAN §Roadmap.
 
 ## Decided
 

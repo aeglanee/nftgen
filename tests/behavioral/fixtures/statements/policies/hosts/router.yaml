@@ -1,0 +1,84 @@
+---
+# Statements & primitives (testing-plan B18-B23, B26).
+#   B18: icmp echo answered on v4 and v6 (icmpv6 ND kept working)
+#   B19: `limited` accepts at most 2 new conns/minute, then falls through
+#   B20: `quota_svc` accepts until 1 mbyte has passed, then falls through
+#   B21: named + anonymous counters increment on traffic
+#   B22: dport vmap dispatches ssh/metrics into per-service chains
+#   B23: forward offloads established flows into the flowtable
+tables:
+  - family: inet
+    name: filter
+    counters:
+      - ssh_hits
+    flowtables:
+      - name: ft
+        devices: [lan_if, wan_if]
+    chains:
+      - name: input
+        hook: input
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - proto: icmp
+            icmp-type: echo-request
+            action: accept
+          - proto: icmp
+            icmp-type: echo-reply
+            action: accept
+          - proto: icmpv6
+            icmp-type: echo-request
+            action: accept
+          - proto: icmpv6
+            icmp-type: echo-reply
+            action: accept
+          - raw: >-
+              icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert,
+              nd-router-solicit, nd-router-advert } accept
+          - proto: tcp
+            dport: limited
+            ct: [new]
+            limit: 2/minute
+            counter: true
+            action: accept
+          - proto: tcp
+            dport: quota_svc
+            quota: 1 mbytes
+            action: accept
+          - vmap:
+              key: dport
+              map:
+                22:
+                  jump: svc_ssh
+                9100:
+                  jump: svc_metrics
+
+      - name: svc_ssh
+        rules:
+          - counter: ssh_hits
+            action: accept
+
+      - name: svc_metrics
+        rules:
+          - action: accept
+
+      - name: forward
+        hook: forward
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          # `flow add` breaks the rule when it can't offload yet, so the
+          # offload and the verdict must be separate rules (see B23).
+          - ct: [established, related]
+            flow-offload: ft
+          - ct: [established, related]
+            action: accept
+          - iifname: lan_if
+            oifname: wan_if
+            proto: tcp
+            dport: bulk
+            action: accept

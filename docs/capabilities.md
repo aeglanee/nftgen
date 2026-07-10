@@ -70,7 +70,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | `log` | `log: {prefix: "ssh ", level: info, group: 2}` | `log prefix "ssh " level info group 2` (or bare `log`; `group` = NFLOG) |
 | `set-mark` | `set-mark: "0x1"` | `meta mark set 0x1` |
 | `set-mss` | `set-mss: pmtu` / `set-mss: 1460` | `tcp flags syn tcp option maxseg size set rt mtu` / `… set 1460` |
-| `flow-offload` | `flow-offload: ft` | `flow add @ft` |
+| `flow-offload` | `flow-offload: ft` | `flow add @ft` (must be its own rule — a verdict in the same rule is a `BuildError`; see best-practices §8c) |
 | `counter` | `counter: true` / `counter: bad_tcp` | `counter` / `counter name bad_tcp` (named must be declared) |
 
 A rule may be **statement-only** (no verdict) — e.g. an MSS clamp or a fwmark.

@@ -172,6 +172,30 @@ _CONCAT_RULE_KEYS = frozenset(
 )
 
 
+def _reject_offload_with_verdict(rule: dict) -> None:
+    """`flow add` breaks the rule when the flow can't be offloaded yet.
+
+    The kernel's flow-offload expression yields NFT_BREAK whenever it declines
+    to offload (TCP still handshaking, fin/rst, no conntrack entry). NFT_BREAK
+    aborts the *rest of the current rule*, so a verdict written after
+    `flow-offload:` is silently skipped and the packet falls through — in a
+    `policy: drop` chain the return path dies and the connection never
+    establishes. `nft -c` accepts it happily; only traffic reveals it.
+    Author it as two rules: offload in one, verdict in the next.
+    """
+    if "flow-offload" not in rule:
+        return
+    verdict = "action" in rule
+    if verdict:
+        raise BuildError(
+            f"`flow-offload:` must not share a rule with `action:` — when the "
+            f"flow can't be offloaded yet (e.g. mid-handshake) the kernel "
+            f"aborts the rule and the verdict never runs. Split into two "
+            f"rules: one with `flow-offload:`, the next with the same matches "
+            f"and `action:`. Rule: {rule!r}"
+        )
+
+
 class RuleRenderer:
     def __init__(
         self, defs: Definitions, named: dict[str, NamedSet], counters=frozenset()
@@ -202,6 +226,7 @@ class RuleRenderer:
             return [self._vmap(rule["vmap"])]
         if "set" in rule:
             return [self._concat_match(rule)]
+        _reject_offload_with_verdict(rule)
         statements = self._statements(rule)
         flag_clauses = self._flag_clauses(rule)
         if "action" not in rule and not statements and not rule.get("counter"):
@@ -580,6 +605,7 @@ class RuleRenderer:
             raise BuildError(
                 f"a concat rule (`set: {name}`) can't carry match keys {sorted(extra)}: {rule!r}"
             )
+        _reject_offload_with_verdict(rule)
         if (
             "action" not in rule
             and not self._statements(rule)

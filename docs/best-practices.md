@@ -344,6 +344,29 @@ semantics are preserved (TTL is still decremented) [4]. Only established
 flows offload — every connection's *first* packets still traverse the
 forward chain, so your policy fully applies to connection setup.
 
+**Never put a verdict in the same rule as `flow-offload:`.** When the
+kernel declines to offload — the TCP connection hasn't reached
+`ESTABLISHED` yet, the packet carries `fin`/`rst`, the conntrack entry
+isn't confirmed — `nft_flow_offload_eval()` falls to its `out:` label and
+sets `regs->verdict.code = NFT_BREAK` [6]. NFT_BREAK aborts the **rest of
+the current rule** and "chain traversal continues with the next rule" [7],
+so an `accept` written after `flow-offload:` **never executes**. In a
+`policy: drop` forward chain the reply packet of every handshake is then
+dropped and *no connection ever establishes* — while `nft -c` reports the
+ruleset perfectly valid. Only traffic reveals it (this cost us a real bug;
+see B23 in [testing-plan.md](testing-plan.md)).
+
+nftgen therefore **rejects the combined form at build time**. Author it as
+two rules — which is also what the wiki's own example does, deciding the
+verdict from conntrack state independently of whether the offload took [3]:
+
+```yaml
+- ct: [established, related]     # offload if the kernel is willing…
+  flow-offload: ft
+- ct: [established, related]     # …and accept regardless
+  action: accept
+```
+
 ### Sources
 
 - [1] [Matching packet metainformation — nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Matching_packet_metainformation)
@@ -351,6 +374,8 @@ forward chain, so your policy fully applies to connection setup.
 - [3] [Flowtables — nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Flowtables)
 - [4] [Flowtables Part 1: a Netfilter/nftables fastpath — thermalcircle.de](https://thermalcircle.de/doku.php?id=blog%3Alinux%3Aflowtables_1_a_netfilter_nftables_fastpath)
 - [5] [Netfilter's flowtable infrastructure — kernel docs](https://docs.kernel.org/networking/nf_flowtable.html)
+- [6] [`nft_flow_offload.c` — `nft_flow_offload_eval()`, the `out:` label](https://elixir.bootlin.com/linux/latest/source/net/netfilter/nft_flow_offload.c)
+- [7] [Ruleset debug / VM code analysis — nftables wiki (NFT_BREAK)](https://wiki.nftables.org/wiki-nftables/index.php/Ruleset_debug/VM_code_analysis)
 
 ### 8d. Zone dispatch: where drops happen and how to see them
 

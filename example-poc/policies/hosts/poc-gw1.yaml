@@ -100,8 +100,12 @@ tables:
         policy: drop
         rules:
           # Established flows offload to the flowtable and skip the ruleset.
+          # The verdict lives in its own rule: `flow add` aborts the rule when
+          # the flow isn't offloadable yet (mid-handshake), so an `action:`
+          # here would be skipped and the return path would die on policy.
           - ct: [established, related]
             flow-offload: ft
+          - ct: [established, related]
             action: accept
           - ct: [invalid]
             action: drop

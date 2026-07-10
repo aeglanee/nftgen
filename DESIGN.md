@@ -203,7 +203,7 @@ A **verdict map** (a native primitive, authored — not inferred):
 | verdict maps | a `vmap:` rule |
 | few base chains, branch via regular | author base chains with `hook:`; put the rest in hookless chains and `jump` |
 | named priorities | `priority: raw \| mangle \| filter \| srcnat…` or a number |
-| flowtables | a table `flowtables:` block + a `flow-offload:` rule key |
+| flowtables | a table `flowtables:` block + a `flow-offload:` rule key (verdict goes in the *next* rule) |
 | live blocklists | a bare `sets:` entry with no elements + `flags: [timeout]`; push with `nft add element` |
 | counters selectively | `counter: true` only where you want it (never auto) |
 

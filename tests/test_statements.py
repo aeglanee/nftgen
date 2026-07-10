@@ -101,3 +101,17 @@ def test_statement_order_before_verdict():
         }
     )
     assert line == "tcp dport @ssh limit rate 5/second log counter accept"
+
+
+def test_flow_offload_must_not_carry_a_verdict():
+    """`flow add` yields NFT_BREAK when it declines to offload (mid-handshake,
+    fin/rst, unconfirmed ct), which aborts the rest of the rule — a verdict
+    after it is silently skipped and the packet falls through to the chain
+    policy. nft -c accepts the combined form; only traffic reveals it."""
+    r = RuleRenderer(Definitions.from_mappings({}), {})
+    with pytest.raises(BuildError, match="must not share a rule with `action:`"):
+        r.render({"ct": ["established"], "flow-offload": "ft", "action": "accept"})
+    # offload alone is fine (it is a statement, so the rule needs no verdict)
+    assert r.render({"ct": ["established"], "flow-offload": "ft"}) == [
+        "ct state established flow add @ft"
+    ]

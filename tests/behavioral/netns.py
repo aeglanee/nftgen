@@ -85,7 +85,11 @@ class Harness:
 
     # -- operations ---------------------------------------------------------- #
     def topology(self, zones: list[dict]) -> None:
-        """zones: [{name, router_if, router_addr(cidr), ns_addr(cidr), gw}, …]"""
+        """zones: [{name, router_if, router_addr(cidr), ns_addr(cidr), gw}, …]
+
+        Optional per-zone v6 keys (router_addr6, ns_addr6, gw6) add dual-stack
+        addressing; the agent waits out DAD before returning.
+        """
         self._rpc(op="topology", zones=zones)
 
     def nft_apply(self, text: str) -> None:
@@ -115,6 +119,10 @@ class Harness:
             op="probe", ns=ns, dst=dst, port=port, timeout=timeout, read=True
         )
         return resp["result"], resp.get("reply")
+
+    def ping(self, ns: str | None, dst: str, timeout: float = 2.0) -> str:
+        """Raw-socket ICMP/ICMPv6 echo -> 'replied' | 'timeout'."""
+        return self._rpc(op="ping", ns=ns, dst=dst, timeout=timeout)["result"]
 
     def run(self, ns: str | None, argv: list[str]) -> subprocess.CompletedProcess:
         resp = self._rpc(op="run", ns=ns, argv=argv)

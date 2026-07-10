@@ -11,7 +11,9 @@ Stdlib only; must be runnable as a bare file (it is exec'd by path).
 
 Ops:
   {"op": "topology", "zones": [{"name", "router_if", "router_addr",
-      "ns_addr", "gw"}, …]}            veths, addrs, routes, ip_forward=1
+      "ns_addr", "gw", "router_addr6"?, "ns_addr6"?, "gw6"?}, …]}
+                                       veths, addrs, routes, ip_forward=1
+                                       (v6 keys optional; forwarding too)
   {"op": "nft", "text": "…"}           apply a ruleset in the router ns
   {"op": "listen", "ns": name|null, "port": N,
       "echo_peer": bool}               TCP accept-loop; echo_peer writes the
@@ -19,6 +21,11 @@ Ops:
   {"op": "probe", "ns": name|null, "dst": "a.b.c.d", "port": N,
       "timeout": secs, "read": bool}   -> connected | refused | timeout
                                        (read: also return the server's reply)
+  {"op": "ping", "ns": name|null, "dst": addr, "timeout": secs}
+                                       raw-socket ICMP/ICMPv6 echo (the ping
+                                       binary needs /etc/protocols; raw
+                                       sockets work as userns root)
+                                       -> replied | timeout
   {"op": "run", "ns": name|null, "argv": […]}       escape hatch / debugging
   {"op": "quit"}
 """
@@ -29,9 +36,11 @@ import json
 import os
 import signal
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
+import time
 
 libc = ctypes.CDLL(None, use_errno=True)
 CLONE_NEWNET = 0x40000000
@@ -101,6 +110,8 @@ def op_topology(req: dict) -> dict:
     _sh(None, "ip", "link", "set", "lo", "up")
     with open("/proc/sys/net/ipv4/ip_forward", "w") as fh:
         fh.write("1")
+    with open("/proc/sys/net/ipv6/conf/all/forwarding", "w") as fh:
+        fh.write("1")
     for zone in req["zones"]:
         name = zone["name"]
         pid = _spawn_holder()
@@ -128,7 +139,28 @@ def op_topology(req: dict) -> dict:
         _sh(name, "ip", "addr", "add", zone["ns_addr"], "dev", "eth0")
         _sh(name, "ip", "link", "set", "eth0", "up")
         _sh(name, "ip", "route", "add", "default", "via", zone["gw"])
+        if zone.get("router_addr6"):
+            _sh(None, "ip", "-6", "addr", "add", zone["router_addr6"], "dev", rif)
+            _sh(name, "ip", "-6", "addr", "add", zone["ns_addr6"], "dev", "eth0")
+            # DAD would leave the addresses tentative for a moment; wait it out
+            _sh(name, "ip", "-6", "route", "add", "default", "via", zone["gw6"])
+    if any(z.get("router_addr6") for z in req["zones"]):
+        _wait_dad_settled(req["zones"])
     return {"ok": True}
+
+
+def _wait_dad_settled(zones: list[dict], timeout: float = 5.0) -> None:
+    """Block until no v6 address is still `tentative` (DAD in progress)."""
+    deadline = time.time() + timeout
+    targets = [(None, "r-" + z["name"]) for z in zones if z.get("router_addr6")]
+    targets += [(z["name"], "eth0") for z in zones if z.get("ns_addr6")]
+    while time.time() < deadline:
+        if all(
+            "tentative" not in _run(ns, ["ip", "-6", "addr", "show", "dev", dev]).stdout
+            for ns, dev in targets
+        ):
+            return
+        time.sleep(0.05)
 
 
 def op_nft(req: dict) -> dict:
@@ -221,6 +253,67 @@ def op_probe(req: dict) -> dict:
     return {"ok": True, "result": outcome, "reply": reply.decode() or None}
 
 
+def _icmp_csum(data: bytes) -> int:
+    if len(data) % 2:
+        data += b"\0"
+    s = sum(struct.unpack(f"!{len(data) // 2}H", data))
+    s = (s >> 16) + (s & 0xFFFF)
+    s += s >> 16
+    return (~s) & 0xFFFF
+
+
+def op_ping(req: dict) -> dict:
+    """Raw-socket echo request; the kernel checksums ICMPv6 for us."""
+    ns = req.get("ns")
+    ns_pid = NAMESPACES[ns] if ns is not None else None
+    dst = req["dst"]
+    timeout = float(req.get("timeout", 2.0))
+    v6 = ":" in dst
+    reply_r, reply_w = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        os.close(reply_r)
+        os.dup2(reply_w, 1)  # fd 1 is the JSON protocol channel; never write to it
+        try:
+            if ns_pid is not None:
+                _setns_net(ns_pid)
+            ident = os.getpid() & 0xFFFF
+            if v6:
+                sock = socket.socket(
+                    socket.AF_INET6, socket.SOCK_RAW, socket.IPPROTO_ICMPV6
+                )
+                pkt = struct.pack("!BBHHH", 128, 0, 0, ident, 1)  # echo-request
+            else:
+                sock = socket.socket(
+                    socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP
+                )
+                hdr = struct.pack("!BBHHH", 8, 0, 0, ident, 1)
+                pkt = struct.pack("!BBHHH", 8, 0, _icmp_csum(hdr), ident, 1)
+            sock.settimeout(timeout)
+            sock.sendto(pkt, (dst, 0))
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                sock.settimeout(max(deadline - time.time(), 0.01))
+                data, _ = sock.recvfrom(1024)
+                # v4 replies carry the IP header; v6 sockets hand us ICMPv6
+                icmp = data if v6 else data[(data[0] & 0x0F) * 4 :]
+                echo_reply = 129 if v6 else 0
+                if icmp[0] == echo_reply and struct.unpack("!H", icmp[4:6])[0] == ident:
+                    os.write(1, b"replied")
+                    os._exit(0)
+            os._exit(3)
+        except (TimeoutError, OSError):
+            os._exit(3)
+    os.close(reply_w)
+    _, status = os.waitpid(pid, 0)
+    got = os.read(reply_r, 16)
+    os.close(reply_r)
+    code = os.waitstatus_to_exitcode(status)
+    if code == 0 and got == b"replied":
+        return {"ok": True, "result": "replied"}
+    return {"ok": True, "result": "timeout"}
+
+
 def op_run(req: dict) -> dict:
     proc = _run(req.get("ns"), req["argv"])
     return {"ok": True, "rc": proc.returncode, "out": proc.stdout, "err": proc.stderr}
@@ -232,6 +325,7 @@ def main() -> int:
         "nft": op_nft,
         "listen": op_listen,
         "probe": op_probe,
+        "ping": op_ping,
         "run": op_run,
     }
     for raw in sys.stdin:

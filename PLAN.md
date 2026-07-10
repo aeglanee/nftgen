@@ -22,18 +22,20 @@ The agreed order of work from here. Rationale and decisions live in
 
 ## Status
 
-- **Done (latest first):** B04–B17 behavioral (2026-07-10: ct-invalid raw-ACK
-  proof, vmap zone/pair/group dispatch, named-set membership, bogon scrub
-  with counter, concat no-bleed, live blocklist add/expire, NAT cluster
-  with saddr-preservation and snat peer proof; suite 181);
+- **Done (latest first):** B04–B23 + B26 behavioral (2026-07-10: ct-invalid
+  raw-ACK proof, vmap zone/pair/group dispatch, named-set membership, bogon
+  scrub with counter, concat no-bleed, live blocklist add/expire, NAT cluster
+  with saddr-preservation and snat peer proof, icmp v4+v6, limit/quota/
+  counters, dport vmap, flowtable, reapply idempotence — **and a real
+  flow-offload bug found + fixed**; suite 189);
   Phases 0–6 (skeleton → defs → sets → rules/chains → host→`.nft` →
   `nft -c` → primitives A–E), Step 2 `build()`, Step 3a (sessrumnir role rewrite,
   two-play flow), and the **v0.2.0 strict authoring surface** (2026-07-05: unknown
   keys/names/empty groups fail the build; type-aware chain policy; loud `--check`;
   clean CLI errors — see TODO.md §Safety), and **v0.3.0** (wrapped large
   literals, named PoC fleet groups, netns harness B01–B03). **166 tests.**
-- **Not done:** behavioral matrix breadth (harness live, B01–B17 green;
-  B18+ and P01–P20 open), nftgen CI, Step 3b apply-rollback,
+- **Not done:** behavioral matrix breadth (§1 matrix complete except B24/B25;
+  P01–P20 open), nftgen CI, Step 3b apply-rollback,
   Step 4 molecule end-to-end, enterprise (bright-future) firewall integration.
 
 ## Roadmap — 2026-07-05 (authoritative TODO; follow in order)

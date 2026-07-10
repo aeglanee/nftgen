@@ -1,0 +1,15 @@
+---
+# B18-B23/B26 fixture: one dual-stack router. Input carries the icmp policy,
+# a rate-limited port, a quota'd port and a dport vmap; forward offloads
+# established flows into a flowtable.
+networks:
+  lan_net: [10.86.1.0/24]
+interfaces:
+  lan_if: [r-lan]
+  wan_if: [r-wan]
+services:
+  ssh: [22/tcp]
+  metrics: [9100/tcp]
+  limited: [7001/tcp]
+  quota_svc: [7002/tcp]
+  bulk: [7003/tcp]
