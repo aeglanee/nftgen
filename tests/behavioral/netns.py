@@ -104,12 +104,21 @@ class Harness:
         self._rpc(op="listen", ns=ns, port=port, echo_peer=echo_peer)
 
     def probe_tcp(
-        self, ns: str | None, dst: str, port: int, timeout: float = 1.5
+        self,
+        ns: str | None,
+        dst: str,
+        port: int,
+        timeout: float = 1.5,
+        src: str | None = None,
     ) -> str:
-        """-> 'connected' | 'refused' | 'timeout' (drop shows as timeout)."""
-        return self._rpc(op="probe", ns=ns, dst=dst, port=port, timeout=timeout)[
-            "result"
-        ]
+        """-> 'connected' | 'refused' | 'timeout' (drop shows as timeout).
+
+        src binds a specific source address (it must be assigned in the ns) —
+        used to simulate a branch host's traffic arriving over transit.
+        """
+        return self._rpc(
+            op="probe", ns=ns, dst=dst, port=port, timeout=timeout, src=src
+        )["result"]
 
     def probe_tcp_reply(
         self, ns: str | None, dst: str, port: int, timeout: float = 1.5

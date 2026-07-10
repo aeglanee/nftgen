@@ -232,6 +232,8 @@ def op_probe(req: dict) -> dict:
                 _setns_net(ns_pid)
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(timeout)
+            if req.get("src"):  # bind a specific source (must exist on an iface)
+                sock.bind((req["src"], 0))
             sock.connect((req["dst"], req["port"]))
             if req.get("read"):
                 data = sock.recv(64)
