@@ -1,0 +1,72 @@
+---
+# Fleet address plan. Real traffic is IPv4 only; the v6 bogon set exists for
+# the dual-stack hygiene layer (the filter table is `inet`). Composition:
+# per-site subnets -> fleet unions; site overlays (sites/<site>.yaml) map the
+# `local_*` names to each site's own subnet.
+networks:
+  # ----- per-site user subnets (vlan 100) -----
+  users_hq: [192.168.1.0/24]
+  users_br1: [192.168.2.0/24]
+  users_br2: [192.168.3.0/24]
+
+  # ----- per-site services subnets (vlan 200) -----
+  services_hq: [10.0.1.0/24]
+  services_br1: [10.0.2.0/24]
+  services_br2: [10.0.3.0/24]
+
+  # ----- per-site dmz subnets (vlan 250, public-facing) -----
+  dmz_hq: [10.0.11.0/24]
+  dmz_br1: [10.0.12.0/24]
+  dmz_br2: [10.0.13.0/24]
+
+  # ----- per-site network-management subnets (vlan 900) -----
+  nwm_hq: [10.90.1.0/24]
+  nwm_br1: [10.90.2.0/24]
+  nwm_br2: [10.90.3.0/24]
+
+  # ----- fleet-wide unions (compose the per-site groups) -----
+  all_users: [users_hq, users_br1, users_br2]
+  all_services: [services_hq, services_br1, services_br2]
+  all_dmz: [dmz_hq, dmz_br1, dmz_br2]
+
+  # ----- transit segment (vlan 50) — every site router sits on it -----
+  transit_net: [172.16.0.0/24]
+
+  # ----- specific fixed hosts (single-address groups) -----
+  hq_central: [10.0.1.10]     # central auth/directory, on hq services
+  hq_monitor: [10.90.1.10]    # hq monitoring collector, scrapes the fleet
+  hq_db: [10.0.1.20]          # a database on hq services (cross-site app target)
+  br1_app: [10.0.2.30]        # a branch-1 app host (talks to hq_db)
+
+  # ----- rfc6890 / iana special-use v4 — ingress source scrub on wan -----
+  # (192.168.0.0/16 is rfc1918; it's a bogon *from the internet* even though
+  #  our own LANs use it — the scrub is wan-ingress-scoped, so internal
+  #  192.168/10-net traffic on lan interfaces is never matched.)
+  bogons_v4:
+    - 0.0.0.0/8            # "this network" (RFC 791)
+    - 10.0.0.0/8          # private-use (RFC 1918)
+    - 100.64.0.0/10       # CGNAT shared space (RFC 6598)
+    - 127.0.0.0/8         # loopback (RFC 1122)
+    - 169.254.0.0/16      # link-local (RFC 3927)
+    - 172.16.0.0/12       # private-use (RFC 1918)
+    - 192.0.0.0/24        # IETF protocol assignments (RFC 6890)
+    - 192.0.2.0/24        # TEST-NET-1 documentation (RFC 5737)
+    - 192.88.99.0/24      # deprecated 6to4 relay anycast (RFC 7526)
+    - 192.168.0.0/16      # private-use (RFC 1918)
+    - 198.18.0.0/15       # benchmarking (RFC 2544)
+    - 198.51.100.0/24     # TEST-NET-2 documentation (RFC 5737)
+    - 203.0.113.0/24      # TEST-NET-3 documentation (RFC 5737)
+    - 224.0.0.0/4         # multicast — never a valid source (RFC 5771)
+    - 240.0.0.0/4         # reserved (RFC 1112) — covers 255.255.255.255 too
+
+  # ----- iana special-use v6 — ingress source scrub (hygiene reference) -----
+  bogons_v6:
+    - ::/128              # unspecified (RFC 4291)
+    - ::1/128             # loopback (RFC 4291)
+    - ::ffff:0:0/96       # ipv4-mapped (RFC 4291)
+    - 100::/64            # discard-only (RFC 6666)
+    - 2001:db8::/32       # documentation (RFC 3849)
+    - 3fff::/20           # documentation (RFC 9637)
+    - fc00::/7            # unique-local (RFC 4193)
+    - fe80::/10           # link-local — never forwarded (RFC 4291)
+    - ff00::/8            # multicast — never a valid source (RFC 4291)

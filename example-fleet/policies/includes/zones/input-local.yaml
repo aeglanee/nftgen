@@ -1,0 +1,20 @@
+---
+# Router input: who may talk to the router itself. Management from the netmgmt
+# vlan only; everything else (including all WAN input) falls to the metered
+# drop-log + policy drop. icmp/ct are handled earlier in the chain.
+rules:
+  - iifname: nwm_if
+    saddr: local_nwm
+    proto: tcp
+    dport: ssh
+    action: accept
+  - iifname: nwm_if
+    saddr: local_nwm
+    proto: udp
+    dport: snmp
+    action: accept
+  - raw: >-
+      update @log_meter { ip saddr timeout 1m limit rate 4/minute }
+      log prefix "input-drop " level info
+  - counter: policy_drops
+    action: drop

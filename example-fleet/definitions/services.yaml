@@ -1,0 +1,12 @@
+---
+# Service port groups. A rule states one `proto:`; the group carries the
+# ports, so mixing tcp/udp under one name is fine (the proto selects).
+services:
+  web: [80/tcp, 443/tcp]
+  dns: [53/tcp, 53/udp]
+  ntp: [123/udp]
+  ssh: [22/tcp]
+  snmp: [161/udp]
+  metrics: [9100/tcp]     # node_exporter — the monitoring pull target
+  ldaps: [636/tcp]        # central directory (the fleet-wide central service)
+  postgres: [5432/tcp]    # a specific cross-site app flow

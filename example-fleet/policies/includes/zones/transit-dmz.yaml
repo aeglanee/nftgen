@@ -1,0 +1,14 @@
+---
+# transit -> local dmz. A shared public service: any site's users may reach
+# any site's dmz web host over transit (users-from-all-sites -> this service).
+rules:
+  - saddr: all_users
+    daddr: local_dmz
+    proto: tcp
+    dport: web
+    action: accept
+  - raw: >-
+      update @log_meter { ip saddr timeout 1m limit rate 4/minute }
+      log prefix "fwd-transit-dmz-drop " level info
+  - counter: policy_drops
+    action: drop

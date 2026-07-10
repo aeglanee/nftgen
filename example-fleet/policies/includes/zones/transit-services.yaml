@@ -1,0 +1,28 @@
+---
+# transit -> local services. Cross-site arrivals landing on this site's
+# servers:
+#   - the HQ monitor scraping this site's exporters (metrics);
+#   - any site's users reaching the HQ directory (ldaps) — meaningful at HQ,
+#     where hq_central lives on local services;
+#   - the one specific cross-site app flow: br1's app host -> HQ's db.
+rules:
+  - saddr: hq_monitor
+    daddr: local_services
+    proto: tcp
+    dport: metrics
+    action: accept
+  - saddr: all_users
+    daddr: hq_central
+    proto: tcp
+    dport: ldaps
+    action: accept
+  - saddr: br1_app
+    daddr: hq_db
+    proto: tcp
+    dport: postgres
+    action: accept
+  - raw: >-
+      update @log_meter { ip saddr timeout 1m limit rate 4/minute }
+      log prefix "fwd-transit-services-drop " level info
+  - counter: policy_drops
+    action: drop

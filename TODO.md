@@ -77,7 +77,9 @@ nft -c validation → primitives A–E). What's left, à la carte:
       limit rate 6/minute }`): a `dynamic` set flag + a rule key mirroring
       nft's `add`/`update` verbs (upstream deprecated the `meter` keyword).
       Use cases: per-source log sampling (best-practices §8d), fail2ban-style
-      throttling. Key shape to settle at implementation.
+      throttling. Key shape to settle at implementation. **example-fleet
+      copy-pastes this raw ~12× (one per zone-chain drop-log)** — the
+      concrete pull for promoting it; see docs/reference-fleet.md Findings.
 - [ ] **opt-in `iif`/`oif` index matching** — faster 32-bit compare for
       static-NIC hosts; unsafe for dynamic interfaces (index changes on
       recreate), so name form stays the default. See best-practices §8a.

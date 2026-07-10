@@ -1,0 +1,8 @@
+---
+# Site overlay for branch 2 (site3). See sites/hq.yaml for the mechanism.
+networks:
+  local_users: [users_br2]
+  local_services: [services_br2]
+  local_dmz: [dmz_br2]
+  local_nwm: [nwm_br2]
+  local_dmz_web: [10.0.13.10]   # the site's public web host (dnat target)

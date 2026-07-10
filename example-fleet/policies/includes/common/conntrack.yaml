@@ -1,0 +1,15 @@
+---
+# Fast path, top of every forward chain. Offload established flows to the
+# flowtable, THEN accept them — in two rules, never one: `flow add` yields
+# NFT_BREAK when it can't offload yet (mid-handshake, fin/rst, unconfirmed
+# ct), which aborts the rest of the rule, so a verdict sharing the rule would
+# be skipped and the handshake's reply would die on `policy drop`. See
+# docs/best-practices.md §8c.
+rules:
+  - ct: [established, related]
+    flow-offload: ft
+  - ct: [established, related]
+    action: accept
+  - ct: [invalid]
+    counter: ct_invalid
+    action: drop

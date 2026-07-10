@@ -1,0 +1,15 @@
+---
+# wan -> local dmz. Inbound internet traffic that prerouting dnat'd to the
+# site's public web host. The filter leg allowlists the post-rewrite
+# destination (daddr is now the dmz host) — a dnat'd port with no rule here
+# would still die (proving nat and filter are independent gates).
+rules:
+  - daddr: local_dmz_web
+    proto: tcp
+    dport: web
+    action: accept
+  - raw: >-
+      update @log_meter { ip saddr timeout 1m limit rate 4/minute }
+      log prefix "fwd-wan-dmz-drop " level info
+  - counter: policy_drops
+    action: drop

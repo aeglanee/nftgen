@@ -1,0 +1,11 @@
+---
+# Site overlay for HQ (site1). Merged *over* definitions/ for any host with
+# `site: hq`, so a shared include that says `local_users` / `local_services`
+# resolves to HQ's own subnets. This is the whole specialization mechanism —
+# the three site routers run an identical policy; only these overlays differ.
+networks:
+  local_users: [users_hq]
+  local_services: [services_hq]
+  local_dmz: [dmz_hq]
+  local_nwm: [nwm_hq]
+  local_dmz_web: [10.0.11.10]   # the site's public web host (dnat target)

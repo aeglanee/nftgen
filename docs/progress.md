@@ -137,9 +137,23 @@ turn. Last updated: 2026-07-10.
   syn+fin and null-scan silently while a normal SYN still replies, counted
   via `bad_tcp`; the log rule proven non-terminal (log+counter+accept still
   connects). All **B01–B26** green. Suite **191**.
-- **⟶ Next:** the P01–P20 PoC reachability truth table over
-  [example-poc/](../example-poc/) — the whole composed policy end-to-end
-  (includes + site overlay + groups), then R2 CI. PLAN §Roadmap.
+- **example-fleet reference built (2026-07-10):** a realistic 3-site
+  deployment ([../example-fleet/](../example-fleet/), design record
+  [reference-fleet.md](reference-fleet.md)) — HQ + 2 branches, one identical
+  policy per site specialised only by the `site:` overlay. Opinionated
+  base-chain skeleton (fast-path split, RFC-4890 icmp with hoplimit-255 NDP,
+  IANA v4+v6 bogon scrub, invalid-tcp-flag drop, live blocklist,
+  `iifname.oifname` dispatch, per-chain metered attributed drop-logging),
+  sets composed bottom-up, dmz zone, multi-WAN masquerade + published-web
+  dnat. Real traffic v4, hygiene dual-stack. Generates + `nft -c` clean +
+  drift-pinned (`tests/test_fleet.py`, 9 tests); suite **200**. Hygiene
+  lists from RFC/IANA research (caught a missing 192.168/16 in review).
+  Replaces example-poc's showcase role; **retiring example-poc + choosing
+  the P-matrix fixture is a flagged review step, not yet done**.
+- **⟶ Next (decide first):** point the P01–P20 truth table at example-fleet
+  and retire example-poc, then implement P-rows on the current single-router
+  harness + the one NFLOG logging test; stage the multi-router cross-site
+  harness last. Then R2 CI. PLAN §Roadmap / reference-fleet.md.
 
 ## Decided
 

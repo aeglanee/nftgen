@@ -1,0 +1,30 @@
+---
+# Family-correct ICMP policy (RFC 4890 for ICMPv6). Echo is rate-limited, not
+# blocked; error/PMTUD types must never be dropped. `icmp-type` is
+# family-aware — `proto:` scopes each rule to icmp vs icmpv6.
+rules:
+  # ----- ICMPv4 -----
+  - proto: icmp
+    icmp-type: echo-request
+    limit: 5/second
+    action: accept
+  - proto: icmp
+    # destination-unreachable carries "fragmentation needed" (PMTUD) — must pass
+    icmp-type: [echo-reply, destination-unreachable, time-exceeded, parameter-problem]
+    action: accept
+
+  # ----- ICMPv6 (RFC 4890 §4.3.1 must-not-drop) -----
+  - proto: icmpv6
+    icmp-type: echo-request
+    limit: 5/second
+    action: accept
+  - proto: icmpv6
+    icmp-type: [echo-reply, destination-unreachable, packet-too-big, time-exceeded, parameter-problem]
+    action: accept
+
+  # ----- ICMPv6 NDP (RFC 4890 §4.3.3): permit only with hop limit 255, the
+  # anti-spoof guarantee that the packet was not forwarded. Not structured —
+  # `ip6 hoplimit` is a raw match. -----
+  - raw: >-
+      icmpv6 type { nd-router-solicit, nd-router-advert, nd-neighbor-solicit,
+      nd-neighbor-advert, nd-redirect } ip6 hoplimit 255 accept

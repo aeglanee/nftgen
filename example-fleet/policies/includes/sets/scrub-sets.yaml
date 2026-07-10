@@ -1,0 +1,11 @@
+---
+# Sets pulled into any table that does WAN-ingress scrub or live blocking.
+# One include line in the table's `sets:` materialises all three.
+sets:
+  - bogons_v4
+  - bogons_v6
+  # live blocklist: ships empty, filled at runtime via `nft add element`
+  # (threat-intel / fail2ban-style), entries self-expire.
+  - name: blocklist
+    type: ipv4_addr
+    flags: [interval, timeout]

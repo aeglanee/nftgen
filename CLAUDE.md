@@ -105,6 +105,9 @@ findings/proposals. Each has one job — don't duplicate across them:
     design proposal (why).
   - [docs/concat-authoring.md](docs/concat-authoring.md) — concatenation
     tuple-authoring options (decided + built: Option 1, `concat:`/`tuples:`).
+  - [docs/reference-fleet.md](docs/reference-fleet.md) — design record for
+    [example-fleet/](example-fleet/), the realistic 3-site reference
+    (opinionated skeleton, sets/vmap composition, dual-stack hygiene).
 
 When you produce a substantial review/finding, add a `docs/<topic>.md` and link
 it here so the structure stays discoverable.

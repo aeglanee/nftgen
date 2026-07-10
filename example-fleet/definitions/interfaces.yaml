@@ -1,0 +1,13 @@
+---
+# Interface groups. Names are the same on every site router (the HA pair and
+# all three sites share one interface model); the site overlay specialises the
+# *addresses*, not the interface names. `wan` is a group of two uplinks —
+# multi-WAN egress out either ISP.
+interfaces:
+  wan: [wan0, wan1]       # two ISP uplinks (multi-WAN group)
+  users_if: [lan_users]   # vlan 100
+  services_if: [lan_svc]  # vlan 200
+  dmz_if: [lan_dmz]       # vlan 250
+  nwm_if: [lan_nwm]       # vlan 900
+  transit_if: [transit0]  # vlan 50 — inter-site
+  lo_if: [lo]             # loopback

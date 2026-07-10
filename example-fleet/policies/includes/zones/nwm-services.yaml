@@ -1,0 +1,26 @@
+---
+# netmgmt -> local services. The site's own management: ssh + snmp to local
+# servers. Plus the HQ monitor scraping metrics — at HQ the collector sits in
+# this nwm vlan, so its scrape of the local services is this pair (at branches
+# the same scrape arrives over transit; see transit-services).
+rules:
+  - saddr: local_nwm
+    daddr: local_services
+    proto: tcp
+    dport: ssh
+    action: accept
+  - saddr: local_nwm
+    daddr: local_services
+    proto: udp
+    dport: snmp
+    action: accept
+  - saddr: hq_monitor
+    daddr: local_services
+    proto: tcp
+    dport: metrics
+    action: accept
+  - raw: >-
+      update @log_meter { ip saddr timeout 1m limit rate 4/minute }
+      log prefix "fwd-nwm-services-drop " level info
+  - counter: policy_drops
+    action: drop

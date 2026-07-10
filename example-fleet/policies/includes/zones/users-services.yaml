@@ -1,0 +1,38 @@
+---
+# users -> local services. Web + DNS + NTP to the site's own services vlan.
+# Postgres is deliberately local-only (no cross-site rule), so a site-local
+# app is reachable by that site's users and no one else.
+rules:
+  - saddr: local_users
+    daddr: local_services
+    proto: tcp
+    dport: web
+    action: accept
+  - saddr: local_users
+    daddr: local_services
+    proto: tcp
+    dport: dns
+    action: accept
+  - saddr: local_users
+    daddr: local_services
+    proto: udp
+    dport: dns
+    action: accept
+  - saddr: local_users
+    daddr: local_services
+    proto: udp
+    dport: ntp
+    action: accept
+  - saddr: local_users
+    daddr: local_services
+    proto: tcp
+    dport: postgres
+    action: accept
+  # end-of-chain drop attribution: metered per-source log names the chain,
+  # then a counted drop. `journalctl -k | grep fwd-users-services-drop`
+  # tells you exactly which pair to open.
+  - raw: >-
+      update @log_meter { ip saddr timeout 1m limit rate 4/minute }
+      log prefix "fwd-users-services-drop " level info
+  - counter: policy_drops
+    action: drop
