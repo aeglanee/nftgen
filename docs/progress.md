@@ -101,8 +101,13 @@ turn. Last updated: 2026-07-10.
   fall-through, directional `[iifname, oifname]` pairs, group expansion;
   `@members` set membership. Four new one-concern fixtures. Suite **173**
   (167 + skips-free on boxes with nft on PATH).
-- **⟶ Next:** §1 matrix breadth (B10+ — sets/NAT/statements), then the
-  P-matrix over example-poc, then R2 CI. PLAN §Roadmap.
+- **B10–B12 behavioral landed (2026-07-10):** bogon scrub attributable via
+  dual-subnet wan (legit connects, rfc1918 dies + `bogon_drops` rises);
+  concat tuples exact with crossed pairs dead on the wire; live blocklist
+  proven as an *operational contract* — runtime `nft add element`, block,
+  kernel-GC expiry (poll-with-deadline, not sleep-and-assert). Suite **176**.
+- **⟶ Next:** §1 matrix breadth (B13+ — NAT cluster, then statements),
+  then the P-matrix over example-poc, then R2 CI. PLAN §Roadmap.
 
 ## Decided
 

@@ -1,0 +1,7 @@
+---
+# B12 fixture: one zone, one service; the blocklist set ships empty and is
+# populated at runtime (`nft add element`), entries expiring via timeout.
+interfaces:
+  zone_if: [r-za]
+services:
+  svc: [7000/tcp]

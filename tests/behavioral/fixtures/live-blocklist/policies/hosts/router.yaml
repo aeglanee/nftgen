@@ -1,0 +1,25 @@
+---
+# Live blocklist (testing-plan B12): a bare set declared empty in the deploy
+# artifact; the drop rule references it with the explicit `@` form. The
+# operational contract — add at runtime, entry expires — is what's under test.
+tables:
+  - family: inet
+    name: filter
+    sets:
+      - name: blocklist
+        type: ipv4_addr
+        flags: [timeout]
+    chains:
+      - name: input
+        hook: input
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - saddr: "@blocklist"
+            action: drop
+          - proto: tcp
+            dport: svc
+            action: accept

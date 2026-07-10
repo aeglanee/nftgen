@@ -22,16 +22,17 @@ The agreed order of work from here. Rationale and decisions live in
 
 ## Status
 
-- **Done (latest first):** B04–B09 behavioral (2026-07-10: ct-invalid raw-ACK
-  proof, vmap zone/pair/group dispatch, named-set membership; suite 173);
+- **Done (latest first):** B04–B12 behavioral (2026-07-10: ct-invalid raw-ACK
+  proof, vmap zone/pair/group dispatch, named-set membership, bogon scrub
+  - counter, concat no-bleed, live blocklist add/expire; suite 176);
   Phases 0–6 (skeleton → defs → sets → rules/chains → host→`.nft` →
   `nft -c` → primitives A–E), Step 2 `build()`, Step 3a (sessrumnir role rewrite,
   two-play flow), and the **v0.2.0 strict authoring surface** (2026-07-05: unknown
   keys/names/empty groups fail the build; type-aware chain policy; loud `--check`;
   clean CLI errors — see TODO.md §Safety), and **v0.3.0** (wrapped large
   literals, named PoC fleet groups, netns harness B01–B03). **166 tests.**
-- **Not done:** behavioral matrix breadth (harness live, B01–B09 green;
-  B10+ and P01–P20 open), nftgen CI, Step 3b apply-rollback,
+- **Not done:** behavioral matrix breadth (harness live, B01–B12 green;
+  B13+ and P01–P20 open), nftgen CI, Step 3b apply-rollback,
   Step 4 molecule end-to-end, enterprise (bright-future) firewall integration.
 
 ## Roadmap — 2026-07-05 (authoritative TODO; follow in order)

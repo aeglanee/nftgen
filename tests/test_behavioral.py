@@ -449,3 +449,65 @@ def test_b11_concat_tuples_exact_no_cartesian_bleed(fw_concat_flows):
     # independent matches would have allowed both of these.
     assert fw_concat_flows.probe_tcp("za", FLOWS_SERVER, 9001) == "timeout"
     assert fw_concat_flows.probe_tcp("zb", FLOWS_SERVER, 9000) == "timeout"
+
+
+# --------------------------------------------------------------------------- #
+# B12 — live blocklist: runtime add, block, expire (fixture: live-blocklist)
+# --------------------------------------------------------------------------- #
+
+BL_ROUTER, BL_CLIENT = "10.83.1.1", "10.83.1.2"
+
+
+@pytest.fixture(scope="module")
+def fw_blocklist():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": "za",
+                    "router_if": "r-za",
+                    "router_addr": f"{BL_ROUTER}/24",
+                    "ns_addr": f"{BL_CLIENT}/24",
+                    "gw": BL_ROUTER,
+                },
+            ]
+        )
+        harness.nft_apply(build(FIXTURES / "live-blocklist")["router"])
+        harness.listen(None, 7000)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b12_live_blocklist_blocks_then_expires(fw_blocklist):
+    # phase 1: set ships empty — traffic flows
+    assert fw_blocklist.probe_tcp("za", BL_ROUTER, 7000) == "connected"
+
+    # phase 2: the runtime workflow the artifact promises — block the client
+    r = fw_blocklist.run(
+        None,
+        [
+            "nft",
+            "add",
+            "element",
+            "inet",
+            "filter",
+            "blocklist",
+            f"{{ {BL_CLIENT} timeout 2s }}",
+        ],
+    )
+    assert r.returncode == 0, r.stderr
+    assert fw_blocklist.probe_tcp("za", BL_ROUTER, 7000) == "timeout"
+
+    # phase 3: entry expiry is kernel-GC-scheduled, so poll with a deadline
+    # rather than sleep-and-assert — timing-sensitive otherwise.
+    deadline = time.time() + 15
+    outcome = "timeout"
+    while time.time() < deadline:
+        outcome = fw_blocklist.probe_tcp("za", BL_ROUTER, 7000)
+        if outcome == "connected":
+            break
+        time.sleep(0.5)
+    assert outcome == "connected"
