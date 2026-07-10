@@ -10,3 +10,9 @@ services:
   metrics: [9100/tcp]     # node_exporter — the monitoring pull target
   ldaps: [636/tcp]        # central directory (the fleet-wide central service)
   postgres: [5432/tcp]    # a specific cross-site app flow
+
+  # ----- composed bundles (service groups compose other service names) -----
+  # what a site's users may reach on their local services, grouped by proto so
+  # one rule per proto replaces a rule per service (renders an anon port set).
+  user_svc_tcp: [web, dns, postgres]
+  user_svc_udp: [dns, ntp]

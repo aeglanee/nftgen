@@ -1,0 +1,8 @@
+---
+# Live blocklist drop — any interface (a blocked source is blocked everywhere,
+# not just on the uplink). Runtime-populated via `nft add element`, entries
+# self-expire. Contract: declare the `blocklist` set + `blocklist_drops` counter.
+rules:
+  - saddr: "@blocklist"
+    counter: blocklist_drops
+    action: drop

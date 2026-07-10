@@ -3,36 +3,28 @@
 # Postgres is deliberately local-only (no cross-site rule), so a site-local
 # app is reachable by that site's users and no one else.
 rules:
+  # one rule per proto: the bundle service group unions the ports (web + dns
+  # + postgres over tcp, dns + ntp over udp) into an anonymous port set.
   - saddr: local_users
     daddr: local_services
     proto: tcp
-    dport: web
-    action: accept
-  - saddr: local_users
-    daddr: local_services
-    proto: tcp
-    dport: dns
+    dport: user_svc_tcp
     action: accept
   - saddr: local_users
     daddr: local_services
     proto: udp
-    dport: dns
-    action: accept
-  - saddr: local_users
-    daddr: local_services
-    proto: udp
-    dport: ntp
-    action: accept
-  - saddr: local_users
-    daddr: local_services
-    proto: tcp
-    dport: postgres
+    dport: user_svc_udp
     action: accept
   # end-of-chain drop attribution: metered per-source log names the chain,
   # then a counted drop. `journalctl -k | grep fwd-users-services-drop`
   # tells you exactly which pair to open.
-  - raw: >-
-      update @log_meter { ip saddr timeout 1m limit rate 4/minute }
-      log prefix "fwd-users-services-drop " level info
+  - meter:
+      set: log_meter
+      key: saddr
+      rate: 4/minute
+      timeout: 1m
+    log:
+      prefix: "fwd-users-services-drop "
+      level: info
   - counter: policy_drops
     action: drop

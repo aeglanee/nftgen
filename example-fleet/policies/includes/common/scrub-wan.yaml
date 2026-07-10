@@ -1,55 +1,43 @@
 ---
-# WAN-ingress scrub + live blocklist. Drops are counted so they're visible.
-# Contract with the including table: declare the scrub sets
-# (includes/sets/scrub-sets.yaml) and the `bogon_drops` / `bad_tcp` /
-# `blocklist_drops` counters. The `iifname: wan` match keeps bogon/tcp-flag
-# scrubbing to the untrusted uplink — internal RFC1918 traffic on LAN
-# interfaces is never matched, even though those ranges are in `bogons_v4`.
+# WAN-ingress scrub body — the rules of the `wan_scrub` chain, reached by one
+# `iifname wan jump wan_scrub` in the forward base chain. Factoring the jump
+# out means a non-wan packet tests the interface *once* and skips this whole
+# block, instead of re-testing `iifname wan` on every rule here.
+# Contract: declare the scrub sets (includes/sets/scrub-sets.yaml) and the
+# `bogon_drops` / `bad_tcp` counters.
 rules:
   # martian source addresses (v4 + v6, single-family sets)
-  - iifname: wan
-    saddr: "@bogons_v4"
+  - saddr: "@bogons_v4"
     counter: bogon_drops
     action: drop
-  - iifname: wan
-    saddr: "@bogons_v6"
+  - saddr: "@bogons_v6"
     counter: bogon_drops
     action: drop
 
   # invalid TCP flag combinations (RFC 793 state machine — no legit stack
   # emits these). NULL scan, XMAS, SYN+FIN, SYN+RST, FIN+RST.
-  - iifname: wan
-    flags:
+  - flags:
       - match: none
         mask: all
     counter: bad_tcp
     action: drop
-  - iifname: wan
-    flags:
+  - flags:
       - match: [fin, psh, urg]
         mask: all
     counter: bad_tcp
     action: drop
-  - iifname: wan
-    flags:
+  - flags:
       - match: [fin, syn]
         mask: [fin, syn]
     counter: bad_tcp
     action: drop
-  - iifname: wan
-    flags:
+  - flags:
       - match: [syn, rst]
         mask: [syn, rst]
     counter: bad_tcp
     action: drop
-  - iifname: wan
-    flags:
+  - flags:
       - match: [fin, rst]
         mask: [fin, rst]
     counter: bad_tcp
-    action: drop
-
-  # live blocklist — a runtime-populated drop, any interface
-  - saddr: "@blocklist"
-    counter: blocklist_drops
     action: drop

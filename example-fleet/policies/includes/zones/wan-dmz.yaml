@@ -8,8 +8,13 @@ rules:
     proto: tcp
     dport: web
     action: accept
-  - raw: >-
-      update @log_meter { ip saddr timeout 1m limit rate 4/minute }
-      log prefix "fwd-wan-dmz-drop " level info
+  - meter:
+      set: log_meter
+      key: saddr
+      rate: 4/minute
+      timeout: 1m
+    log:
+      prefix: "fwd-wan-dmz-drop "
+      level: info
   - counter: policy_drops
     action: drop

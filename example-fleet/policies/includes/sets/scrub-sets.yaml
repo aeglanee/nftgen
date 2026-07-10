@@ -9,3 +9,7 @@ sets:
   - name: blocklist
     type: ipv4_addr
     flags: [interval, timeout]
+  # per-source log meter for the drop-attribution logging (structured `meter:`)
+  - name: log_meter
+    type: ipv4_addr
+    flags: [dynamic, timeout]

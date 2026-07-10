@@ -4,8 +4,13 @@
 # can't flood the log) names it as an unmatched pair, then a counted drop.
 # The verdict is a separate rule from the log (§8b left-to-right gating).
 rules:
-  - raw: >-
-      update @log_meter { ip saddr timeout 1m limit rate 4/minute }
-      log prefix "fwd-nomatch-drop " level info
+  - meter:
+      set: log_meter
+      key: saddr
+      rate: 4/minute
+      timeout: 1m
+    log:
+      prefix: "fwd-nomatch-drop "
+      level: info
   - counter: policy_drops
     action: drop

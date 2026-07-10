@@ -8,8 +8,8 @@ tests, suite 200). This doc is the design record; the project's own
 **As-built decisions** (were open in the draft): 3 sites, **one identical
 policy per site** specialised only by the `site:` overlay (cleaner and a
 stronger overlay demo than 6 near-duplicate HA host files — the HA pair
-shares the policy); icmp after ct, before dispatch; log metering via
-`raw:` (a structured `meter:` key is queued — see Findings); dmz added as
+shares the policy); icmp after ct, before dispatch; log metering via the
+structured **`meter:`** key (built 2026-07-10, no longer `raw:`); dmz added as
 a first-class zone; `example-poc/` **retired** (example-fleet took over
 its showcase + P-matrix role). **Still open:** the cross-site behavioral
 harness — flagged below.
@@ -207,12 +207,13 @@ fleet groups, and the site overlays together.
 
 ## Findings from building it
 
-- **Drop-log tails repeat.** Every zone chain ends with the same two-rule
-  metered-log + drop, differing only in the log prefix. Includes can't be
-  parameterised, so the pattern is copy-pasted ~12×. This is the concrete
-  case for a structured **`meter:` key** (and/or a parameterised drop-log
-  include) — queued in [TODO.md](../TODO.md). For now it's `raw:`, which
-  is honest (guardrail 4) but verbose.
+- **Drop-log tails repeat (drove the `meter:` key).** Every zone chain
+  ends with the same metered-log + drop, differing only in the log prefix.
+  Includes can't be parameterised, so the pattern is copy-pasted ~12×.
+  That was the concrete pull for the structured **`meter:` key** (built
+  2026-07-10): the drop-logs are now structured, not `raw:` — the
+  repetition remains (the prefix is inherently per-chain) but every line
+  is validated and family-aware.
 - **Interval-set overlaps error at build.** `255.255.255.255/32` inside
   `240.0.0.0/4` made `nft -c` reject the bogon set ("conflicting
   intervals"). nftgen passes the set through as-authored; the fix is to
@@ -220,6 +221,19 @@ fleet groups, and the site overlays together.
   convenience). Worth a note in [sets-and-performance.md](sets-and-performance.md).
 - **Research gap caught in review:** the v4 bogon list initially omitted
   `192.168.0.0/16` (RFC 1918). Always cross-check generated hygiene lists.
+
+## `iif` vs `iifname` in the reference
+
+The `iif:`/`oif:` index-match keys exist (faster than the name compare),
+and a wired router's interfaces are static — so `iif` is tempting here.
+The reference **stays on `iifname`** anyway, for one decisive reason:
+`iif "wan0"` resolves the name to an index *at load*, so **`nft -c` fails
+if the interface is absent** — and the reference is generated and
+validated (CI, dev, the drift/`--check` tests) *without* the real NICs.
+`iifname` validates portably and survives boot ordering / interface
+flaps. The `iif` option is documented in [best-practices.md](best-practices.md)
+§8a for real static-interface deployments that want the perf and can
+guarantee the interfaces are present at load.
 
 ## Still-open decisions
 

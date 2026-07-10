@@ -47,18 +47,23 @@ The order *is* the policy — see
 1. **fast path** — offload established flows to the flowtable, then accept
    (two rules: `flow add` NFT_BREAKs mid-handshake, so the verdict can't
    share the rule — see best-practices §8c).
-2. **wan scrub** — bogon source drop (v4+v6, RFC/IANA lists) + invalid
-   tcp-flag drop, counted.
-3. **live blocklist** — a runtime-updatable drop set.
+2. **wan scrub** — one `iifname wan jump wan_scrub` gates the whole scrub
+   block (bogon source drop v4+v6 + invalid tcp-flag drop, counted), so
+   non-wan traffic skips it in a single interface test instead of
+   re-testing the interface on every scrub rule.
+3. **live blocklist** — a runtime-updatable drop set, any interface.
 4. **icmp** — RFC 4890 policy; NDP permitted only at hop-limit 255.
 5. **dispatch** — one `iifname . oifname` vmap jumps each interface pair
    to its own zone chain.
 6. **catch-all** — unmatched pairs hit a metered, attributed drop-log.
 
 Every zone chain ends the same way: a **per-source metered log naming the
-chain**, then a counted drop. So when a flow is blocked,
-`journalctl -k | grep fwd-users-services-drop` tells you exactly which
-`iifname→oifname` chain to open — the drop is self-documenting.
+chain** (the structured `meter:` key), then a counted drop. So when a flow
+is blocked, `journalctl -k | grep fwd-users-services-drop` tells you
+exactly which `iifname→oifname` chain to open — the drop is
+self-documenting. Multi-service allows collapse into one rule per proto
+via composed service groups (`user_svc_tcp` → an anon `{ 80, 443, 53,
+5432 }` port set).
 
 ## Scenarios worth reading
 

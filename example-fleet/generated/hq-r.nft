@@ -4,8 +4,6 @@
 flush ruleset
 
 table inet filter {
-    set log_meter { type ipv4_addr; flags dynamic, timeout; }
-
     flowtable ft {
         hook ingress priority 0
         devices = { "wan0", "wan1", "transit0", "lan_users", "lan_svc", "lan_dmz" }
@@ -69,6 +67,11 @@ table inet filter {
         flags interval, timeout
     }
 
+    set log_meter {
+        type ipv4_addr
+        flags dynamic, timeout
+    }
+
     chain input {
         type filter hook input priority 0; policy drop;
         ct state established,related accept
@@ -90,13 +93,7 @@ table inet filter {
         ct state established,related flow add @ft
         ct state established,related accept
         ct state invalid counter name ct_invalid drop
-        iifname { "wan0", "wan1" } ip saddr @bogons_v4 counter name bogon_drops drop
-        iifname { "wan0", "wan1" } ip6 saddr @bogons_v6 counter name bogon_drops drop
-        iifname { "wan0", "wan1" } tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 counter name bad_tcp drop
-        iifname { "wan0", "wan1" } tcp flags & (fin|syn|rst|psh|ack|urg) == (fin|psh|urg) counter name bad_tcp drop
-        iifname { "wan0", "wan1" } tcp flags & (fin|syn) == (fin|syn) counter name bad_tcp drop
-        iifname { "wan0", "wan1" } tcp flags & (syn|rst) == (syn|rst) counter name bad_tcp drop
-        iifname { "wan0", "wan1" } tcp flags & (fin|rst) == (fin|rst) counter name bad_tcp drop
+        iifname { "wan0", "wan1" } jump wan_scrub
         ip saddr @blocklist counter name blocklist_drops drop
         icmp type echo-request limit rate 5/second accept
         icmp type { echo-reply, destination-unreachable, time-exceeded, parameter-problem } accept
@@ -124,12 +121,19 @@ table inet filter {
         counter name policy_drops drop
     }
 
+    chain wan_scrub {
+        ip saddr @bogons_v4 counter name bogon_drops drop
+        ip6 saddr @bogons_v6 counter name bogon_drops drop
+        tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 counter name bad_tcp drop
+        tcp flags & (fin|syn|rst|psh|ack|urg) == (fin|psh|urg) counter name bad_tcp drop
+        tcp flags & (fin|syn) == (fin|syn) counter name bad_tcp drop
+        tcp flags & (syn|rst) == (syn|rst) counter name bad_tcp drop
+        tcp flags & (fin|rst) == (fin|rst) counter name bad_tcp drop
+    }
+
     chain fwd_users_services {
-        ip saddr 192.168.1.0/24 ip daddr 10.0.1.0/24 tcp dport { 80, 443 } accept
-        ip saddr 192.168.1.0/24 ip daddr 10.0.1.0/24 tcp dport 53 accept
-        ip saddr 192.168.1.0/24 ip daddr 10.0.1.0/24 udp dport 53 accept
-        ip saddr 192.168.1.0/24 ip daddr 10.0.1.0/24 udp dport 123 accept
-        ip saddr 192.168.1.0/24 ip daddr 10.0.1.0/24 tcp dport 5432 accept
+        ip saddr 192.168.1.0/24 ip daddr 10.0.1.0/24 tcp dport { 80, 443, 53, 5432 } accept
+        ip saddr 192.168.1.0/24 ip daddr 10.0.1.0/24 udp dport { 53, 123 } accept
         update @log_meter { ip saddr timeout 1m limit rate 4/minute } log prefix "fwd-users-services-drop " level info
         counter name policy_drops drop
     }
