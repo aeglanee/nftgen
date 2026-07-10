@@ -82,6 +82,9 @@ findings/proposals. Each has one job — don't duplicate across them:
 - **[docs/](docs/)** — findings & proposals, one topic per file:
   - [docs/progress.md](docs/progress.md) — **the orientation tracker** (status,
     decided, open agenda). Read this first to see where we are.
+  - [docs/authoring.md](docs/authoring.md) — **the hub**: firewall structure,
+    the add-a-rule workflow, and the pick-the-right-tool decision table
+    (sets/vmap/concat/map/jump/meter/pipapo); links the deep-dives.
   - [docs/capabilities.md](docs/capabilities.md) — the render reference: what
     nftgen turns YAML into (structured / raw-only / can't-express /
     promotion queue).

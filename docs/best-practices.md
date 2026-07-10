@@ -5,6 +5,10 @@ nft**, every example verified with `nft -c`. The big idea to internalise is in
 §2: **independent matches give a cartesian product; specific flows need a
 concatenation.** Getting that wrong is the classic firewall footgun.
 
+New here? Start with [authoring.md](authoring.md) — the structure, the
+add-a-rule workflow, and the decision table for which primitive to use;
+this doc is the detailed cookbook it links into.
+
 Definitions used below:
 
 ```yaml

@@ -12,7 +12,9 @@ host policies → a native `.nft` ruleset you keep in git and apply with `nft -f
 > `nftables` role consumes
 > `nftgen build` (Step 3a done; 3b/4 remain — see [PLAN.md](PLAN.md)).
 >
-> **Docs:** [DESIGN.md](DESIGN.md) (spec) · [DECISIONS.md](DECISIONS.md) (why) ·
+> **Docs:** [docs/authoring.md](docs/authoring.md) (**start here** — structure,
+> workflow, decision table) · [DESIGN.md](DESIGN.md) (spec) ·
+> [DECISIONS.md](DECISIONS.md) (why) ·
 > [DEPLOYMENT.md](DEPLOYMENT.md) (GitOps/Ansible vision) · [PLAN.md](PLAN.md)
 > (plan & status) · [RAW.md](RAW.md) (`raw:` cookbook) · [TODO.md](TODO.md)
 > (backlog) · [CLAUDE.md](CLAUDE.md) (working guardrails).

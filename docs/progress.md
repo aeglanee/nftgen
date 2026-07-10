@@ -153,6 +153,26 @@ turn. Last updated: 2026-07-10.
   the P01–P22 truth table ([testing-plan.md](testing-plan.md) §2) re-derived
   against the fleet scenarios, `.gitignore` un-ignores the drift-pinned
   `example-fleet/generated/`. Suite **194** (poc's 6 tests removed).
+- **`meter:` + `iif:` + fleet refactor + authoring guide (2026-07-10),
+  from a review of the reference:**
+  - **`meter:` key** — `meter: {set, key, rate, timeout}` renders
+    `update @set { <key> [timeout] limit rate }` on a `flags: [dynamic]`
+    set; the per-source drop-log sampling is now structured, not `raw:`.
+  - **`iif:`/`oif:` index matching** — rule + vmap keys render the index
+    form; the v0.4.0 rename hints removed. Tradeoff: `iif` fails to *load*
+    (incl. `nft -c`) if the interface is absent, so the reference stays on
+    `iifname` (validates portably); `iif` is for real static-interface
+    deployments (best-practices §8a).
+  - **example-fleet refactor** — drop-logs use `meter:` (no raw left),
+    `iifname wan jump wan_scrub` factors the scrub prefix (1 vs 7 interface
+    tests for non-wan traffic), users→services collapses 5→2 rules via
+    composed service groups. No firewall behavior change.
+  - **[authoring.md](authoring.md)** — the hub doc: firewall structure, the
+    add-a-rule workflow (find the chain from the `(iif,oif)` pair; the
+    drop-log names it), and the decision table (sets anon-vs-named, vmap,
+    concat, data map, jump, meter, interval/pipapo) linking the deep-dives.
+  - **CLAUDE.md** — standing instruction to be proactively, substantively
+    critical of the user's ideas. Suite **199**.
 - **⟶ Next:** implement P01–P22 over example-fleet on the single-router
   harness + the one NFLOG log test (P22); stage the multi-router cross-site
   harness last. Then R2 CI. PLAN §Roadmap / reference-fleet.md.
