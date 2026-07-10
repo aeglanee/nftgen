@@ -1,0 +1,20 @@
+---
+# B13-B17 fixture: port-forwarding router. wan hosts the outside client (and
+# the server for the snat test); web/jump are the inner dnat targets; lan is
+# the snat'd client zone. snat_ip is the router's own wan address, published
+# as a single-address group (the per-site-NAT pattern).
+networks:
+  lan_net: [10.85.0.0/24]
+  web_host: [10.85.2.2]
+  jump_host: [10.85.3.2]
+  snat_ip: [10.85.1.1]
+interfaces:
+  lan_if: [r-lan]
+  wan_if: [r-wan]
+  web_if: [r-web]
+  jump_if: [r-jump]
+services:
+  websvc: [80/tcp]
+  jumpsvc: [2222/tcp]
+  outsvc: [9000/tcp]
+  fwd_web: [80/tcp, 7000/tcp]

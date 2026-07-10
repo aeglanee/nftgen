@@ -106,8 +106,17 @@ turn. Last updated: 2026-07-10.
   concat tuples exact with crossed pairs dead on the wire; live blocklist
   proven as an *operational contract* — runtime `nft add element`, block,
   kernel-GC expiry (poll-with-deadline, not sleep-and-assert). Suite **176**.
-- **⟶ Next:** §1 matrix breadth (B13+ — NAT cluster, then statements),
-  then the P-matrix over example-poc, then R2 CI. PLAN §Roadmap.
+- **B13–B17 NAT cluster landed (2026-07-10):** harness listeners can now
+  echo the accepted peer address back over the connection, so NAT proofs
+  assert *what the server saw* — dnat preserves the original client saddr
+  (B13), the inline dnat map dispatches per port with address-only
+  targets (B14), an unmapped port passes prerouting un-rewritten and dies
+  at the filter (B15), a dnat'd-but-not-forward-allowed port proves the
+  forward leg filters post-rewrite (B16), and lan egress leaves as the
+  fixed snat_ip (B17). Suite **181**.
+- **⟶ Next:** §1 matrix breadth (B18+ — icmp, limit/quota/counter,
+  dport-vmap, flowtable smoke, reapply idempotence), then the P-matrix
+  over example-poc, then R2 CI. PLAN §Roadmap.
 
 ## Decided
 

@@ -1,0 +1,81 @@
+---
+# NAT cluster (testing-plan B13-B17).
+#   B13: single-target dnat with port rewrite (:8080 -> web:7000)
+#   B14: inline dnat data map (:80 -> web, :2222 -> jump; ports preserved)
+#   B15: unmapped port passes prerouting un-rewritten and dies at the filter
+#   B16: the forward leg allowlists post-rewrite (daddr, dport) — a dnat'd
+#        port with no forward rule (:9022 -> jump) must still time out
+#   B17: lan egress snat'd to the fixed snat_ip group
+tables:
+  - family: inet
+    name: filter
+    chains:
+      - name: input
+        hook: input
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+
+      - name: forward
+        hook: forward
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - iifname: wan_if
+            oifname: web_if
+            daddr: web_host
+            proto: tcp
+            dport: fwd_web
+            action: accept
+          - iifname: wan_if
+            oifname: jump_if
+            daddr: jump_host
+            proto: tcp
+            dport: jumpsvc
+            action: accept
+          - iifname: lan_if
+            oifname: wan_if
+            saddr: lan_net
+            proto: tcp
+            dport: outsvc
+            action: accept
+
+  - family: inet
+    name: nat
+    chains:
+      - name: prerouting
+        hook: prerouting
+        type: nat
+        priority: dstnat
+        policy: accept
+        rules:
+          - iifname: wan_if
+            proto: tcp
+            dport: 8080
+            action:
+              dnat: "10.85.2.2:7000"
+          - iifname: wan_if
+            action:
+              dnat:
+                proto: tcp
+                map:
+                  80: web_host
+                  2222: jump_host
+                  9022: jump_host
+
+      - name: postrouting
+        hook: postrouting
+        type: nat
+        priority: srcnat
+        policy: accept
+        rules:
+          - oifname: wan_if
+            saddr: lan_net
+            action:
+              snat: snat_ip

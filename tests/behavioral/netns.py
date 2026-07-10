@@ -91,9 +91,13 @@ class Harness:
     def nft_apply(self, text: str) -> None:
         self._rpc(op="nft", text=text)
 
-    def listen(self, ns: str | None, port: int) -> None:
-        """TCP accept-loop in a zone ns (or the router when ns is None)."""
-        self._rpc(op="listen", ns=ns, port=port)
+    def listen(self, ns: str | None, port: int, echo_peer: bool = False) -> None:
+        """TCP accept-loop in a zone ns (or the router when ns is None).
+
+        echo_peer: the listener writes the accepted peer's address back on
+        the connection — probe_tcp_reply() reads it (NAT assertions).
+        """
+        self._rpc(op="listen", ns=ns, port=port, echo_peer=echo_peer)
 
     def probe_tcp(
         self, ns: str | None, dst: str, port: int, timeout: float = 1.5
@@ -102,6 +106,15 @@ class Harness:
         return self._rpc(op="probe", ns=ns, dst=dst, port=port, timeout=timeout)[
             "result"
         ]
+
+    def probe_tcp_reply(
+        self, ns: str | None, dst: str, port: int, timeout: float = 1.5
+    ) -> tuple[str, str | None]:
+        """Probe an echo_peer listener -> (outcome, address the server saw)."""
+        resp = self._rpc(
+            op="probe", ns=ns, dst=dst, port=port, timeout=timeout, read=True
+        )
+        return resp["result"], resp.get("reply")
 
     def run(self, ns: str | None, argv: list[str]) -> subprocess.CompletedProcess:
         resp = self._rpc(op="run", ns=ns, argv=argv)

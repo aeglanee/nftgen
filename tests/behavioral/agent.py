@@ -13,13 +13,17 @@ Ops:
   {"op": "topology", "zones": [{"name", "router_if", "router_addr",
       "ns_addr", "gw"}, …]}            veths, addrs, routes, ip_forward=1
   {"op": "nft", "text": "…"}           apply a ruleset in the router ns
-  {"op": "listen", "ns": name|null, "port": N}      TCP accept-loop listener
+  {"op": "listen", "ns": name|null, "port": N,
+      "echo_peer": bool}               TCP accept-loop; echo_peer writes the
+                                       accepted peer address back on the conn
   {"op": "probe", "ns": name|null, "dst": "a.b.c.d", "port": N,
-      "timeout": secs}                 -> connected | refused | timeout
+      "timeout": secs, "read": bool}   -> connected | refused | timeout
+                                       (read: also return the server's reply)
   {"op": "run", "ns": name|null, "argv": […]}       escape hatch / debugging
   {"op": "quit"}
 """
 
+import contextlib
 import ctypes
 import json
 import os
@@ -158,8 +162,12 @@ def op_listen(req: dict) -> dict:
             os._exit(1)
         os.write(ready_w, b"1")
         os.close(ready_w)
+        echo_peer = bool(req.get("echo_peer"))
         while True:
-            conn, _ = srv.accept()
+            conn, peer = srv.accept()
+            if echo_peer:
+                with contextlib.suppress(OSError):
+                    conn.sendall(peer[0].encode())
             conn.close()
     os.close(ready_w)
     ready = os.read(ready_r, 1)
@@ -178,14 +186,20 @@ def op_probe(req: dict) -> dict:
     ns = req.get("ns")
     ns_pid = NAMESPACES[ns] if ns is not None else None
     timeout = float(req.get("timeout", 1.5))
+    reply_r, reply_w = os.pipe()
     pid = os.fork()
     if pid == 0:
+        os.close(reply_r)
+        os.dup2(reply_w, 1)
         try:
             if ns_pid is not None:
                 _setns_net(ns_pid)
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(timeout)
             sock.connect((req["dst"], req["port"]))
+            if req.get("read"):
+                data = sock.recv(64)
+                os.write(1, data)  # parent reads the reply from a pipe
             os._exit(0)
         except ConnectionRefusedError:
             os._exit(2)
@@ -193,10 +207,18 @@ def op_probe(req: dict) -> dict:
             os._exit(3)
         except Exception:
             os._exit(4)
+    os.close(reply_w)
     _, status = os.waitpid(pid, 0)
+    reply = b""
+    while True:
+        chunk = os.read(reply_r, 64)
+        if not chunk:
+            break
+        reply += chunk
+    os.close(reply_r)
     code = os.waitstatus_to_exitcode(status)
     outcome = {0: "connected", 2: "refused", 3: "timeout"}.get(code, f"error({code})")
-    return {"ok": True, "result": outcome}
+    return {"ok": True, "result": outcome, "reply": reply.decode() or None}
 
 
 def op_run(req: dict) -> dict:

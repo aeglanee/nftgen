@@ -511,3 +511,84 @@ def test_b12_live_blocklist_blocks_then_expires(fw_blocklist):
             break
         time.sleep(0.5)
     assert outcome == "connected"
+
+
+# --------------------------------------------------------------------------- #
+# B13-B17 — NAT: dnat single/map/fall-through, forward leg, snat (fixture: nat)
+# --------------------------------------------------------------------------- #
+
+NAT_ROUTER_WAN = "10.85.1.1"  # == snat_ip in the fixture
+NAT_WAN_CLIENT = "10.85.1.2"
+NAT_LAN_CLIENT = "10.85.0.2"
+
+
+@pytest.fixture(scope="module")
+def fw_nat():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": z,
+                    "router_if": f"r-{z}",
+                    "router_addr": f"{router}/24",
+                    "ns_addr": f"{ns}/24",
+                    "gw": router,
+                }
+                for z, router, ns in (
+                    ("lan", "10.85.0.1", NAT_LAN_CLIENT),
+                    ("wan", NAT_ROUTER_WAN, NAT_WAN_CLIENT),
+                    ("web", "10.85.2.1", "10.85.2.2"),
+                    ("jump", "10.85.3.1", "10.85.3.2"),
+                )
+            ]
+        )
+        harness.nft_apply(build(FIXTURES / "nat")["router"])
+        harness.listen("web", 7000, echo_peer=True)  # B13 target (port rewritten)
+        harness.listen("web", 80)  # B14 map target
+        harness.listen("jump", 2222)  # B14 map target
+        harness.listen("jump", 9022)  # B16: dnat'd but not forward-allowed
+        harness.listen("wan", 9000, echo_peer=True)  # B17: outside server
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b13_dnat_single_target_rewrites_and_preserves_saddr(fw_nat):
+    # wan client hits the router's public :8080; dnat sends it to web:7000.
+    # The echoed peer proves the server saw the *original* client address.
+    outcome, seen = fw_nat.probe_tcp_reply("wan", NAT_ROUTER_WAN, 8080)
+    assert outcome == "connected"
+    assert seen == NAT_WAN_CLIENT
+
+
+@requires_netns
+def test_b14_dnat_map_dispatches_per_port(fw_nat):
+    # one map rule, two targets; ports preserved (map values are address-only)
+    assert fw_nat.probe_tcp("wan", NAT_ROUTER_WAN, 80) == "connected"
+    assert fw_nat.probe_tcp("wan", NAT_ROUTER_WAN, 2222) == "connected"
+
+
+@requires_netns
+def test_b15_dnat_map_fall_through_dies_at_filter(fw_nat):
+    # unmapped port: prerouting (policy accept) leaves it un-rewritten, so it
+    # targets the router itself and dies against input's policy drop.
+    assert fw_nat.probe_tcp("wan", NAT_ROUTER_WAN, 9999) == "timeout"
+
+
+@requires_netns
+def test_b16_forward_leg_filters_post_rewrite(fw_nat):
+    # :9022 IS dnat'd (to jump, listener live) — but forward has no rule for
+    # it, so the rewritten packet must die crossing the forward hook.
+    assert fw_nat.probe_tcp("wan", NAT_ROUTER_WAN, 9022) == "timeout"
+
+
+@requires_netns
+def test_b17_snat_rewrites_source_to_fixed_ip(fw_nat):
+    # lan client reaches the outside server; the server must see the router's
+    # snat_ip, not the lan client's address.
+    outcome, seen = fw_nat.probe_tcp_reply("lan", NAT_WAN_CLIENT, 9000)
+    assert outcome == "connected"
+    assert seen == NAT_ROUTER_WAN
+    assert seen != NAT_LAN_CLIENT
