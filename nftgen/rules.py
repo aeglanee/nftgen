@@ -142,6 +142,7 @@ _KNOWN_RULE_KEYS = frozenset(
         "dport",
         "flags",
         "icmp-type",
+        "meter",
         "limit",
         "quota",
         "log",
@@ -162,6 +163,7 @@ _CONCAT_RULE_KEYS = frozenset(
         "set",
         "action",
         "counter",
+        "meter",
         "limit",
         "quota",
         "log",
@@ -288,6 +290,10 @@ class RuleRenderer:
     # -- statements (non-terminal: rate/quota/log/mangle) ------------------- #
     def _statements(self, rule: dict) -> list[str]:
         out = []
+        # meter first: a per-key rate gate (`update @set { <key> limit rate }`)
+        # — it gates whatever follows (typically a log), so it renders ahead.
+        if "meter" in rule:
+            out.append(self._meter(rule["meter"]))
         if "limit" in rule:
             out.append(f"limit rate {rule['limit']}")
         if "quota" in rule:
@@ -303,6 +309,50 @@ class RuleRenderer:
         if "flow-offload" in rule:
             out.append(f"flow add @{rule['flow-offload']}")
         return out
+
+    _METER_KEYS = frozenset({"saddr", "daddr", "iifname", "oifname"})
+    _METER_SPEC_KEYS = frozenset({"set", "key", "rate", "timeout"})
+
+    def _meter(self, spec) -> str:
+        """`update @set { <key> [timeout T] limit rate R }` — per-key rate
+        limiting on a dynamic set. The typical use is per-source drop-log
+        sampling; the author declares the dynamic set (`flags: [dynamic,
+        timeout]`)."""
+        if not isinstance(spec, dict):
+            raise BuildError(f"`meter:` must be a mapping: {spec!r}")
+        unknown = set(spec) - self._METER_SPEC_KEYS
+        if unknown:
+            raise BuildError(f"unknown meter key(s) {sorted(unknown)}: {spec!r}")
+        name = spec.get("set")
+        if name not in self.named:
+            raise BuildError(f"meter set @{name} is not a declared set: {spec!r}")
+        s = self.named[name]
+        if "dynamic" not in s.flags:
+            raise BuildError(
+                f"meter set @{name} must be declared `flags: [dynamic]`: {spec!r}"
+            )
+        key = spec.get("key")
+        if key not in self._METER_KEYS:
+            raise BuildError(
+                f"meter key {key!r} not supported (use {sorted(self._METER_KEYS)})"
+            )
+        rate = spec.get("rate")
+        if not rate:
+            raise BuildError(f"`meter:` needs a `rate:`: {spec!r}")
+        if key in ("saddr", "daddr"):
+            if s.type not in ("ipv4_addr", "ipv6_addr"):
+                raise BuildError(
+                    f"meter key {key!r} needs an address set, got {s.type}: {spec!r}"
+                )
+            keyexpr = f"{'ip' if s.type == 'ipv4_addr' else 'ip6'} {key}"
+        else:  # iifname / oifname
+            if s.type != "ifname":
+                raise BuildError(
+                    f"meter key {key!r} needs an ifname set, got {s.type}: {spec!r}"
+                )
+            keyexpr = key
+        timeout = f"timeout {spec['timeout']} " if spec.get("timeout") else ""
+        return f"update @{name} {{ {keyexpr} {timeout}limit rate {rate} }}"
 
     def _counter(self, value) -> str:
         if value is True:

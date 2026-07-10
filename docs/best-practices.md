@@ -413,26 +413,28 @@ in the base chain. Structure the drops so every one is attributed:
   it**. `policy: drop` stays as the backstop that should see zero
   traffic.
 - **Per-source log sampling (meters).** A tail's `limit:` is global to
-  the rule — one noisy host can crowd the sample. nft's current idiom
-  for per-key limits is a `dynamic` set plus an `add`/`update`
-  expression; each key (e.g. saddr) gets its own token bucket, idle
-  entries expire via `timeout`:
-
-  ```nft
-  set log_meter {
-      type ipv4_addr
-      flags dynamic
-      timeout 1m
-  }
-  ```
+  the rule — one noisy host can crowd the sample. The `meter:` key gives
+  each key (e.g. saddr) its own token bucket via a `dynamic` set, idle
+  entries expiring via `timeout`. Declare the set, then meter the log:
 
   ```yaml
-  - raw: 'add @log_meter { ip saddr limit rate 6/minute } log prefix "fwd-user2wan-drop: "'
+  sets:
+    - name: log_meter
+      type: ipv4_addr
+      flags: [dynamic, timeout]
+  # …in the chain tail:
+  - meter:
+      set: log_meter
+      key: saddr
+      rate: 6/minute
+      timeout: 1m
+    log:
+      prefix: "fwd-user2wan-drop "
   ```
 
-  Raw-only today; promotion queued ([TODO.md](../TODO.md)) — the rule
-  key will mirror nft's `add`/`update` verbs (the standalone `meter`
-  keyword is deprecated upstream).
+  renders `update @log_meter { ip saddr timeout 1m limit rate 6/minute }
+  log prefix "fwd-user2wan-drop "` — one noisy source can no longer
+  crowd the sample out for everyone else.
 - **Live debugging beats logs for "why":** arm `meta nftrace set 1` on
   the traffic you're testing (a `raw:` rule, temporary) and watch
   `nft monitor trace` — it prints every chain and rule the packet

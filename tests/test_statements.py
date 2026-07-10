@@ -115,3 +115,52 @@ def test_flow_offload_must_not_carry_a_verdict():
     assert r.render({"ct": ["established"], "flow-offload": "ft"}) == [
         "ct state established flow add @ft"
     ]
+
+
+# --- meter: per-key rate limiting on a dynamic set ------------------------- #
+
+_METER_DEFS = Definitions.from_mappings({"networks": {"any": ["0.0.0.0/0"]}})
+_METER_SETS = build_sets(
+    [
+        {"name": "m4", "type": "ipv4_addr", "flags": ["dynamic", "timeout"]},
+        {"name": "m6", "type": "ipv6_addr", "flags": ["dynamic", "timeout"]},
+        {"name": "mif", "type": "ifname", "flags": ["dynamic"]},
+        {"name": "static4", "type": "ipv4_addr", "flags": ["interval"]},
+    ],
+    _METER_DEFS,
+)
+RM = RuleRenderer(_METER_DEFS, {s.name: s for s in _METER_SETS})
+
+
+def test_meter_saddr_with_log():
+    assert RM.render(
+        {
+            "meter": {"set": "m4", "key": "saddr", "rate": "4/minute", "timeout": "1m"},
+            "log": {"prefix": "drop "},
+        }
+    ) == ['update @m4 { ip saddr timeout 1m limit rate 4/minute } log prefix "drop "']
+
+
+def test_meter_v6_and_ifname_keys():
+    assert RM.render(
+        {"meter": {"set": "m6", "key": "daddr", "rate": "10/second"}, "action": "drop"}
+    ) == ["update @m6 { ip6 daddr limit rate 10/second } drop"]
+    assert RM.render(
+        {
+            "meter": {"set": "mif", "key": "iifname", "rate": "3/minute"},
+            "action": "drop",
+        }
+    ) == ["update @mif { iifname limit rate 3/minute } drop"]
+
+
+def test_meter_validation_errors():
+    with pytest.raises(BuildError, match="not a declared set"):
+        RM.render({"meter": {"set": "nope", "key": "saddr", "rate": "1/s"}})
+    with pytest.raises(BuildError, match="must be declared `flags: \\[dynamic\\]`"):
+        RM.render({"meter": {"set": "static4", "key": "saddr", "rate": "1/s"}})
+    with pytest.raises(BuildError, match="key 'oifname' needs an ifname set"):
+        RM.render({"meter": {"set": "m4", "key": "oifname", "rate": "1/s"}})
+    with pytest.raises(BuildError, match="needs a `rate:`"):
+        RM.render({"meter": {"set": "m4", "key": "saddr"}})
+    with pytest.raises(BuildError, match="unknown meter key"):
+        RM.render({"meter": {"set": "m4", "key": "saddr", "rate": "1/s", "x": 1}})

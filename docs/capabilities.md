@@ -66,6 +66,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | Key | YAML | nft |
 | --- | --- | --- |
 | `limit` | `limit: 4/minute` | `limit rate 4/minute` |
+| `meter` | `meter: {set: m, key: saddr, rate: 4/minute, timeout: 1m}` | `update @m { ip saddr timeout 1m limit rate 4/minute }` — per-key rate on a `flags: [dynamic]` set (keys: `saddr`/`daddr`/`iifname`/`oifname`) |
 | `quota` | `quota: over 10240 mbytes` | `quota over 10240 mbytes` |
 | `log` | `log: {prefix: "ssh ", level: info, group: 2}` | `log prefix "ssh " level info group 2` (or bare `log`; `group` = NFLOG) |
 | `set-mark` | `set-mark: "0x1"` | `meta mark set 0x1` |

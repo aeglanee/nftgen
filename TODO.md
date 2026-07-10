@@ -73,13 +73,11 @@ nft -c validation → primitives A–E). What's left, à la carte:
       [PLAN.md](PLAN.md) §R1 / [docs/testing-plan.md](docs/testing-plan.md).
 - [x] **own venv** — `make install-dev` (2026-07-09), plus the lint suite +
       pre-commit (`make verify`).
-- [ ] **dynamic-set meters** — per-key rate limiting (`add @meter { ip saddr
-      limit rate 6/minute }`): a `dynamic` set flag + a rule key mirroring
-      nft's `add`/`update` verbs (upstream deprecated the `meter` keyword).
-      Use cases: per-source log sampling (best-practices §8d), fail2ban-style
-      throttling. Key shape to settle at implementation. **example-fleet
-      copy-pastes this raw ~12× (one per zone-chain drop-log)** — the
-      concrete pull for promoting it; see docs/reference-fleet.md Findings.
+- [x] **dynamic-set meters** — done 2026-07-10. `meter: {set, key, rate,
+      timeout}` renders `update @set { <key> [timeout T] limit rate R }` on a
+      `flags: [dynamic]` set (keys: saddr/daddr/iifname/oifname). Per-source
+      log sampling (best-practices §8d) is now structured, not raw.
+      Fail2ban-style throttling uses the same primitive.
 - [ ] **opt-in `iif`/`oif` index matching** — faster 32-bit compare for
       static-NIC hosts; unsafe for dynamic interfaces (index changes on
       recreate), so name form stays the default. See best-practices §8a.
