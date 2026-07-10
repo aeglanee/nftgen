@@ -139,3 +139,48 @@ def test_b06_zone_absent_from_vmap_falls_to_policy(fw_vmap_input):
     # packet falls through to the base chain's policy drop.
     assert fw_vmap_input.probe_tcp("zc", ZC_ROUTER, 7000) == "timeout"
     assert fw_vmap_input.probe_tcp("zc", ZC_ROUTER, 7001) == "timeout"
+
+
+# --------------------------------------------------------------------------- #
+# B07 — concat vmap pair dispatch (fixture: vmap-pairs)
+# --------------------------------------------------------------------------- #
+
+PAIR_A_CLIENT, PAIR_B_CLIENT = "10.79.1.2", "10.79.2.2"
+
+
+@pytest.fixture(scope="module")
+def fw_vmap_pairs():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": "za",
+                    "router_if": "r-za",
+                    "router_addr": "10.79.1.1/24",
+                    "ns_addr": f"{PAIR_A_CLIENT}/24",
+                    "gw": "10.79.1.1",
+                },
+                {
+                    "name": "zb",
+                    "router_if": "r-zb",
+                    "router_addr": "10.79.2.1/24",
+                    "ns_addr": f"{PAIR_B_CLIENT}/24",
+                    "gw": "10.79.2.1",
+                },
+            ]
+        )
+        harness.nft_apply(build(FIXTURES / "vmap-pairs")["router"])
+        harness.listen("za", 9000)  # target for the reversed-pair probe
+        harness.listen("zb", 9000)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b07_pair_dispatch_is_directional(fw_vmap_pairs):
+    # identical service, identical topology — only the (in, out) interface
+    # pair differs. Mapped pair passes; the reversed pair is a vmap no-match.
+    assert fw_vmap_pairs.probe_tcp("za", PAIR_B_CLIENT, 9000) == "connected"
+    assert fw_vmap_pairs.probe_tcp("zb", PAIR_A_CLIENT, 9000) == "timeout"

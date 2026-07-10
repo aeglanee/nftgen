@@ -1,0 +1,27 @@
+---
+# Pair dispatch (testing-plan B07): forward branches on the concatenated
+# `[iifname, oifname]` key. Only the za->zb direction is in the map; the
+# reversed pair must be a vmap no-match and die against the policy.
+tables:
+  - family: inet
+    name: filter
+    chains:
+      - name: forward
+        hook: forward
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - vmap:
+              key: [iifname, oifname]
+              map:
+                - match: [za_if, zb_if]
+                  jump: fwd_ab
+
+      - name: fwd_ab
+        rules:
+          - proto: tcp
+            dport: svc
+            action: accept

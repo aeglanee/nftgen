@@ -1,0 +1,9 @@
+---
+# B07 fixture: two zones; the forward chain dispatches on the concatenated
+# (iifname, oifname) pair, so direction matters — za->zb is mapped, zb->za
+# is not.
+interfaces:
+  za_if: [r-za]
+  zb_if: [r-zb]
+services:
+  svc: [9000/tcp]
