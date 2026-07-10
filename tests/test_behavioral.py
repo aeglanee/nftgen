@@ -86,3 +86,56 @@ def test_b03_unsolicited_inbound_forward_dropped(fw):
     # the same service port the other way, with a live listener waiting:
     # no ct entry, no wan->lan rule -> policy drop.
     assert fw.probe_tcp("wan", CLIENT, 9000) == "timeout"
+
+
+# --------------------------------------------------------------------------- #
+# B05/B06 — input vmap dispatch (fixture: vmap-input)
+# --------------------------------------------------------------------------- #
+
+ZA_ROUTER, ZB_ROUTER, ZC_ROUTER = "10.78.1.1", "10.78.2.1", "10.78.3.1"
+
+
+@pytest.fixture(scope="module")
+def fw_vmap_input():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": z,
+                    "router_if": f"r-{z}",
+                    "router_addr": f"{addr}/24",
+                    "ns_addr": f"{addr[:-1]}2/24",
+                    "gw": addr,
+                }
+                for z, addr in (
+                    ("za", ZA_ROUTER),
+                    ("zb", ZB_ROUTER),
+                    ("zc", ZC_ROUTER),
+                )
+            ]
+        )
+        harness.nft_apply(build(FIXTURES / "vmap-input")["router"])
+        harness.listen(None, 7000)
+        harness.listen(None, 7001)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b05_input_vmap_dispatches_per_zone(fw_vmap_input):
+    # same router, same listeners — the only difference is the inbound zone,
+    # so a verdict flip proves the vmap dispatched to different chains.
+    assert fw_vmap_input.probe_tcp("za", ZA_ROUTER, 7000) == "connected"
+    assert fw_vmap_input.probe_tcp("za", ZA_ROUTER, 7001) == "timeout"
+    assert fw_vmap_input.probe_tcp("zb", ZB_ROUTER, 7001) == "connected"
+    assert fw_vmap_input.probe_tcp("zb", ZB_ROUTER, 7000) == "timeout"
+
+
+@requires_netns
+def test_b06_zone_absent_from_vmap_falls_to_policy(fw_vmap_input):
+    # zc is wired up but has no vmap entry: the lookup is a no-match and the
+    # packet falls through to the base chain's policy drop.
+    assert fw_vmap_input.probe_tcp("zc", ZC_ROUTER, 7000) == "timeout"
+    assert fw_vmap_input.probe_tcp("zc", ZC_ROUTER, 7001) == "timeout"

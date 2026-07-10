@@ -1,0 +1,35 @@
+---
+# Input dispatch (testing-plan B05/B06): one `iifname` vmap lookup branches to
+# per-zone chains. za may reach svc_a only, zb svc_b only; the unlisted zc
+# falls to the base-chain policy.
+tables:
+  - family: inet
+    name: filter
+    chains:
+      - name: input
+        hook: input
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - vmap:
+              key: iifname
+              map:
+                za_if:
+                  jump: za_in
+                zb_if:
+                  jump: zb_in
+
+      - name: za_in
+        rules:
+          - proto: tcp
+            dport: svc_a
+            action: accept
+
+      - name: zb_in
+        rules:
+          - proto: tcp
+            dport: svc_b
+            action: accept

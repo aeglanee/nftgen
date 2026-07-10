@@ -1,0 +1,10 @@
+---
+# B05/B06 fixture: three zones. za and zb are dispatched by the input vmap to
+# per-zone chains allowing *different* ports; zc exists in the topology but is
+# absent from the map, so its traffic falls through to the chain policy.
+interfaces:
+  za_if: [r-za]
+  zb_if: [r-zb]
+services:
+  svc_a: [7000/tcp]
+  svc_b: [7001/tcp]
