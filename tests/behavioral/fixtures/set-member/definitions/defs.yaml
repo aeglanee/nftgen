@@ -1,0 +1,9 @@
+---
+# B09 fixture: a network group materialised as a *named set* (@members).
+# The za client's address is a member; the zb client's is not.
+networks:
+  members: [10.80.1.2]
+interfaces:
+  any_zone: [r-za, r-zb]
+services:
+  svc: [7000/tcp]

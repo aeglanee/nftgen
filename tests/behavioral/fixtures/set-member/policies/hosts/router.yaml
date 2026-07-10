@@ -1,0 +1,23 @@
+---
+# Named-set membership (testing-plan B09): `members` is listed under `sets:`
+# so the rule renders `ip saddr @members` — a set lookup, not an inline
+# literal. Member saddr passes; non-member falls through to policy.
+tables:
+  - family: inet
+    name: filter
+    sets:
+      - members
+    chains:
+      - name: input
+        hook: input
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - iifname: any_zone
+            saddr: members
+            proto: tcp
+            dport: svc
+            action: accept

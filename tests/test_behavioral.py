@@ -228,3 +228,49 @@ def test_b08_group_expands_to_both_member_devices(fw_vmap_group):
     assert fw_vmap_group.probe_tcp("za", GRP_ZA_ROUTER, 7000) == "connected"
     assert fw_vmap_group.probe_tcp("zb", GRP_ZB_ROUTER, 7000) == "connected"
     assert fw_vmap_group.probe_tcp("zc", GRP_ZC_ROUTER, 7000) == "timeout"
+
+
+# --------------------------------------------------------------------------- #
+# B09 — named-set membership (fixture: set-member)
+# --------------------------------------------------------------------------- #
+
+MEMBER_ROUTER, NONMEMBER_ROUTER = "10.80.1.1", "10.80.2.1"
+
+
+@pytest.fixture(scope="module")
+def fw_set_member():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": "za",
+                    "router_if": "r-za",
+                    "router_addr": f"{MEMBER_ROUTER}/24",
+                    "ns_addr": "10.80.1.2/24",
+                    "gw": MEMBER_ROUTER,
+                },
+                {
+                    "name": "zb",
+                    "router_if": "r-zb",
+                    "router_addr": f"{NONMEMBER_ROUTER}/24",
+                    "ns_addr": "10.80.2.2/24",
+                    "gw": NONMEMBER_ROUTER,
+                },
+            ]
+        )
+        artifact = build(FIXTURES / "set-member")["router"]
+        assert "@members" in artifact  # it must be a set lookup, not an inline
+        harness.nft_apply(artifact)
+        harness.listen(None, 7000)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b09_named_set_membership(fw_set_member):
+    # identical rule path for both zones (any_zone matches both devices) —
+    # only @members membership differs between the two source addresses.
+    assert fw_set_member.probe_tcp("za", MEMBER_ROUTER, 7000) == "connected"
+    assert fw_set_member.probe_tcp("zb", NONMEMBER_ROUTER, 7000) == "timeout"
