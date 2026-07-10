@@ -1,0 +1,27 @@
+---
+# Bogon scrub (testing-plan B10): spoofed rfc1918 saddr on the wan interface
+# is dropped by the @bogons rule and counted; the same zone's legit subnet
+# reaches svc — so the drop is attributable to the scrub rule, not policy.
+tables:
+  - family: inet
+    name: filter
+    counters:
+      - bogon_drops
+    sets:
+      - bogons
+    chains:
+      - name: input
+        hook: input
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - iifname: wan_if
+            saddr: bogons
+            counter: bogon_drops
+            action: drop
+          - proto: tcp
+            dport: svc
+            action: accept

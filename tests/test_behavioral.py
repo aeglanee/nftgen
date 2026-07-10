@@ -339,3 +339,58 @@ def test_b04_out_of_state_ack_is_invalid_dropped_and_counted(fw):
         time.sleep(0.1)
         hits = _invalid_hits(fw)
     assert hits > before
+
+
+# --------------------------------------------------------------------------- #
+# B10 — bogon scrub + named counter (fixture: bogon-counter)
+# --------------------------------------------------------------------------- #
+
+BOGON_LEGIT_ROUTER, BOGON_SPOOF_ROUTER = "10.82.1.1", "192.168.99.1"
+
+
+def _counter_packets(fw, name: str) -> int:
+    r = fw.run(None, ["nft", "list", "counter", "inet", "filter", name])
+    assert r.returncode == 0, r.stderr
+    m = re.search(r"packets (\d+)", r.stdout)
+    assert m, r.stdout
+    return int(m.group(1))
+
+
+@pytest.fixture(scope="module")
+def fw_bogon():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": "wan",
+                    "router_if": "r-wan",
+                    "router_addr": f"{BOGON_LEGIT_ROUTER}/24",
+                    "ns_addr": "10.82.1.2/24",
+                    "gw": BOGON_LEGIT_ROUTER,
+                },
+            ]
+        )
+        # second (bogon) subnet on the same link: source selection makes the
+        # probe to 192.168.99.1 leave with the rfc1918 saddr — the spoof.
+        for ns, dev, addr in (
+            (None, "r-wan", f"{BOGON_SPOOF_ROUTER}/24"),
+            ("wan", "eth0", "192.168.99.2/24"),
+        ):
+            r = harness.run(ns, ["ip", "addr", "add", addr, "dev", dev])
+            assert r.returncode == 0, r.stderr
+        harness.nft_apply(build(FIXTURES / "bogon-counter")["router"])
+        harness.listen(None, 7000)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b10_bogon_saddr_dropped_and_counted(fw_bogon):
+    before = _counter_packets(fw_bogon, "bogon_drops")
+    # legit subnet reaches the service — the accept rule works…
+    assert fw_bogon.probe_tcp("wan", BOGON_LEGIT_ROUTER, 7000) == "connected"
+    # …so the rfc1918-sourced probe dying proves the scrub rule, counted.
+    assert fw_bogon.probe_tcp("wan", BOGON_SPOOF_ROUTER, 7000) == "timeout"
+    assert _counter_packets(fw_bogon, "bogon_drops") > before

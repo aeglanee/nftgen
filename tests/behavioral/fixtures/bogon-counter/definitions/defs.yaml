@@ -1,0 +1,12 @@
+---
+# B10 fixture: rfc1918 scrub on the wan side. The wan link carries a legit
+# subnet and a bogon subnet; only bogon-sourced traffic must die (counted).
+# 10/8 is deliberately NOT in the group — the legit subnet lives there.
+networks:
+  bogons:
+    - 192.168.0.0/16
+    - 172.16.0.0/12
+interfaces:
+  wan_if: [r-wan]
+services:
+  svc: [7000/tcp]
