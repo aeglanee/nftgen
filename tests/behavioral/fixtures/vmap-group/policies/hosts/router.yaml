@@ -1,0 +1,27 @@
+---
+# Group expansion (testing-plan B08): the single `ab_group` map entry expands
+# to one element per member device — traffic from either member device hits
+# the same verdict chain; a non-member zone falls to policy.
+tables:
+  - family: inet
+    name: filter
+    chains:
+      - name: input
+        hook: input
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - vmap:
+              key: iifname
+              map:
+                ab_group:
+                  jump: grp_in
+
+      - name: grp_in
+        rules:
+          - proto: tcp
+            dport: svc
+            action: accept

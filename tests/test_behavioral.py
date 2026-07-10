@@ -184,3 +184,47 @@ def test_b07_pair_dispatch_is_directional(fw_vmap_pairs):
     # pair differs. Mapped pair passes; the reversed pair is a vmap no-match.
     assert fw_vmap_pairs.probe_tcp("za", PAIR_B_CLIENT, 9000) == "connected"
     assert fw_vmap_pairs.probe_tcp("zb", PAIR_A_CLIENT, 9000) == "timeout"
+
+
+# --------------------------------------------------------------------------- #
+# B08 — interface-group expansion in a vmap (fixture: vmap-group)
+# --------------------------------------------------------------------------- #
+
+GRP_ZA_ROUTER, GRP_ZB_ROUTER, GRP_ZC_ROUTER = "10.81.1.1", "10.81.2.1", "10.81.3.1"
+
+
+@pytest.fixture(scope="module")
+def fw_vmap_group():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": z,
+                    "router_if": f"r-{z}",
+                    "router_addr": f"{addr}/24",
+                    "ns_addr": f"{addr[:-1]}2/24",
+                    "gw": addr,
+                }
+                for z, addr in (
+                    ("za", GRP_ZA_ROUTER),
+                    ("zb", GRP_ZB_ROUTER),
+                    ("zc", GRP_ZC_ROUTER),
+                )
+            ]
+        )
+        harness.nft_apply(build(FIXTURES / "vmap-group")["router"])
+        harness.listen(None, 7000)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b08_group_expands_to_both_member_devices(fw_vmap_group):
+    # one map entry (the group name), two member devices: both zones must hit
+    # the same verdict chain; the non-member zone proves the expansion didn't
+    # widen into a wildcard.
+    assert fw_vmap_group.probe_tcp("za", GRP_ZA_ROUTER, 7000) == "connected"
+    assert fw_vmap_group.probe_tcp("zb", GRP_ZB_ROUTER, 7000) == "connected"
+    assert fw_vmap_group.probe_tcp("zc", GRP_ZC_ROUTER, 7000) == "timeout"

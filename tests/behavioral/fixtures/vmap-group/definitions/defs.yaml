@@ -1,0 +1,7 @@
+---
+# B08 fixture: one interface *group* with two member devices; the vmap entry
+# is written once against the group name and must expand to both members.
+interfaces:
+  ab_group: [r-za, r-zb]
+services:
+  svc: [7000/tcp]
