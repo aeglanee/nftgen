@@ -62,7 +62,7 @@ Small dedicated fixture policies (one concern each) under
 | B21 | counter (unnamed + named) | pass M packets on counted rule | `nft list counters`/ruleset shows ≥ M |
 | B22 | dport vmap service dispatch | ssh port vs metrics port to servers zone | each lands in its per-service chain (observed via that chain's counter) |
 | B23 | flowtable smoke | long-lived flow with `flow-offload` | flow uninterrupted; `nft list flowtables` shows ft; no functional regression. **Found a real bug:** `flow-offload` + `action:` in one rule → NFT_BREAK skips the verdict → handshake dies on `policy drop`. Build now rejects it (best-practices §8c) |
-| B24 | tcp-flags scrub (stretch — needs raw sockets/scapy) | crafted fin+syn segment | dropped + `bad_tcp` counter rises |
+| B24 | tcp-flags scrub | crafted fin+syn + null-scan segments (raw socket, no scapy) | dropped silent + `bad_tcp` rises; a normal SYN still replies |
 | B25 | log statement | structural only (assert rule renders; kernel log capture in ns is not portable) | n/a |
 | B26 | artifact reapply idempotence | `nft -f` the same artifact twice | second apply succeeds; ruleset identical (`nft list ruleset` stable) |
 

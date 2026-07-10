@@ -132,9 +132,14 @@ turn. Last updated: 2026-07-10.
   combined form at build time; docs carry the citation
   ([best-practices.md](best-practices.md) §8c). Exactly the class of
   failure the behavioral layer exists to catch. Suite **189**.
-- **⟶ Next:** B24 (crafted tcp-flags scrub — B04's raw-socket technique
-  applies) + B25 (log, structural), then the P01–P20 truth table over
-  example-poc, then R2 CI. PLAN §Roadmap.
+- **B24/B25 landed — §1 matrix complete (2026-07-10):** crafted TCP
+  segments (raw socket, arbitrary flags — no scapy) prove the scrub drops
+  syn+fin and null-scan silently while a normal SYN still replies, counted
+  via `bad_tcp`; the log rule proven non-terminal (log+counter+accept still
+  connects). All **B01–B26** green. Suite **191**.
+- **⟶ Next:** the P01–P20 PoC reachability truth table over
+  [example-poc/](../example-poc/) — the whole composed policy end-to-end
+  (includes + site overlay + groups), then R2 CI. PLAN §Roadmap.
 
 ## Decided
 

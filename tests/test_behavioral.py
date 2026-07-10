@@ -715,3 +715,63 @@ def test_b26_reapplying_the_artifact_is_idempotent(fw_statements):
     fw_statements.nft_apply(fw_statements.artifact)
     second = fw_statements.run(None, ["nft", "list", "ruleset"]).stdout
     assert _without_runtime_state(first) == _without_runtime_state(second)
+
+
+# --------------------------------------------------------------------------- #
+# B24/B25 — tcp-flags scrub + log statement (fixture: tcp-flags)
+# --------------------------------------------------------------------------- #
+
+TF_ROUTER, TF_CLIENT = "10.87.1.1", "10.87.1.2"
+
+
+@pytest.fixture(scope="module")
+def fw_tcp_flags():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": "za",
+                    "router_if": "r-za",
+                    "router_addr": f"{TF_ROUTER}/24",
+                    "ns_addr": f"{TF_CLIENT}/24",
+                    "gw": TF_ROUTER,
+                },
+            ]
+        )
+        harness.nft_apply(build(FIXTURES / "tcp-flags")["router"])
+        harness.listen(None, 7000)
+        harness.listen(None, 7005)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b24_crafted_bad_flags_dropped_and_counted(fw_tcp_flags):
+    before = _counter_packets(fw_tcp_flags, "bad_tcp")
+    # a normal SYN to the service draws a reply (SYN-ACK): the scrub is not a
+    # blanket drop.
+    assert fw_tcp_flags.send_tcp("za", TF_CLIENT, TF_ROUTER, 7000, ["syn"]) == "replied"
+    # null scan (no flags) and syn+fin are illegal combos: dropped, silent.
+    assert fw_tcp_flags.send_tcp("za", TF_CLIENT, TF_ROUTER, 7000, []) == "silent"
+    assert (
+        fw_tcp_flags.send_tcp("za", TF_CLIENT, TF_ROUTER, 7000, ["fin", "syn"])
+        == "silent"
+    )
+    assert _counter_packets(fw_tcp_flags, "bad_tcp") >= before + 2
+
+
+@requires_netns
+def test_b25_log_statement_is_non_terminal(fw_tcp_flags):
+    # the rule carries log + counter + accept; log/counter don't decide the
+    # verdict, so the connection still lands. The counter proves it matched
+    # (kernel log capture in a userns isn't portable — the structural proof
+    # that log renders and doesn't break the rule is what B25 targets).
+    before = _counter_packets(fw_tcp_flags, "logged_hits")
+    assert fw_tcp_flags.probe_tcp("za", TF_ROUTER, 7005) == "connected"
+    assert _counter_packets(fw_tcp_flags, "logged_hits") > before
+    assert (
+        'log prefix "logged-svc "'
+        in fw_tcp_flags.run(None, ["nft", "list", "ruleset"]).stdout
+    )

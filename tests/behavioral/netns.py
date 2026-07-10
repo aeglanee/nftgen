@@ -124,6 +124,26 @@ class Harness:
         """Raw-socket ICMP/ICMPv6 echo -> 'replied' | 'timeout'."""
         return self._rpc(op="ping", ns=ns, dst=dst, timeout=timeout)["result"]
 
+    def send_tcp(  # noqa: PLR0913 - a crafted segment needs its fields
+        self,
+        ns: str | None,
+        src: str,
+        dst: str,
+        dport: int,
+        flags: list[str],
+        timeout: float = 1.5,
+    ) -> str:
+        """Send one crafted TCP segment -> 'replied' | 'silent'."""
+        return self._rpc(
+            op="send_tcp",
+            ns=ns,
+            src=src,
+            dst=dst,
+            dport=dport,
+            flags=flags,
+            timeout=timeout,
+        )["result"]
+
     def run(self, ns: str | None, argv: list[str]) -> subprocess.CompletedProcess:
         resp = self._rpc(op="run", ns=ns, argv=argv)
         return subprocess.CompletedProcess(argv, resp["rc"], resp["out"], resp["err"])

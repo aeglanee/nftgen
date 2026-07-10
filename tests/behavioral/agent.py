@@ -26,6 +26,10 @@ Ops:
                                        binary needs /etc/protocols; raw
                                        sockets work as userns root)
                                        -> replied | timeout
+  {"op": "send_tcp", "ns": name|null, "src", "dst", "dport",
+      "flags": [...], "sport"?, "timeout"?}
+                                       raw crafted TCP segment (arbitrary
+                                       flags) -> replied | silent
   {"op": "run", "ns": name|null, "argv": […]}       escape hatch / debugging
   {"op": "quit"}
 """
@@ -314,6 +318,88 @@ def op_ping(req: dict) -> dict:
     return {"ok": True, "result": "timeout"}
 
 
+_TCP_FLAG_BITS = {
+    "fin": 0x01,
+    "syn": 0x02,
+    "rst": 0x04,
+    "psh": 0x08,
+    "ack": 0x10,
+    "urg": 0x20,
+}
+
+
+def op_send_tcp(req: dict) -> dict:
+    """Send one crafted TCP segment (arbitrary flags) and report whether the
+    target replied. Used for tcp-flags scrub tests: a legit SYN draws a
+    SYN-ACK or RST (a reply); a scrubbed segment draws silence.
+    -> replied | silent
+    """
+    ns = req.get("ns")
+    ns_pid = NAMESPACES[ns] if ns is not None else None
+    src, dst = req["src"], req["dst"]
+    dport = int(req["dport"])
+    sport = int(req.get("sport", 54321))
+    flags = 0
+    for f in req.get("flags", ["syn"]):
+        flags |= _TCP_FLAG_BITS[f]
+    timeout = float(req.get("timeout", 1.5))
+    reply_r, reply_w = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        os.close(reply_r)
+        os.dup2(reply_w, 1)
+        try:
+            if ns_pid is not None:
+                _setns_net(ns_pid)
+            seq = 1000
+            hdr = struct.pack(
+                "!HHIIBBHHH", sport, dport, seq, 0, 5 << 4, flags, 8192, 0, 0
+            )
+            pseudo = (
+                socket.inet_aton(src)
+                + socket.inet_aton(dst)
+                + struct.pack("!BBH", 0, 6, len(hdr))
+            )
+            hdr = struct.pack(
+                "!HHIIBBHHH",
+                sport,
+                dport,
+                seq,
+                0,
+                5 << 4,
+                flags,
+                8192,
+                _icmp_csum(pseudo + hdr),
+                0,
+            )
+            send = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+            recv = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+            recv.settimeout(timeout)
+            send.sendto(hdr, (dst, 0))
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                recv.settimeout(max(deadline - time.time(), 0.01))
+                data, addr = recv.recvfrom(2048)
+                ihl = (data[0] & 0x0F) * 4
+                tcp = data[ihl:]
+                # a reply from dst:dport back to our sport
+                if (
+                    addr[0] == dst
+                    and struct.unpack("!H", tcp[0:2])[0] == dport
+                    and struct.unpack("!H", tcp[2:4])[0] == sport
+                ):
+                    os.write(1, b"replied")
+                    os._exit(0)
+            os._exit(3)
+        except (TimeoutError, OSError):
+            os._exit(3)
+    os.close(reply_w)
+    _, status = os.waitpid(pid, 0)
+    got = os.read(reply_r, 16)
+    os.close(reply_r)
+    return {"ok": True, "result": "replied" if got == b"replied" else "silent"}
+
+
 def op_run(req: dict) -> dict:
     proc = _run(req.get("ns"), req["argv"])
     return {"ok": True, "rc": proc.returncode, "out": proc.stdout, "err": proc.stderr}
@@ -326,6 +412,7 @@ def main() -> int:
         "listen": op_listen,
         "probe": op_probe,
         "ping": op_ping,
+        "send_tcp": op_send_tcp,
         "run": op_run,
     }
     for raw in sys.stdin:

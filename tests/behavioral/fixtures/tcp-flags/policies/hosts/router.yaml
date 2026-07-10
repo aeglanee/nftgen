@@ -1,0 +1,43 @@
+---
+# tcp-flags scrub + log (testing-plan B24, B25).
+#   B24: crafted fin+syn and null-scan segments are dropped by the masked
+#        compares and attributed to the shared bad_tcp counter; a normal SYN
+#        to the same port still connects (the scrub isn't a blanket drop).
+#   B25: the `log:` statement is non-terminal — a rule carrying log + counter
+#        + accept still accepts, and the counter proves the rule matched.
+tables:
+  - family: inet
+    name: filter
+    counters:
+      - bad_tcp
+      - logged_hits
+    chains:
+      - name: input
+        hook: input
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - flags:
+              - match: none
+                mask: all
+            counter: bad_tcp
+            action: drop
+          - flags:
+              - match: [fin, syn]
+                mask: [fin, syn]
+            counter: bad_tcp
+            action: drop
+          - proto: tcp
+            dport: svc
+            action: accept
+          - proto: tcp
+            dport: logged
+            limit: 6/minute
+            log:
+              prefix: "logged-svc "
+              level: info
+            counter: logged_hits
+            action: accept

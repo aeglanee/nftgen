@@ -1,0 +1,8 @@
+---
+# B24/B25 fixture: tcp-flags scrub in front of an accepted service, plus a
+# logged-and-counted rule so the log statement is exercised on real traffic.
+interfaces:
+  zone_if: [r-za]
+services:
+  svc: [7000/tcp]
+  logged: [7005/tcp]

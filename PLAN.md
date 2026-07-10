@@ -22,20 +22,20 @@ The agreed order of work from here. Rationale and decisions live in
 
 ## Status
 
-- **Done (latest first):** B04–B23 + B26 behavioral (2026-07-10: ct-invalid
-  raw-ACK proof, vmap zone/pair/group dispatch, named-set membership, bogon
-  scrub with counter, concat no-bleed, live blocklist add/expire, NAT cluster
-  with saddr-preservation and snat peer proof, icmp v4+v6, limit/quota/
-  counters, dport vmap, flowtable, reapply idempotence — **and a real
-  flow-offload bug found + fixed**; suite 189);
+- **Done (latest first):** the full B01–B26 behavioral matrix (2026-07-10:
+  ct/default-drop, vmap zone/pair/group dispatch, named-set membership, bogon
+  scrub, concat no-bleed, live blocklist add/expire, NAT cluster with
+  saddr/snat peer proof, icmp v4+v6, limit/quota/counters, dport vmap,
+  flowtable, reapply idempotence, crafted tcp-flags scrub, log — **and a
+  real flow-offload bug found + fixed**; suite 191);
   Phases 0–6 (skeleton → defs → sets → rules/chains → host→`.nft` →
   `nft -c` → primitives A–E), Step 2 `build()`, Step 3a (sessrumnir role rewrite,
   two-play flow), and the **v0.2.0 strict authoring surface** (2026-07-05: unknown
   keys/names/empty groups fail the build; type-aware chain policy; loud `--check`;
   clean CLI errors — see TODO.md §Safety), and **v0.3.0** (wrapped large
   literals, named PoC fleet groups, netns harness B01–B03). **166 tests.**
-- **Not done:** behavioral matrix breadth (§1 matrix complete except B24/B25;
-  P01–P20 open), nftgen CI, Step 3b apply-rollback,
+- **Not done:** P01–P20 PoC reachability truth table (§1 primitive matrix
+  B01–B26 **complete**), nftgen CI, Step 3b apply-rollback,
   Step 4 molecule end-to-end, enterprise (bright-future) firewall integration.
 
 ## Roadmap — 2026-07-05 (authoritative TODO; follow in order)
@@ -71,11 +71,10 @@ targets now resolve site-overlay groups). Next: the harness itself.
 - [x] pytest fixture: 3-namespace topology (client ↔ router ↔ server), apply a
       fixture ruleset in the router ns, probe with `nc`/ping. (Done 2026-07-05:
       `tests/behavioral/`, rootless.)
-- [ ] Assert the *semantics* of each primitive: ct established/related return
-      path; default-drop; accepted dport reachable, others refused; ct
-      invalid; vmap dispatch incl. pairs/groups; named-set membership
-      (B01–B09 **done**); dnat rewrites; icmp policy; concat paired-flow
-      sets; limit/quota/counters; flowtables (B10+ **open**).
+- [x] Assert the *semantics* of each primitive: the full B01–B26 matrix is
+      green (ct, default-drop, vmap dispatch, sets, NAT, icmp v4+v6,
+      limit/quota/counters, flowtable, tcp-flags, log, idempotence). Done
+      2026-07-10 — and it caught the flow-offload/verdict footgun.
 - [x] Marked/skipped cleanly where namespaces are unavailable (mirrors
       `requires_nft`).
 - [ ] Then run the same harness over `example/` host policies (gateway dnat,
