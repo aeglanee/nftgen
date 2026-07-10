@@ -299,11 +299,19 @@ The index is dynamically allocated, and the same page warns not to use
 `iif` "for interfaces that are dynamically created and destroyed, eg.
 ppp0" [1]: delete + recreate an interface (PPP reconnect, WireGuard
 restart, USB NIC replug) and the rule silently stops matching until the
-ruleset is reloaded. That failure mode is why nftgen defaults to the name
-form; an opt-in index form for static-NIC, PPS-critical hosts is on the
-backlog ([TODO.md](../TODO.md)). Claims that `iifname` "performs system
-calls per packet" (seen in optimization writeups) are false — it is an
-in-kernel string compare.
+ruleset is reloaded. There's also a **load-order** cost: `iif "vlan100"`
+resolves the name to an index *at load time*, so the ruleset **fails to
+load** if the interface doesn't exist yet — which is a double-edged sword
+(it catches missing/typo'd interfaces at load, but is fragile to boot
+ordering). Claims that `iifname` "performs system calls per packet" (seen
+in optimization writeups) are false — it is an in-kernel string compare.
+
+**Both forms are available:** `iifname:`/`oifname:` (name, the robust
+default) and `iif:`/`oif:` (index, faster). Use the index form when the
+interfaces are statically named and always present — a wired router's
+VLANs and physical ports — and the name form for anything dynamic or
+where load ordering isn't guaranteed. They author identically
+(`iif: wan` vs `iifname: wan`); only the emitted keyword differs.
 
 ### 8b. Rate-limit your log rules
 

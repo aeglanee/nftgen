@@ -78,9 +78,10 @@ nft -c validation → primitives A–E). What's left, à la carte:
       `flags: [dynamic]` set (keys: saddr/daddr/iifname/oifname). Per-source
       log sampling (best-practices §8d) is now structured, not raw.
       Fail2ban-style throttling uses the same primitive.
-- [ ] **opt-in `iif`/`oif` index matching** — faster 32-bit compare for
-      static-NIC hosts; unsafe for dynamic interfaces (index changes on
-      recreate), so name form stays the default. See best-practices §8a.
+- [x] **opt-in `iif`/`oif` index matching** — done 2026-07-10. `iif:`/`oif:`
+      rule keys + vmap keys render the index form (`iif "wan0"`); name form
+      stays the default. Tradeoff (load-order, recreate) in best-practices §8a.
+      Not a concat field (that stays iifname — different set type).
 - [ ] **CI** — GitHub Actions: `pytest` + `nft -c` + `nftgen build example
       --check` + golden drift + `make lint` (PLAN §R2).
 

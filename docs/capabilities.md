@@ -50,7 +50,8 @@ The authoritative reference for what the generator turns YAML into, grounded in
 
 | Key | YAML | nft | Notes |
 | --- | --- | --- | --- |
-| `iifname` / `oifname` | `iifname: wan` | `iifname @wan` / `{ "wan0", … }` / `"wan0"` | named set or interface group (strict — unknown names error); one device inlines bare |
+| `iifname` / `oifname` | `iifname: wan` | `iifname @wan` / `{ "wan0", … }` / `"wan0"` | interface-*name* match (string, robust to load order); named set or interface group (strict — unknown names error); one device inlines bare |
+| `iif` / `oif` | `iif: wan` | `iif { "wan0", … }` / `iif "wan0"` | interface-*index* match (faster; nft resolves the name at load). Ruleset fails to load if the interface is absent and needs a reload if recreated — prefer for static-named interfaces. See best-practices §8a |
 | `saddr` / `daddr` | `saddr: webhosts` | `ip saddr @webhosts` | **family-aware**; named set, group, or IP/CIDR literal; renders once per common family |
 | `ct` | `ct: [established, related]` | `ct state established,related` | authored, never auto-injected |
 | `mark` | `mark: "0x1"` | `meta mark 0x1` | match an fwmark (set one with `set-mark:`) |

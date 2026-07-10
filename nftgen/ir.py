@@ -221,8 +221,10 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:  # noqa: PLR0912 - 
         raise BuildError(f"unknown concat set key(s) {sorted(unknown)}: {entry!r}")
     for f in fields:
         if f not in _CONCAT_FIELD_TYPE:
+            # iif/oif (index) aren't concat fields — a concat set over
+            # interfaces uses iifname/oifname (ifname type).
             hint = (
-                " (renamed in v0.4.0: iif->iifname, oif->oifname)"
+                " (concat sets use iifname/oifname, not the index form)"
                 if f in ("iif", "oif")
                 else ""
             )

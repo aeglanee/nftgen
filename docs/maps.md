@@ -5,7 +5,8 @@ matched value in **one** operation instead of a ladder of rules. There are two
 flavours, by *what the value is*. Every nft block below is `nft -c`-verified.
 
 > nftgen status: **inline verdict maps are done** (Phase 6D), keyed on
-> `iifname`/`oifname`/`proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`, plus
+> `iifname`/`oifname` (or the index form `iif`/`oif`) /
+> `proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`, plus
 > **concatenated** keys (`key: [iifname, oifname]`). **Inline dnat data
 > maps** are done
 > too; **named/reusable** maps (verdict + data) are the open

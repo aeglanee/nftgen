@@ -140,6 +140,8 @@ _KNOWN_RULE_KEYS = frozenset(
         "proto",
         "sport",
         "dport",
+        "iif",
+        "oif",
         "flags",
         "icmp-type",
         "meter",
@@ -212,12 +214,7 @@ class RuleRenderer:
         # (e.g. `dprot:` for `dport:`) and nft -c can't catch it (still valid nft).
         unknown = set(rule) - _KNOWN_RULE_KEYS
         if unknown:
-            hint = (
-                " (renamed in v0.4.0: iif->iifname, oif->oifname)"
-                if unknown & {"iif", "oif"}
-                else ""
-            )
-            raise BuildError(f"unknown rule key(s) {sorted(unknown)}{hint}: {rule!r}")
+            raise BuildError(f"unknown rule key(s) {sorted(unknown)}: {rule!r}")
         if "raw" in rule:
             if len(rule) != 1:
                 raise BuildError(f"`raw:` must be a rule's only key: {rule!r}")
@@ -250,6 +247,14 @@ class RuleRenderer:
                     parts.append(f"iifname {self._iface(rule['iifname'])}")
                 if "oifname" in rule:
                     parts.append(f"oifname {self._iface(rule['oifname'])}")
+                # iif/oif match the interface *index* (resolved from the name at
+                # load): faster, but the ruleset fails to load if the interface
+                # is absent, and a recreated interface needs a reload. Prefer
+                # for static-named interfaces; see docs/best-practices.md §8a.
+                if "iif" in rule:
+                    parts.append(f"iif {self._iface(rule['iif'])}")
+                if "oif" in rule:
+                    parts.append(f"oif {self._iface(rule['oif'])}")
                 if "saddr" in rule:
                     parts.append(f"{fam} saddr {addr['saddr'][fam]}")
                 if "daddr" in rule:
@@ -469,6 +474,8 @@ class RuleRenderer:
     _VMAP_KEYS = {
         "iifname": "iifname",
         "oifname": "oifname",
+        "iif": "iif",  # interface index (see iif/oif note in render)
+        "oif": "oif",
         "proto": "meta l4proto",
         "dport": "th dport",
         "sport": "th sport",  # transport-agnostic ports
@@ -485,12 +492,7 @@ class RuleRenderer:
             )
         unknown = set(spec) - {"key", "map"}
         if unknown:
-            hint = (
-                " (renamed in v0.4.0: iif->iifname, oif->oifname)"
-                if unknown & {"iif", "oif"}
-                else ""
-            )
-            raise BuildError(f"unknown vmap key(s) {sorted(unknown)}{hint}: {spec!r}")
+            raise BuildError(f"unknown vmap key(s) {sorted(unknown)}: {spec!r}")
         key = spec.get("key")
         if isinstance(key, list):  # concatenated key
             return self._concat_vmap(spec, key)
@@ -604,7 +606,7 @@ class RuleRenderer:
 
     def _vmap_lit_tokens(self, keytype: str, value) -> list:
         """Non-address vmap element tokens for one key — groups and services expand."""
-        if keytype in ("iifname", "oifname"):
+        if keytype in ("iifname", "oifname", "iif", "oif"):
             if value in self.defs.interfaces:
                 devices = self.defs.interface(value)
                 if not devices:

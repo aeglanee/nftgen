@@ -25,6 +25,33 @@ def test_iif_vmap():
     ]
 
 
+def test_iif_index_vmap():
+    # the index form dispatches too — same names (nft resolves at load), keyword iif
+    rule = {
+        "vmap": {
+            "key": "iif",
+            "map": {"wan0": {"jump": "wan_input"}, "lan0": {"jump": "lan_input"}},
+        }
+    }
+    assert RD.render(rule) == [
+        'iif vmap { "wan0" : jump wan_input, "lan0" : jump lan_input }'
+    ]
+
+
+def test_concat_iif_oif_index_vmap():
+    rd = RuleRenderer(
+        Definitions.from_mappings({"interfaces": {"wan0": ["wan0"], "lan0": ["lan0"]}}),
+        {},
+    )
+    rule = {
+        "vmap": {
+            "key": ["iif", "oif"],
+            "map": [{"match": ["lan0", "wan0"], "jump": "fwd"}],
+        }
+    }
+    assert rd.render(rule) == ['iif . oif vmap { "lan0" . "wan0" : jump fwd }']
+
+
 def test_iif_vmap_unknown_group_errors():
     with pytest.raises(BuildError, match="not a known interface group"):
         R.render({"vmap": {"key": "iifname", "map": {"wan0": {"jump": "wan_input"}}}})

@@ -162,7 +162,8 @@ tables:
 A rule is a small mapping of **match keys** + an **action** (the recommended
 form), or a `raw:` string for full nft power.
 
-Match keys: `iifname` / `oifname` (interface), `saddr` / `daddr` (address),
+Match keys: `iifname` / `oifname` (interface name) or `iif` / `oif`
+(interface index — faster, load-order-sensitive), `saddr` / `daddr` (address),
 `proto`, `sport` / `dport` (service or port), `ct` (state list),
 `counter` (bool), `log` (bool/opts). `action`: `accept` / `drop` / `reject` /
 `masquerade`, or a mapping — `jump: chain` / `goto: chain` /

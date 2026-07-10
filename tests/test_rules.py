@@ -336,9 +336,17 @@ def test_chain_needs_name():
         build_chain({"hook": "input"}, R)
 
 
-def test_renamed_iface_keys_hint():
+def test_iif_oif_index_match():
+    # iif/oif render the index form (nft resolves the name at load); groups
+    # expand like the name form.
     r = RuleRenderer(DEFS, {})
-    with pytest.raises(BuildError, match="iif->iifname"):
-        r.render({"iif": "wan", "action": "accept"})
-    with pytest.raises(BuildError, match="oif->oifname"):
-        r.render({"oif": "wan", "action": "accept"})
+    assert r.render({"iif": "lan_if", "action": "accept"}) == ['iif "lan0" accept']
+    assert r.render({"oif": "wan", "action": "accept"}) == [
+        'oif { "wan0", "wwan0" } accept'
+    ]
+    assert r.render({"iif": "lan_if", "oif": "wan", "action": "accept"}) == [
+        'iif "lan0" oif { "wan0", "wwan0" } accept'
+    ]
+    # a typo'd interface group still fails loudly
+    with pytest.raises(BuildError, match="unknown interface group 'nope'"):
+        r.render({"iif": "nope", "action": "accept"})
