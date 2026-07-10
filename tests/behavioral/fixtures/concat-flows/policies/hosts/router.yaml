@@ -1,0 +1,25 @@
+---
+# Concat paired flows (testing-plan B11): forward allows exactly
+# A->server:9000 and B->server:9001 as tuples. A->9001 / B->9000 are the
+# cartesian cross-combinations and must time out.
+tables:
+  - family: inet
+    name: filter
+    sets:
+      - name: flows
+        concat: [saddr, daddr, dport]
+        proto: tcp
+        tuples:
+          - [client_a, server, svc_a]
+          - [client_b, server, svc_b]
+    chains:
+      - name: forward
+        hook: forward
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - set: flows
+            action: accept

@@ -1,0 +1,14 @@
+---
+# B11 fixture: two clients, one server zone, two services. The concat set
+# holds exactly two (saddr, daddr, dport) tuples — the *crossed* combinations
+# must not pass (that would be cartesian bleed).
+networks:
+  client_a: [10.84.1.2]
+  client_b: [10.84.2.2]
+  server: [10.84.3.2]
+interfaces:
+  za_if: [r-za]
+  zb_if: [r-zb]
+services:
+  svc_a: [9000/tcp]
+  svc_b: [9001/tcp]

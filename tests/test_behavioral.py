@@ -394,3 +394,58 @@ def test_b10_bogon_saddr_dropped_and_counted(fw_bogon):
     # …so the rfc1918-sourced probe dying proves the scrub rule, counted.
     assert fw_bogon.probe_tcp("wan", BOGON_SPOOF_ROUTER, 7000) == "timeout"
     assert _counter_packets(fw_bogon, "bogon_drops") > before
+
+
+# --------------------------------------------------------------------------- #
+# B11 — concat set paired flows, no cartesian bleed (fixture: concat-flows)
+# --------------------------------------------------------------------------- #
+
+FLOWS_SERVER = "10.84.3.2"
+
+
+@pytest.fixture(scope="module")
+def fw_concat_flows():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": "za",
+                    "router_if": "r-za",
+                    "router_addr": "10.84.1.1/24",
+                    "ns_addr": "10.84.1.2/24",
+                    "gw": "10.84.1.1",
+                },
+                {
+                    "name": "zb",
+                    "router_if": "r-zb",
+                    "router_addr": "10.84.2.1/24",
+                    "ns_addr": "10.84.2.2/24",
+                    "gw": "10.84.2.1",
+                },
+                {
+                    "name": "zs",
+                    "router_if": "r-zs",
+                    "router_addr": "10.84.3.1/24",
+                    "ns_addr": f"{FLOWS_SERVER}/24",
+                    "gw": "10.84.3.1",
+                },
+            ]
+        )
+        harness.nft_apply(build(FIXTURES / "concat-flows")["router"])
+        harness.listen("zs", 9000)
+        harness.listen("zs", 9001)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b11_concat_tuples_exact_no_cartesian_bleed(fw_concat_flows):
+    # exact tuples pass…
+    assert fw_concat_flows.probe_tcp("za", FLOWS_SERVER, 9000) == "connected"
+    assert fw_concat_flows.probe_tcp("zb", FLOWS_SERVER, 9001) == "connected"
+    # …the crossed combinations — live listeners waiting — must not:
+    # independent matches would have allowed both of these.
+    assert fw_concat_flows.probe_tcp("za", FLOWS_SERVER, 9001) == "timeout"
+    assert fw_concat_flows.probe_tcp("zb", FLOWS_SERVER, 9000) == "timeout"
