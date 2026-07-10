@@ -118,6 +118,8 @@ Behavioral tests assert *traffic outcomes only* — never text.
    JSON-line driven from pytest; probes discriminate
    connected/refused/timeout and the suite self-validates all three).
    B01–B03 green in ~5s; skips cleanly where userns/veth/nft/ct are missing.
+   **B04–B09 landed 2026-07-10** (ct invalid via raw ACK + counter; vmap
+   zone/pair/group dispatch; named-set membership).
    Note: iproute2 7.x needs `ip link add name X type veth …` (explicit
    `name`).
 2. §1 matrix, cheapest first; B24 last (needs packet crafting).

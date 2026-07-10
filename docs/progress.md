@@ -2,7 +2,7 @@
 
 Durable orientation: where nftgen is, what's decided, what's next. The
 conversation holds nuance; this holds the map. Update on milestones, not every
-turn. Last updated: 2026-07-09.
+turn. Last updated: 2026-07-10.
 
 ## Status
 
@@ -94,8 +94,15 @@ turn. Last updated: 2026-07-09.
   the build with a rename hint. Frees `iif:`/`oif:` for the queued opt-in
   index matching (TODO). sessrumnir's fixtures need the same rename when
   its pin moves past v0.3.0.
-- **⟶ Next:** §1 matrix breadth (B04+), then the P-matrix over
-  example-poc, then R2 CI (venv half already done). PLAN §Roadmap.
+- **B04–B09 behavioral landed (2026-07-10):** ct invalid proven with a
+  hand-packed out-of-state ACK (raw socket as userns root;
+  `nf_conntrack_tcp_loose=0` — default *loose* pickup would call it NEW)
+  plus named-counter attribution; vmap dispatch per zone, unlisted-zone
+  fall-through, directional `[iifname, oifname]` pairs, group expansion;
+  `@members` set membership. Four new one-concern fixtures. Suite **173**
+  (167 + skips-free on boxes with nft on PATH).
+- **⟶ Next:** §1 matrix breadth (B10+ — sets/NAT/statements), then the
+  P-matrix over example-poc, then R2 CI. PLAN §Roadmap.
 
 ## Decided
 

@@ -22,14 +22,16 @@ The agreed order of work from here. Rationale and decisions live in
 
 ## Status
 
-- **Done:** Phases 0–6 (skeleton → defs → sets → rules/chains → host→`.nft` →
+- **Done (latest first):** B04–B09 behavioral (2026-07-10: ct-invalid raw-ACK
+  proof, vmap zone/pair/group dispatch, named-set membership; suite 173);
+  Phases 0–6 (skeleton → defs → sets → rules/chains → host→`.nft` →
   `nft -c` → primitives A–E), Step 2 `build()`, Step 3a (sessrumnir role rewrite,
   two-play flow), and the **v0.2.0 strict authoring surface** (2026-07-05: unknown
   keys/names/empty groups fail the build; type-aware chain policy; loud `--check`;
   clean CLI errors — see TODO.md §Safety), and **v0.3.0** (wrapped large
   literals, named PoC fleet groups, netns harness B01–B03). **166 tests.**
-- **Not done:** behavioral matrix breadth (harness live, B01–B03 green;
-  B04+ and P01–P20 open), nftgen CI, Step 3b apply-rollback,
+- **Not done:** behavioral matrix breadth (harness live, B01–B09 green;
+  B10+ and P01–P20 open), nftgen CI, Step 3b apply-rollback,
   Step 4 molecule end-to-end, enterprise (bright-future) firewall integration.
 
 ## Roadmap — 2026-07-05 (authoritative TODO; follow in order)
@@ -66,9 +68,10 @@ targets now resolve site-overlay groups). Next: the harness itself.
       fixture ruleset in the router ns, probe with `nc`/ping. (Done 2026-07-05:
       `tests/behavioral/`, rootless.)
 - [ ] Assert the *semantics* of each primitive: ct established/related return
-      path; default-drop; accepted dport reachable, others refused (B01–B03
-      **done**); dnat port-forward rewrites; vmap dispatch (per-interface
-      chains hit); icmp policy; concat-set pair matching (B04+ **open**).
+      path; default-drop; accepted dport reachable, others refused; ct
+      invalid; vmap dispatch incl. pairs/groups; named-set membership
+      (B01–B09 **done**); dnat rewrites; icmp policy; concat paired-flow
+      sets; limit/quota/counters; flowtables (B10+ **open**).
 - [x] Marked/skipped cleanly where namespaces are unavailable (mirrors
       `requires_nft`).
 - [ ] Then run the same harness over `example/` host policies (gateway dnat,

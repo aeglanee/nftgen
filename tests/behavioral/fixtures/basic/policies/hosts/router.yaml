@@ -6,6 +6,8 @@
 tables:
   - family: inet
     name: filter
+    counters:
+      - invalid_hits
     chains:
       - name: input
         hook: input
@@ -16,6 +18,7 @@ tables:
           - ct: [established, related]
             action: accept
           - ct: [invalid]
+            counter: invalid_hits
             action: drop
           - iifname: lan_if
             saddr: lan_net
@@ -37,6 +40,7 @@ tables:
           - ct: [established, related]
             action: accept
           - ct: [invalid]
+            counter: invalid_hits
             action: drop
           - iifname: lan_if
             oifname: wan_if

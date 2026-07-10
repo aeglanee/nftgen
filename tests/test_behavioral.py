@@ -7,6 +7,9 @@ as a firewall drop.
 """
 
 import pathlib
+import re
+import sys
+import time
 
 import pytest
 
@@ -274,3 +277,65 @@ def test_b09_named_set_membership(fw_set_member):
     # only @members membership differs between the two source addresses.
     assert fw_set_member.probe_tcp("za", MEMBER_ROUTER, 7000) == "connected"
     assert fw_set_member.probe_tcp("zb", NONMEMBER_ROUTER, 7000) == "timeout"
+
+
+# --------------------------------------------------------------------------- #
+# B04 — ct invalid: out-of-state ACK is dropped and counted (fixture: basic)
+# --------------------------------------------------------------------------- #
+
+# Build one bare TCP ACK (no conntrack entry) and send it raw. Runs as root
+# inside the wan zone namespace, where CAP_NET_RAW is held over the netns.
+_ACK_SCRIPT = r"""
+import socket, struct, random
+
+SRC, DST, SPORT, DPORT = "10.77.2.2", "10.77.2.1", 45555, 22
+
+def csum(data):
+    if len(data) % 2:
+        data += b"\0"
+    s = sum(struct.unpack("!%dH" % (len(data) // 2), data))
+    s = (s >> 16) + (s & 0xFFFF)
+    s += s >> 16
+    return (~s) & 0xFFFF
+
+seq, ack = random.randint(0, 2**32 - 1), random.randint(0, 2**32 - 1)
+hdr = struct.pack("!HHIIBBHHH", SPORT, DPORT, seq, ack, 5 << 4, 0x10, 8192, 0, 0)
+pseudo = socket.inet_aton(SRC) + socket.inet_aton(DST) + struct.pack("!BBH", 0, 6, len(hdr))
+hdr = struct.pack(
+    "!HHIIBBHHH", SPORT, DPORT, seq, ack, 5 << 4, 0x10, 8192, csum(pseudo + hdr), 0
+)
+s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+s.sendto(hdr, (DST, 0))
+print("sent")
+"""
+
+
+def _invalid_hits(fw) -> int:
+    r = fw.run(None, ["nft", "list", "counter", "inet", "filter", "invalid_hits"])
+    assert r.returncode == 0, r.stderr
+    m = re.search(r"packets (\d+)", r.stdout)
+    assert m, r.stdout
+    return int(m.group(1))
+
+
+@requires_netns
+def test_b04_out_of_state_ack_is_invalid_dropped_and_counted(fw):
+    # Default nf_conntrack_tcp_loose=1 classifies a bare ACK as NEW (pickup);
+    # disable it so window tracking marks the ACK INVALID, as on a real router.
+    r = fw.run(
+        None,
+        ["sh", "-c", "echo 0 > /proc/sys/net/netfilter/nf_conntrack_tcp_loose"],
+    )
+    if r.returncode != 0:
+        pytest.skip("nf_conntrack_tcp_loose not writable in this userns")
+
+    before = _invalid_hits(fw)
+    r = fw.run("wan", [sys.executable, "-c", _ACK_SCRIPT])
+    assert r.returncode == 0, r.stderr
+
+    deadline = time.time() + 3
+    hits = _invalid_hits(fw)
+    while hits <= before and time.time() < deadline:
+        time.sleep(0.1)
+        hits = _invalid_hits(fw)
+    assert hits > before
