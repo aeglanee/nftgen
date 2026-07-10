@@ -1,8 +1,0 @@
----
-# Conntrack-early skeleton (best-practices §1): the first rules of every
-# stateful base chain. Authored here, included there — never auto-injected.
-rules:
-  - ct: [established, related]
-    action: accept
-  - ct: [invalid]
-    action: drop

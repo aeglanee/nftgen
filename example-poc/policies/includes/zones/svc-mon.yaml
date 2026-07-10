@@ -1,7 +1,0 @@
----
-# Metrics scrape: only the fleet monitors reach node_exporter.
-rules:
-  - saddr: monitors
-    proto: tcp
-    dport: node_exporter
-    action: accept

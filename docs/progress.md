@@ -53,7 +53,7 @@ turn. Last updated: 2026-07-10.
 - **R1 specced + fixture built (2026-07-05):** behavioral test matrix in
   [testing-plan.md](testing-plan.md) (B01–B26 primitive semantics, P01–P20
   PoC reachability truth table, netns harness design); showcase fixture
-  [../example-poc/](../example-poc/) — a two-site best-practice router pair
+  `example-poc/` (later retired for example-fleet) — a two-site pair
   (zone vmaps incl. `[iif, oif]` pair dispatch, dport service dispatch, dnat
   data map, concat paired-flows set, live blocklist, site overlays with
   divergent sites, static-snat vs masquerade) — README-narrated, `nft -c`
@@ -148,11 +148,13 @@ turn. Last updated: 2026-07-10.
   dnat. Real traffic v4, hygiene dual-stack. Generates + `nft -c` clean +
   drift-pinned (`tests/test_fleet.py`, 9 tests); suite **200**. Hygiene
   lists from RFC/IANA research (caught a missing 192.168/16 in review).
-  Replaces example-poc's showcase role; **retiring example-poc + choosing
-  the P-matrix fixture is a flagged review step, not yet done**.
-- **⟶ Next (decide first):** point the P01–P20 truth table at example-fleet
-  and retire example-poc, then implement P-rows on the current single-router
-  harness + the one NFLOG logging test; stage the multi-router cross-site
+- **example-poc retired (2026-07-10):** example-fleet takes over the
+  showcase + P-matrix-fixture role; `example-poc/` + `test_poc.py` removed,
+  the P01–P22 truth table ([testing-plan.md](testing-plan.md) §2) re-derived
+  against the fleet scenarios, `.gitignore` un-ignores the drift-pinned
+  `example-fleet/generated/`. Suite **194** (poc's 6 tests removed).
+- **⟶ Next:** implement P01–P22 over example-fleet on the single-router
+  harness + the one NFLOG log test (P22); stage the multi-router cross-site
   harness last. Then R2 CI. PLAN §Roadmap / reference-fleet.md.
 
 ## Decided

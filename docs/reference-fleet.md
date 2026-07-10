@@ -10,10 +10,9 @@ policy per site** specialised only by the `site:` overlay (cleaner and a
 stronger overlay demo than 6 near-duplicate HA host files — the HA pair
 shares the policy); icmp after ct, before dispatch; log metering via
 `raw:` (a structured `meter:` key is queued — see Findings); dmz added as
-a first-class zone. **Still open:** whether to *retire* `example-poc/`
-(this replaces its showcase role, but that touches `test_poc.py` + the
-P-matrix fixture choice) and the cross-site behavioral harness — both
-flagged below.
+a first-class zone; `example-poc/` **retired** (example-fleet took over
+its showcase + P-matrix role). **Still open:** the cross-site behavioral
+harness — flagged below.
 
 ## Why this exists
 
@@ -224,10 +223,7 @@ fleet groups, and the site overlays together.
 
 ## Still-open decisions
 
-1. **Retire `example-poc/`?** This replaces its showcase role, but doing so
-   means rewriting `test_poc.py`, and choosing which project the P01–P20
-   truth table runs against. *Rec: point the P-matrix at `example-fleet/`
-   and retire example-poc — as a reviewed step, not done here.*
-2. **Cross-site behavioral** needs a multi-router harness (three router
-   namespaces over transit). *Rec: build the reference + single-site P
-   rows + the NFLOG log test first; stage the multi-router harness last.*
+1. **Cross-site behavioral** needs a multi-router harness (three router
+   namespaces over transit). *Rec: build the single-site P rows + the NFLOG
+   log test first (they cover most of P01–P22); stage the multi-router
+   harness last.* `example-poc/` retirement — **done** (2026-07-10).

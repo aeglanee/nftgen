@@ -7,7 +7,9 @@ dist/
 .venv/
 venv/
 .pytest_cache/
-# generated rulesets (regenerate from source); golden test fixtures are kept
+# generated rulesets are transient, EXCEPT the drift-pinned example projects
+# whose committed render is the golden their drift tests compare against.
 **/generated/
+!example-fleet/generated/
 # local Claude settings stay local
 .claude/settings.local.json

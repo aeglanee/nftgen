@@ -68,34 +68,39 @@ Small dedicated fixture policies (one concern each) under
 
 ## §2 PoC firewall end-to-end (reachability truth table)
 
-Fixture: [`example-poc/`](../example-poc/) — the best-practice showcase router
-pair (see its README). The harness stands up **poc-gw1** (site1) with one veth
-per zone and walks the matrix. This is the "does the whole composed policy
-mean what we think" layer — every row exercises includes + site overlay +
-groups end-to-end.
+Fixture: [`example-fleet/`](../example-fleet/) — the realistic 3-site
+reference (see its README + [reference-fleet.md](reference-fleet.md)). The
+harness stands up **hq-r** with one veth per zone (users / services / dmz /
+nwm / transit / wan) and walks the matrix. This is the "does the whole
+composed policy mean what we think" layer — every row exercises the
+skeleton + includes + site overlay + fleet sets end-to-end. Cross-site
+*arrival* is tested by sourcing traffic from the transit veth with a branch
+address; true two-router end-to-end is the staged multi-router harness.
 
 | ID | Flow | Expected |
 | --- | --- | --- |
-| P01 | users → inet: web/dns/ntp | accept |
-| P02 | users → inet: anything else (e.g. 25/tcp) | drop |
-| P03 | iot → inet: ntp | accept |
-| P04 | iot → inet: web | drop (iot egress is ntp-only) |
-| P05 | iot → users (any) | drop (pair not in vmap) |
-| P06 | users → servers: web, ssh, node_exporter | accept |
-| P07 | users → dmz: web, ssh | accept |
-| P08 | dmz → users (any) | drop (no return pair; only ct-established) |
-| P09 | wan → router input (any port) | drop (input vmap → in_wan: bogons only, then policy) |
-| P10 | wan spoofed rfc1918 saddr → forward | drop + `bogon_drops` counter |
-| P11 | wan → :80 / :443 | dnat → dmz web host, forward allowlisted, served |
-| P12 | wan → :2222 | dnat → dmz jump host ssh |
-| P13 | wan → :23 | drop (unmapped; nat falls through, forward drops) |
-| P14 | mgmt → router: ssh/snmp from `local_mgmt` | accept |
-| P15 | admins (either site's admin host) → router ssh | accept (fleet `admins` group) |
-| P16 | users@site1 → servers@site2 via transit link | accept (`all_users`→`all_servers` shared include) |
-| P17 | monitoring tuple (mon host → dmz web :9100) | accept via concat set; same host to :9101 drops |
-| P18 | lan egress source seen by wan peer | == site1 `local_snat_ip` (static snat); gw2 variant: masqueraded |
-| P19 | runtime blocklist add of a users IP | that client loses all reachability until timeout |
-| P20 | icmp: users can ping router + inet; wan echo to router rate-limited | per icmp include |
+| P01 | users → local services: web/dns/ntp | accept |
+| P02 | users → local services: ssh (22) | drop (only nwm manages services) |
+| P03 | users → local services: postgres | accept (site-local app) |
+| P04 | users → local dmz: web | accept |
+| P05 | users → local dmz: ssh | drop (dmz exposes only web to users) |
+| P06 | users → inet: web/dns/ntp | accept (egress, masqueraded) |
+| P07 | users → inet: smtp (25) | drop + `fwd-users-inet-drop` log |
+| P08 | dmz → users (any) | drop (reverse pair not in vmap; only ct-established) |
+| P09 | nwm → local services: ssh/snmp | accept (management) |
+| P10 | `hq_monitor` → local services: metrics (9100) | accept (metrics pull) |
+| P11 | nwm → local services: web | drop (mgmt ports only) |
+| P12 | wan → router input (any port) | drop (input allows only nwm mgmt) |
+| P13 | wan spoofed rfc1918 saddr → forward | drop + `bogon_drops` counter |
+| P14 | wan crafted syn+fin → forward | drop + `bad_tcp` counter |
+| P15 | wan → :80 / :443 | dnat → local dmz web host, forward-allowed, served |
+| P16 | wan → :23 (unmapped) | drop (nat falls through, filter drops) |
+| P17 | transit `all_users` saddr → `hq_central` :ldaps | accept (fleet-wide central directory) |
+| P18 | transit `br1_app` → `hq_db` :postgres | accept; other saddr → `hq_db` drops |
+| P19 | lan egress source seen by wan peer | == router wan addr (masquerade), not the client |
+| P20 | runtime blocklist add of a users IP | that client loses reachability until timeout |
+| P21 | icmp echo v4 to router (rate-limited); crafted bad flags still dropped | per icmp/scrub includes |
+| P22 | a dropped flow emits its attributed log | NFLOG group receives `fwd-<pair>-drop` (the troubleshoot story) |
 
 ## §3 What layers 1–3 already pin (don't re-test behaviorally)
 

@@ -61,12 +61,12 @@ as the one architectural gap — "aerleon-style rule generator planned" = us).
 
 The real-trust layer `nft -c` can't give. No VM needed: user+net namespaces
 (`unshare -rn` already proven here) + veth pairs.
-**Progress 2026-07-05:** the *what* is specced — full behavioral matrix in
-[docs/testing-plan.md](docs/testing-plan.md) (B01–B26 primitives + P01–P20
-PoC truth table), and the showcase fixture exists:
-[example-poc/](example-poc/) (two-site best-practice pair, README-narrated,
-built + `nft -c` clean + drift-pinned by `tests/test_poc.py`; bare nat
-targets now resolve site-overlay groups). Next: the harness itself.
+**Progress:** the *what* is specced — full behavioral matrix in
+[docs/testing-plan.md](docs/testing-plan.md) (B01–B26 primitives + P01–P22
+truth table). B01–B26 are **done** (2026-07-10). The composed fixture is
+[example-fleet/](example-fleet/) — the realistic 3-site reference
+(README-narrated, `nft -c` clean, drift-pinned by `tests/test_fleet.py`);
+it replaced the retired `example-poc/`. Next: the P-matrix over it.
 
 - [x] pytest fixture: 3-namespace topology (client ↔ router ↔ server), apply a
       fixture ruleset in the router ns, probe with `nc`/ping. (Done 2026-07-05:
@@ -77,8 +77,9 @@ targets now resolve site-overlay groups). Next: the harness itself.
       2026-07-10 — and it caught the flow-offload/verdict footgun.
 - [x] Marked/skipped cleanly where namespaces are unavailable (mirrors
       `requires_nft`).
-- [ ] Then run the same harness over `example/` host policies (gateway dnat,
-      router1/2 zones) — golden *behavior*, not just golden text.
+- [ ] **P01–P22 over example-fleet** (§2 truth table): the composed policy
+      end-to-end on the single-router harness + one NFLOG log test; the
+      cross-site two-router harness is staged last (reference-fleet.md).
 
 ### R2 — nftgen CI + last safety guard
 
