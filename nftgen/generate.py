@@ -12,7 +12,7 @@ import pathlib
 import yaml
 
 from nftgen.definitions import Definitions
-from nftgen.ir import BuildError, Table, build_sets
+from nftgen.ir import BuildError, Table, build_sets, check_nft_name
 from nftgen.rules import RuleRenderer, build_chain, build_flowtables
 
 # Strict authoring surface: an unknown key is a typo, and a typo'd `tables:` or
@@ -93,6 +93,8 @@ def generate(
         sets_spec = _resolve_list(tspec.get("sets", []), "sets", include_base)
         sets = build_sets(sets_spec, defs)
         counters = list(tspec.get("counters", []))
+        for c in counters:
+            check_nft_name(c, "counter")
         renderer = RuleRenderer(defs, {s.name: s for s in sets}, counters=set(counters))
 
         chains = []

@@ -18,6 +18,101 @@ _PORT_LITERAL = re.compile(r"^\d+(-\d+)?$")  # port or port-range
 SET_INDENT = "    "
 BODY_INDENT = "        "
 
+# nftables scanner keywords that break when used as an object identifier
+# (set / map / chain / counter / flowtable name) — nft emits a cryptic parse
+# error pointing at the *generated* file, so catch it here against the YAML.
+# Empirically confirmed against `nft -c`; not exhaustive — `nft -c`/`--check`
+# stays the complete backstop for anything version-specific this misses.
+# (Contextual words like input/forward/nat/last/state are valid names and are
+# deliberately absent.)
+_NFT_KEYWORDS = frozenset(
+    {
+        "ip",
+        "ip6",
+        "inet",
+        "arp",
+        "tcp",
+        "udp",
+        "sctp",
+        "dccp",
+        "ah",
+        "esp",
+        "comp",
+        "icmp",
+        "icmpv6",
+        "igmp",
+        "th",
+        "meta",
+        "ct",
+        "rt",
+        "fib",
+        "fwd",
+        "dup",
+        "numgen",
+        "jhash",
+        "symhash",
+        "osf",
+        "socket",
+        "exthdr",
+        "frag",
+        "vlan",
+        "ether",
+        "map",
+        "vmap",
+        "set",
+        "element",
+        "flow",
+        "flowtable",
+        "counter",
+        "quota",
+        "limit",
+        "log",
+        "reject",
+        "snat",
+        "dnat",
+        "masquerade",
+        "redirect",
+        "tproxy",
+        "accept",
+        "drop",
+        "queue",
+        "continue",
+        "return",
+        "jump",
+        "goto",
+        "chain",
+        "table",
+        "rule",
+        "mark",
+        "ecn",
+        "secmark",
+        "notrack",
+        "synproxy",
+        "typeof",
+        "size",
+        "timeout",
+        "flags",
+        "type",
+        "hook",
+        "device",
+        "priority",
+        "policy",
+        "comment",
+    }
+)
+
+
+def check_nft_name(name, kind: str) -> None:
+    """Reject a reserved nftables keyword used as an object name (§strict
+    authoring surface: fail early with a clear message instead of leaking a
+    cryptic nft parse error at deploy time)."""
+    if name in _NFT_KEYWORDS:
+        raise BuildError(
+            f"{kind} name {name!r} is a reserved nftables keyword — rename it "
+            f"(it would render to a ruleset nft can't parse)"
+        )
+
+
 _WRAP_AT = 4  # a { … } literal with this many entries renders one per line
 
 
@@ -147,6 +242,7 @@ def build_sets(sets_spec: list, defs: Definitions) -> list[NamedSet]:
                 out.append(_bare_set(entry))
         else:
             raise BuildError(f"set entry must be a name or a mapping, got {entry!r}")
+        check_nft_name(out[-1].name, "set")
     return out
 
 

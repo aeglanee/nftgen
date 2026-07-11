@@ -22,6 +22,7 @@ from nftgen.ir import (
     Chain,
     Flowtable,
     NamedSet,
+    check_nft_name,
     render_literal,
 )
 
@@ -775,6 +776,7 @@ def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:
             raise BuildError(f"unknown flowtable key(s) {sorted(unknown)}: {spec!r}")
         if "name" not in spec:
             raise BuildError(f"flowtable needs a `name:`: {spec!r}")
+        check_nft_name(spec["name"], "flowtable")
         devices: list[str] = []
         for dev in spec.get("devices", []):
             if dev not in defs.interfaces:
@@ -802,6 +804,7 @@ def build_chain(spec: dict, renderer: RuleRenderer) -> Chain:
         raise BuildError(f"unknown chain key(s) {sorted(unknown)}: {spec!r}")
     if "name" not in spec:
         raise BuildError(f"chain needs a `name:`: {spec!r}")
+    check_nft_name(spec["name"], "chain")
     rule_lines: list[str] = []
     for r in spec.get("rules", []):
         if isinstance(r, dict) and "include" in r:

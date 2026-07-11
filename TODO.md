@@ -37,9 +37,11 @@ nft -c validation → primitives A–E). What's left, à la carte:
       - CLI prints `nftgen: error: <msg>` (rc 1) for authoring mistakes instead
         of a traceback.
 
-- [ ] **reject nft-keyword set/map names** — a set/map named after an nft keyword
-      (`fwd`, `last`, …) breaks the generated ruleset with a confusing parse error.
-      Guard against it at build time. (Found while verifying maps; see docs/maps.md.)
+- [x] **reject nft-keyword names** — done 2026-07-11. A set/chain/counter/
+      flowtable named after a reserved nft keyword (`fwd`, `meta`, `counter`,
+      `map`, …) rendered to a ruleset nft can't parse — now a `BuildError` at
+      build (`check_nft_name`, keyword list empirically confirmed vs `nft -c`).
+      (`last`/`nat`/`input` etc. are contextual and stay valid names.)
 
 ## Promote remaining `raw:` recipes to structured keys
 

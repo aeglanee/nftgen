@@ -91,7 +91,8 @@ it replaced the retired `example-poc/`. Next: the P-matrix over it.
 - [ ] GitHub Actions: pytest + `nft -c` (ubuntu runner) +
       `nftgen build example --check` + golden-drift (`git diff
       --exit-code` after regenerate) + the R1 netns suite + `make lint`.
-- [ ] TODO item: reject nft-keyword set/map names (`fwd`, `last`, …) at build.
+- [x] reject nft-keyword names (set/chain/counter/flowtable) at build — done
+      2026-07-11 (`check_nft_name`; keyword list confirmed vs `nft -c`).
 
 ### R3 — sessrumnir Step 3b: apply-with-rollback (deploy safety)
 
