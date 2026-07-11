@@ -44,18 +44,33 @@ jobs:
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install -e '.[dev]'
 
+      # Ubuntu 24.04 restricts unprivileged user namespaces via AppArmor, which
+      # blocks the rootless `unshare -rn nft -c` path and the netns harness.
+      # Re-enable them so `nft -c` and the behavioral suite actually run.
+      - name: Enable unprivileged user namespaces
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+
       - name: Lint (ruff / yamllint / markdownlint / gitleaks)
         run: make lint
 
-      # nft lives in /usr/sbin; make prepends .venv/bin but keeps the rest of
-      # PATH, so the netns harness and validate.py find it. The behavioral
-      # tests auto-skip if the runner blocks user namespaces.
-      - name: Tests (unit + golden + nft -c + behavioral netns)
+      # Fail loud if the runner can't run nft -c — otherwise the nft-dependent
+      # and behavioral tests would silently skip and we'd lose that coverage.
+      - name: Assert nft -c + netns are usable
         run: |
           set -euo pipefail
-          echo "netns usable: $(.venv/bin/python -c \
-            'from tests.behavioral.netns import can_netns; print(can_netns())')"
-          make test
+          .venv/bin/python - <<'PY'
+          from nftgen import validate
+          from tests.behavioral.netns import can_netns
+          assert validate.nft_available(), "nft binary not on PATH"
+          assert validate.can_check(), "nft -c not usable (no netlink and no userns)"
+          assert can_netns(), "netns harness unusable — behavioral tests would skip"
+          print("nft -c and netns both usable")
+          PY
+
+      - name: Tests (unit + golden + nft -c + behavioral netns)
+        run: make test
 
       - name: Build examples + nft -c
         run: |
