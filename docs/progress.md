@@ -185,9 +185,17 @@ turn. Last updated: 2026-07-10.
   TEST-NET-3 is itself a bogon (sim internet moved to 8.8.8/24 — proves the
   scrub); `ct invalid` shadows the bad_tcp flag scrub in the stateful path.
   Suite **221**.
-- **⟶ Next:** R2 — nftgen CI (GitHub Actions: pytest + nft -c + build
-  --check + golden drift + make lint) and the reject-nft-keyword-names guard;
-  the multi-router harness (true two-router cross-site) can slot in
+- **R2 done (2026-07-11): CI + last safety guard.** (1) The
+  **reject-nft-keyword-names guard** — a set/chain/counter/flowtable named
+  after a reserved nft keyword (`fwd`/`meta`/`counter`/`map`/…) is now a
+  `BuildError` (`check_nft_name`, list confirmed vs `nft -c`; contextual
+  words like `last`/`nat`/`input` stay valid). (2) **GitHub Actions**
+  (`.github/workflows/ci.yml`, actionlint-clean): lint + the full test
+  suite (incl. behavioral netns) + `build --check` + golden-drift, on every
+  push/PR. Suite **240**.
+- **⟶ Next:** R3 (sessrumnir apply-with-rollback) is the roadmap's next
+  ordered item; the multi-router harness (true two-router cross-site) and
+  R2's own first-CI-run watch (does the runner allow `unshare -rn`?) sit
   alongside. PLAN §Roadmap.
 
 ## Decided

@@ -35,9 +35,9 @@ The agreed order of work from here. Rationale and decisions live in
   clean CLI errors — see TODO.md §Safety), and **v0.3.0** (wrapped large
   literals, named PoC fleet groups, netns harness B01–B03). **166 tests.**
 - **Not done:** the multi-router harness (true two-router cross-site);
-  §1 (B01–B26) and §2 (P01–P22) behavioral matrices **complete**. nftgen CI,
-  Step 3b apply-rollback, Step 4 molecule end-to-end, enterprise
-  (bright-future) firewall integration.
+  §1 (B01–B26) + §2 (P01–P22) behavioral matrices, **R2 (CI + keyword
+  guard)** all **complete**. Remaining: Step 3b apply-rollback, Step 4
+  molecule end-to-end, enterprise (bright-future) firewall integration.
 
 ## Roadmap — 2026-07-05 (authoritative TODO; follow in order)
 
@@ -88,9 +88,11 @@ it replaced the retired `example-poc/`. Next: the P-matrix over it.
 - [x] Own venv (drop the aerleon `.venv` borrow) — done 2026-07-09 via
       `make install-dev`, plus the full lint suite (ruff/yamllint/
       markdownlint/gitleaks, pre-commit, `make verify`).
-- [ ] GitHub Actions: pytest + `nft -c` (ubuntu runner) +
-      `nftgen build example --check` + golden-drift (`git diff
-      --exit-code` after regenerate) + the R1 netns suite + `make lint`.
+- [x] GitHub Actions (`.github/workflows/ci.yml`) — done 2026-07-11:
+      `make lint` + `make test` (unit/golden/`nft -c`/behavioral netns) +
+      `nftgen build example{,-fleet} --check` + golden-drift (`git diff
+      --exit-code`). Watch the first run: whether the runner allows
+      `unshare -rn` decides if the netns suite runs or auto-skips.
 - [x] reject nft-keyword names (set/chain/counter/flowtable) at build — done
       2026-07-11 (`check_nft_name`; keyword list confirmed vs `nft -c`).
 

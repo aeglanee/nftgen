@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+---
+name: ci
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: lint + tests + nft -c
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install nftables + iproute2 (for nft -c and the netns harness)
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends nftables iproute2
+
+      - name: Install dev dependencies
+        run: |
+          set -euo pipefail
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e '.[dev]'
+
+      - name: Lint (ruff / yamllint / markdownlint / gitleaks)
+        run: make lint
+
+      # nft lives in /usr/sbin; make prepends .venv/bin but keeps the rest of
+      # PATH, so the netns harness and validate.py find it. The behavioral
+      # tests auto-skip if the runner blocks user namespaces.
+      - name: Tests (unit + golden + nft -c + behavioral netns)
+        run: |
+          set -euo pipefail
+          echo "netns usable: $(.venv/bin/python -c \
+            'from tests.behavioral.netns import can_netns; print(can_netns())')"
+          make test
+
+      - name: Build examples + nft -c
+        run: |
+          set -euo pipefail
+          .venv/bin/nftgen build example --check
+          .venv/bin/nftgen build example-fleet --check
+
+      - name: Drift gate (committed artifacts reproduce from source)
+        run: |
+          set -euo pipefail
+          .venv/bin/nftgen build example-fleet
+          git diff --exit-code -- example-fleet/generated \
+            || { echo "::error::example-fleet/generated is stale — regenerate and commit"; exit 1; }

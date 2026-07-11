@@ -1,5 +1,7 @@
 # nftgen
 
+[![ci](https://github.com/aeglanee/nftgen/actions/workflows/ci.yml/badge.svg)](https://github.com/aeglanee/nftgen/actions/workflows/ci.yml)
+
 A small, **nftables-only** firewall-as-code generator. YAML definitions +
 host policies → a native `.nft` ruleset you keep in git and apply with `nft -f`.
 
