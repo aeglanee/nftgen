@@ -33,7 +33,9 @@ The agreed order of work from here. Rationale and decisions live in
   two-play flow), and the **v0.2.0 strict authoring surface** (2026-07-05: unknown
   keys/names/empty groups fail the build; type-aware chain policy; loud `--check`;
   clean CLI errors — see TODO.md §Safety), and **v0.3.0** (wrapped large
-  literals, named PoC fleet groups, netns harness B01–B03). **166 tests.**
+  literals), **v0.4.0** (meter:/iif index keys/keyword guard), the full
+  B01–B26 + P01–P22 behavioral matrices, and R2 (CI + keyword guard).
+  **240 tests.**
 - **Not done:** the multi-router harness (true two-router cross-site);
   §1 (B01–B26) + §2 (P01–P22) behavioral matrices, **R2 (CI + keyword
   guard)** all **complete**. Remaining: Step 3b apply-rollback, Step 4
@@ -67,7 +69,8 @@ The real-trust layer `nft -c` can't give. No VM needed: user+net namespaces
 truth table). B01–B26 are **done** (2026-07-10). The composed fixture is
 [example-fleet/](example-fleet/) — the realistic 3-site reference
 (README-narrated, `nft -c` clean, drift-pinned by `tests/test_fleet.py`);
-it replaced the retired `example-poc/`. Next: the P-matrix over it.
+it replaced the retired `example-poc/`. The P01–P22 matrix over it is
+  done (below).
 
 - [x] pytest fixture: 3-namespace topology (client ↔ router ↔ server), apply a
       fixture ruleset in the router ns, probe with `nc`/ping. (Done 2026-07-05:

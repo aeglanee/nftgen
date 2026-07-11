@@ -2,7 +2,7 @@
 
 Status: **built (2026-07-10).** The project is [`example-fleet/`](../example-fleet/)
 — generates, `nft -c` clean, drift-pinned by `tests/test_fleet.py` (9
-tests, suite 200). This doc is the design record; the project's own
+tests; suite 240). This doc is the design record; the project's own
 [README](../example-fleet/README.md) is the reader's tour.
 
 **As-built decisions** (were open in the draft): 3 sites, **one identical
@@ -58,11 +58,10 @@ more per-pair chains — the skeleton scales without new structure.
 ## Topology
 
 - **3 sites:** `hq` (site1), `br1` (site2), `br2` (site3).
-- **HA:** two routers per site (`<site>-r1`, `<site>-r2`) running the same
-  policy. **DECISION:** model both hosts (6 host files sharing one site
-  include — shows the host/site-overlay split) vs one router per site (3
-  files, simpler). *Recommend both* — it's cheap (identical rules) and
-  demonstrates the real fleet shape.
+- **HA:** two routers per site (`<site>-r1`, `<site>-r2`) run the same
+  policy. **As built:** one host file per site (`hq-r`/`br1-r`/`br2-r`) —
+  the HA pair shares the policy, so a second near-identical host file per
+  site would add nothing; the site overlay is what specialises them.
 - **Multi-WAN:** each site has two ISP uplinks in a `wan` interface group;
   egress masquerades out the group, bogon scrub inbound.
 - **Transit:** a shared L3 segment all site routers sit on — carries the
@@ -120,12 +119,11 @@ Every **zone chain** (`fwd_users_services`, `fwd_transit_services`, …):
   (`fwd-<a>-<b>-drop`) + `counter` + `drop`, so a rejected flow is logged
   *with the exact chain that dropped it* — you know which pair to open.
 
-**Log metering** (so one noisy source can't flood the log): a `dynamic`
-set keyed on `ip saddr` with a per-key rate, e.g.
-`add @log_meter { ip saddr limit rate 6/minute } log prefix "…"`.
-**DECISION:** author via `raw:` now (works, `nft -c`-valid) vs promote a
-structured `meter:` key first. *Recommend raw: now* — the reference is the
-real usage that should drive the promotion later (guardrail 4).
+**Log metering** (so one noisy source can't flood the log): the structured
+`meter:` key on a `dynamic` set, keyed per source —
+`meter: {set: log_meter, key: saddr, rate: 4/minute} log: {prefix: "…"}`
+→ `update @log_meter { ip saddr … limit rate 4/minute } log prefix "…"`.
+(This reference *drove* that key's promotion out of `raw:` — guardrail 4.)
 
 The **input** chain mirrors this: ct/lo/icmp early, then `nwm` →
 router ssh/snmp for management, then a metered `input-drop` log + drop.
@@ -169,10 +167,10 @@ v4, so the address groups and scenario rules are v4. But the **hygiene
 layer is dual-stack**: the filter tables are `inet`, and icmp, bogon
 scrub, and the tcp-flags scrub are defined for **both v4 and v6** (icmpv6
 ND/PMTUD must work even in a v4-addressed network for a correct `inet`
-ruleset, and it's the honest reference). Authoritative lists for all
-three — ICMPv6 per RFC 4890, ICMPv4, IANA special-use v4 + v6 bogons, and
-the invalid-tcp-flag set — are **pending research (running)** and will be
-filled in here before build.
+ruleset, and it's the honest reference). The authoritative lists — ICMPv6
+per RFC 4890, ICMPv4, IANA special-use v4 + v6 bogons, and the
+invalid-tcp-flag set — are cited in [best-practices.md](best-practices.md)
+§8 and live in the fleet's hygiene includes.
 
 ## Traffic-scenario catalog (what makes it interesting)
 

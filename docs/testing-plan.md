@@ -9,7 +9,7 @@ rulesets, and type-mismatched set references — syntax is not semantics.
 | --- | --- | --- | --- |
 | 1 | unit + golden | YAML → exact expected text | `tests/` |
 | 2 | `nft -c` | the text is a valid ruleset | `tests/test_validate.py` etc. |
-| 3 | drift | committed artifacts == regeneration | CI (R2), manual today |
+| 3 | drift | committed artifacts == regeneration | pytest + CI (both) |
 | 4 | **behavioral** | packets are accepted/dropped **as authored** | this plan |
 | 5 | deploy | role ships/applies/rolls back safely | sessrumnir molecule (R3/R4) |
 
@@ -134,4 +134,5 @@ Behavioral tests assert *traffic outcomes only* — never text.
    `name`).
 2. §1 matrix, cheapest first; B24 last (needs packet crafting).
 3. §2 PoC matrix as one parametrized class over the truth table.
-4. Wire both into CI (R2) behind the namespace-availability mark.
+4. Wired into CI (`.github/workflows/ci.yml`) — the runner enables
+   unprivileged userns so the suite runs, not skips. **Done.**

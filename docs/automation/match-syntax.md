@@ -10,7 +10,7 @@ keyword spelling, family prefix, proto-qualification, `meta` wrapping. Examples
 rules:
   - ct: [established, related]   # -> ct state ...
     action: accept
-  - iif: wan                     # -> iifname (name, not index)
+  - iifname: wan                 # -> iifname (interface name match)
     action: drop
   - proto: icmp                  # -> meta l4proto (standalone)
     action: accept
@@ -33,7 +33,8 @@ ip saddr @mgmt tcp dport @web accept
 
 | YAML | nft | note |
 | --- | --- | --- |
-| `iif` / `oif` | `iifname` / `oifname` | matches by interface **name** |
+| `iifname` / `oifname` | `iifname` / `oifname` | interface **name** match (robust) |
+| `iif` / `oif` | `iif` / `oif` | interface **index** match (faster; see below) |
 | `saddr` / `daddr` | `ip`/`ip6 saddr`/`daddr` | family prefix from the address |
 | `proto: X` (alone) | `meta l4proto X` | family-agnostic L4 match |
 | `proto: X` + `sport`/`dport` | `X sport`/`dport …` | proto-qualified port |
@@ -45,18 +46,21 @@ ip saddr @mgmt tcp dport @web accept
 - **Fixed, deterministic mapping** — each key has exactly one nft spelling;
   it's a lookup, not a judgement. nft defines the syntax.
 - **nft-policed** — a wrong token is an `nft -c` error; it can't silently mislead.
-- **Removes syntax memorization** — `iifname` vs `iif`, ports needing a proto,
-  `meta l4proto` — you don't have to remember any of it.
+- **Removes syntax memorization** — the family prefix, ports needing a proto,
+  `meta l4proto` wrapping — you don't have to remember any of it.
 
-## The two deliberate choices
+## Interface match: name vs index
 
-| Key | nftgen emits | Alternative | Why this default |
-| --- | --- | --- | --- |
-| `iif`/`oif` | `iifname`/`oifname` (name) | `iif`/`oif` (index) | names survive interface renumbering; index is marginally faster |
-| `proto` (alone) | `meta l4proto` | `ip protocol` / `ip6 nexthdr` | family-agnostic — one rule works for v4+v6 in `inet` |
+Both forms are structured keys — you choose by which tradeoff you want:
 
-Both are consistent, correct-for-`inet` defaults. Want the alternative form
-(index match, family-specific protocol)? Use `raw:`.
+| Key | nft | when |
+| --- | --- | --- |
+| `iifname` / `oifname` | name compare, per packet | the **default** — survives interface renumbering / boot ordering |
+| `iif` / `oif` | index compare (name resolved at load) | faster, but the ruleset **fails to load** if the interface is absent — for statically-named, always-present interfaces |
+
+Full tradeoff in [best-practices.md](../best-practices.md) §8a. (`proto` alone
+emits `meta l4proto` rather than `ip protocol`/`ip6 nexthdr` so one rule works
+for v4+v6 in an `inet` table — the family-specific form is a `raw:` matter.)
 
 ## Guardrail
 
@@ -73,5 +77,6 @@ BuildError: port match needs a proto: {'dport': 'web', 'action': 'accept'}
 
 ## Override
 
-`raw:` for anything beyond the common vocabulary (index-based `iif`, `ip protocol`,
-exotic meta matches). Every standard match has a structured key.
+`raw:` for anything beyond the common vocabulary (`ip protocol`, exotic meta
+matches, `pkttype`, …). Every standard match — including both interface forms —
+has a structured key.

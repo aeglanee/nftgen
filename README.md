@@ -10,7 +10,7 @@ host policies → a native `.nft` ruleset you keep in git and apply with `nft -f
 > primitives — statements, counters, flowtables, vmaps, concatenations,
 > tcp-flags; strict
 > authoring surface — unknown keys/names and empty groups fail the build).
-> Latest release **v0.3.0**; 166 tests. Ansible integration: the sessrumnir
+> Latest release **v0.4.0**; 240 tests. Ansible integration: the sessrumnir
 > `nftables` role consumes
 > `nftgen build` (Step 3a done; 3b/4 remain — see [PLAN.md](PLAN.md)).
 >

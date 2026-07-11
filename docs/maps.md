@@ -97,7 +97,7 @@ ip saddr . tcp dport vmap { 10.0.0.1 . 22 : jump admin_in }
 nftgen supports this for verdict maps via a **list key** —
 `key: [iifname, oifname]` →
 `iifname . oifname vmap`. The `map:` becomes a list of `{match: [...], <verdict>}`
-entries; each match value resolves like a normal `iif`/`oif`, so **interface
+entries; each match value resolves like a normal `iifname`/`oifname`, so **interface
 groups expand** and cartesian-product into elements:
 
 ```yaml
@@ -125,7 +125,8 @@ groups expand** and cartesian-product into elements:
 
 ## nftgen plan
 
-- ✅ **Inline vmaps** — `vmap:` rule → verdict. Keys: `iif`/`oif` (interface
+- ✅ **Inline vmaps** — `vmap:` rule → verdict. Keys: `iifname`/`oifname`
+  (or index `iif`/`oif`; interface
   groups expand; strict — unknown names error), `proto`, `dport`/`sport`
   (`th dport`; **services resolve** via `services.yaml`, a bundle expands to its
   ports; a numeric port/range stays literal, anything else errors), `mark`,
@@ -144,4 +145,5 @@ groups expand** and cartesian-product into elements:
 ## Gotcha (found while verifying)
 
 Don't name a set/map after an **nft keyword** (`fwd`, `last`, …) — it breaks the
-parse with a confusing error. nftgen should reject keyword names (TODO).
+parse with a confusing error. nftgen rejects keyword names at build
+(`check_nft_name`, a `BuildError`).

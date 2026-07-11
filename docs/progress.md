@@ -2,7 +2,7 @@
 
 Durable orientation: where nftgen is, what's decided, what's next. The
 conversation holds nuance; this holds the map. Update on milestones, not every
-turn. Last updated: 2026-07-10.
+turn. Last updated: 2026-07-11.
 
 ## Status
 
