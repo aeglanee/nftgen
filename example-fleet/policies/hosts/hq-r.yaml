@@ -33,6 +33,11 @@ tables:
             action: drop
           - iifname: lo_if
             action: accept
+          # malformed tcp flags are illegal on any interface (packet-validity,
+          # not address hygiene) — scrub them here too, not just on wan
+          - proto: tcp
+            action:
+              jump: tcp_scrub
           - include: includes/common/icmp.yaml
           - include: includes/zones/input-local.yaml
 
@@ -43,8 +48,13 @@ tables:
         policy: drop
         rules:
           - include: includes/common/conntrack.yaml
-          # one interface test gates the whole wan scrub block (bogon + bad
-          # tcp flags) — non-wan traffic skips it in a single comparison.
+          # malformed tcp flags: illegal from any interface (packet-validity),
+          # so scrubbed unconditionally — the proto gate keeps non-tcp out.
+          - proto: tcp
+            action:
+              jump: tcp_scrub
+          # bogon sources: address-legitimacy, so wan-only — one interface
+          # test gates the whole block (non-wan traffic skips it).
           - iifname: wan
             action:
               jump: wan_scrub
@@ -78,7 +88,12 @@ tables:
                   jump: fwd_wan_dmz
           - include: includes/common/fwd-catchall.yaml
 
-      # ---- wan ingress scrub (regular; reached by the iifname wan jump) ----
+      # ---- scrub chains (regular) ----
+      # malformed tcp flags — all-interface (jumped from input + forward)
+      - name: tcp_scrub
+        rules:
+          - include: includes/common/bad-tcp.yaml
+      # bogon sources — wan-only (jumped from forward on iifname wan)
       - name: wan_scrub
         rules:
           - include: includes/common/scrub-wan.yaml

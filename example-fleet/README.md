@@ -47,10 +47,12 @@ The order *is* the policy — see
 1. **fast path** — offload established flows to the flowtable, then accept
    (two rules: `flow add` NFT_BREAKs mid-handshake, so the verdict can't
    share the rule — see best-practices §8c).
-2. **wan scrub** — one `iifname wan jump wan_scrub` gates the whole scrub
-   block (bogon source drop v4+v6 + invalid tcp-flag drop, counted), so
-   non-wan traffic skips it in a single interface test instead of
-   re-testing the interface on every scrub rule.
+2. **scrub** — two concerns, scoped by their logic: `proto tcp jump
+   tcp_scrub` drops malformed flags **on every interface** (packet-validity
+   — a compromised internal host scans the same way), while `iifname wan
+   jump wan_scrub` drops bogon sources **wan-only** (rfc1918 is illegal
+   from the internet but is our own LANs). Both counted; each jump gates
+   its whole block in one test.
 3. **live blocklist** — a runtime-updatable drop set, any interface.
 4. **icmp** — RFC 4890 policy; NDP permitted only at hop-limit 255.
 5. **dispatch** — one `iifname . oifname` vmap jumps each interface pair

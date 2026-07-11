@@ -1,43 +1,13 @@
 ---
-# WAN-ingress scrub body — the rules of the `wan_scrub` chain, reached by one
-# `iifname wan jump wan_scrub` in the forward base chain. Factoring the jump
-# out means a non-wan packet tests the interface *once* and skips this whole
-# block, instead of re-testing `iifname wan` on every rule here.
-# Contract: declare the scrub sets (includes/sets/scrub-sets.yaml) and the
-# `bogon_drops` / `bad_tcp` counters.
+# WAN-ingress bogon scrub — the `wan_scrub` chain body, reached by
+# `iifname wan jump wan_scrub`. Martian / rfc1918 sources are illegal *from
+# the internet*, but our own LANs use rfc1918 — so this is address-legitimacy
+# hygiene and must stay wan-scoped (all-interface would drop internal traffic).
+# Contract: declare the scrub sets + the `bogon_drops` counter.
 rules:
-  # martian source addresses (v4 + v6, single-family sets)
   - saddr: "@bogons_v4"
     counter: bogon_drops
     action: drop
   - saddr: "@bogons_v6"
     counter: bogon_drops
-    action: drop
-
-  # invalid TCP flag combinations (RFC 793 state machine — no legit stack
-  # emits these). NULL scan, XMAS, SYN+FIN, SYN+RST, FIN+RST.
-  - flags:
-      - match: none
-        mask: all
-    counter: bad_tcp
-    action: drop
-  - flags:
-      - match: [fin, psh, urg]
-        mask: all
-    counter: bad_tcp
-    action: drop
-  - flags:
-      - match: [fin, syn]
-        mask: [fin, syn]
-    counter: bad_tcp
-    action: drop
-  - flags:
-      - match: [syn, rst]
-        mask: [syn, rst]
-    counter: bad_tcp
-    action: drop
-  - flags:
-      - match: [fin, rst]
-        mask: [fin, rst]
-    counter: bad_tcp
     action: drop

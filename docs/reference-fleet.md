@@ -99,15 +99,18 @@ policy:
 2. `ct established,related accept` — accept it (separate rule: `flow add`
    NFT_BREAKs mid-handshake, so the verdict can't share the rule — see
    [best-practices.md](best-practices.md) §8c).
-3. `iifname wan` + bogon saddr → `counter bogon_drops drop`.
-4. `saddr @blocklist` → `counter blocklist_drops drop` (live set, updated
+3. `proto tcp jump tcp_scrub` — malformed tcp flags, **all interfaces**
+   (packet-validity hygiene: illegal from any source), `counter bad_tcp`.
+4. `iifname wan jump wan_scrub` — bogon saddr, **wan-only**
+   (address-legitimacy: rfc1918 is our own LANs, illegal only from the
+   internet), `counter bogon_drops`.
+5. `saddr @blocklist` → `counter blocklist_drops drop` (live set, updated
    at runtime — the "bad address drop you can update").
-5. icmp: icmpv6 ND accept; echo-request rate-limited accept. **DECISION:**
-   place here (after ct, before dispatch) — ND must stay reliable or v6
-   breaks. *Recommend as shown.*
-6. `iifname . oifname vmap { <pair> : jump fwd_<a>_<b>, … }` — one lookup
+6. icmp: icmpv6 ND accept; echo-request rate-limited accept — placed here
+   (after ct, before dispatch) so ND stays reliable.
+7. `iifname . oifname vmap { <pair> : jump fwd_<a>_<b>, … }` — one lookup
    dispatches each interface pair to its zone chain.
-7. **catch-all:** metered log (`fwd-unmatched-pair`) + `counter` + `drop`
+8. **catch-all:** metered log (`fwd-unmatched-pair`) + `counter` + `drop`
    — traffic whose interface pair isn't in the vmap dies here, logged.
 
 Every **zone chain** (`fwd_users_services`, `fwd_transit_services`, …):

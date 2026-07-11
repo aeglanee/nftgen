@@ -25,11 +25,12 @@ forward (base, policy drop)
   1. ct established,related  flow-offload ft      # fast path (own rule)
   2. ct established,related  accept               # …then accept
   3. ct invalid              drop
-  4. iifname wan  jump wan_scrub                  # one test gates all scrub
-  5. saddr @blocklist        drop                 # runtime-updatable
-  6. icmp / icmpv6 policy                         # RFC 4890
-  7. iifname . oifname vmap { <pair> : jump … }   # O(1) zone dispatch
-  8. <catch-all metered drop-log>                 # unmatched pairs, logged
+  4. proto tcp    jump tcp_scrub                  # malformed flags (all ifaces)
+  5. iifname wan  jump wan_scrub                  # bogon sources (wan-only)
+  6. saddr @blocklist        drop                 # runtime-updatable
+  7. icmp / icmpv6 policy                         # RFC 4890
+  8. iifname . oifname vmap { <pair> : jump … }   # O(1) zone dispatch
+  9. <catch-all metered drop-log>                 # unmatched pairs, logged
 ```
 
 Each `(in, out)` interface pair jumps to its own **zone chain**

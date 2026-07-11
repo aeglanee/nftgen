@@ -77,6 +77,7 @@ table inet filter {
         ct state established,related accept
         ct state invalid counter name ct_invalid drop
         iifname "lo" accept
+        meta l4proto tcp jump tcp_scrub
         icmp type echo-request limit rate 5/second accept
         icmp type { echo-reply, destination-unreachable, time-exceeded, parameter-problem } accept
         icmpv6 type echo-request limit rate 5/second accept
@@ -93,6 +94,7 @@ table inet filter {
         ct state established,related flow add @ft
         ct state established,related accept
         ct state invalid counter name ct_invalid drop
+        meta l4proto tcp jump tcp_scrub
         iifname { "wan0", "wan1" } jump wan_scrub
         ip saddr @blocklist counter name blocklist_drops drop
         icmp type echo-request limit rate 5/second accept
@@ -121,14 +123,17 @@ table inet filter {
         counter name policy_drops drop
     }
 
-    chain wan_scrub {
-        ip saddr @bogons_v4 counter name bogon_drops drop
-        ip6 saddr @bogons_v6 counter name bogon_drops drop
+    chain tcp_scrub {
         tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 counter name bad_tcp drop
         tcp flags & (fin|syn|rst|psh|ack|urg) == (fin|psh|urg) counter name bad_tcp drop
         tcp flags & (fin|syn) == (fin|syn) counter name bad_tcp drop
         tcp flags & (syn|rst) == (syn|rst) counter name bad_tcp drop
         tcp flags & (fin|rst) == (fin|rst) counter name bad_tcp drop
+    }
+
+    chain wan_scrub {
+        ip saddr @bogons_v4 counter name bogon_drops drop
+        ip6 saddr @bogons_v6 counter name bogon_drops drop
     }
 
     chain fwd_users_services {

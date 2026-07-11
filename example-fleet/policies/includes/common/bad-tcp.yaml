@@ -1,0 +1,34 @@
+---
+# Invalid TCP flag combinations (RFC 793 — no legitimate stack emits these).
+# The `tcp_scrub` chain body, reached by `proto tcp jump tcp_scrub` on *every*
+# interface: malformed flags are illegal regardless of source (a compromised
+# internal host scans the same way an internet attacker does), unlike the
+# address-scoped bogon scrub. `ct invalid` also catches these in the stateful
+# path — this is the stateless backstop (notrack paths, defense-in-depth).
+# Contract: declare the `bad_tcp` counter.
+rules:
+  - flags:
+      - match: none
+        mask: all
+    counter: bad_tcp
+    action: drop
+  - flags:
+      - match: [fin, psh, urg]
+        mask: all
+    counter: bad_tcp
+    action: drop
+  - flags:
+      - match: [fin, syn]
+        mask: [fin, syn]
+    counter: bad_tcp
+    action: drop
+  - flags:
+      - match: [syn, rst]
+        mask: [syn, rst]
+    counter: bad_tcp
+    action: drop
+  - flags:
+      - match: [fin, rst]
+        mask: [fin, rst]
+    counter: bad_tcp
+    action: drop
