@@ -72,8 +72,12 @@ inventory_hostname  ==  policies/hosts/<name>.yaml  ==  generated/<name>.nft
 
 `nftgen build <root>` globs `policies/hosts/*.y{,a}ml`, generates each (with
 `flush ruleset`), and writes `generated/<stem>.nft` — override the output dir
-with `--out-dir`, build one host with `--host`, validate with `--check`. The
-worked example lives under [example/](example/).
+with `--out-dir`, build one host with `--host`, validate with `--check`.
+`--host <name> --stdout` renders that one host to stdout and writes **nothing**
+(for previews, pipes, or a deployer that renders on the fly without touching the
+committed `generated/` tree); `--stdout` requires `--host` — stdout is a single
+stream, so it maps to a single host. The worked example lives under
+[example/](example/).
 
 ## The nftables model (what the YAML mirrors)
 

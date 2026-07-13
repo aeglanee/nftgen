@@ -55,6 +55,34 @@ def test_cli_build_writes_files(tmp_path):
         assert (tmp_path / f"{host}.nft").exists()
 
 
+def test_cli_build_stdout_requires_host(capsys):
+    # stdout is a single stream, so it only makes sense for one host.
+    assert main(["build", str(EXAMPLE), "--stdout"]) == 2
+    assert "--stdout requires --host" in capsys.readouterr().err
+
+
+def test_cli_build_stdout_emits_and_writes_nothing(tmp_path, capsys):
+    # --stdout emits the host's deploy artifact byte-for-byte and touches no file.
+    assert (
+        main(
+            [
+                "build",
+                str(EXAMPLE),
+                "--host",
+                "router1",
+                "--stdout",
+                "--out-dir",
+                str(tmp_path),
+            ]
+        )
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert out == build(EXAMPLE, host="router1")["router1"]
+    assert out.startswith("#!/usr/sbin/nft -f")
+    assert not list(tmp_path.glob("*.nft"))  # nothing written, even with --out-dir set
+
+
 def test_cli_build_check_unusable_fails_loudly(tmp_path, monkeypatch, capsys):
     # --check must never silently skip: CI asking for validation has to know
     # when it didn't run.

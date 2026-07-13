@@ -53,7 +53,13 @@ nftgen policies/hosts/router1.yaml --defs definitions --out generated/router1.nf
 # whole fleet from a directory (convention layout) — the deploy artifacts
 nftgen build <root>                 # → generated/<host>.nft for every policies/hosts/*.yaml
 nftgen build <root> --host router1  # just one host
+nftgen build <root> --host router1 --stdout  # render one host to stdout, write nothing
 ```
+
+`--stdout` prints the host's ruleset instead of writing `generated/` — for
+previewing a change (`… --stdout | git diff --no-index generated/router1.nft -`),
+piping, or a deployer that renders on the fly without mutating the committed
+tree. It requires `--host` (stdout is a single stream = a single host).
 
 `build` output is a complete, applyable ruleset (`#!/usr/sbin/nft -f` +
 `flush ruleset` + tables) that ships verbatim as `/etc/nftables.conf`.

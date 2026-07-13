@@ -64,9 +64,23 @@ def _build_cmd(argv: list[str]) -> int:
     parser.add_argument("--host", help="build only this host (default: all)")
     parser.add_argument("--out-dir", help="output dir (default: <root>/generated)")
     parser.add_argument(
+        "--stdout",
+        action="store_true",
+        help="print the ruleset to stdout, write nothing (requires --host)",
+    )
+    parser.add_argument(
         "--check", action="store_true", help="validate each output with `nft -c -f`"
     )
     args = parser.parse_args(argv)
+
+    # stdout is a single stream, so it maps to exactly one host.
+    if args.stdout and not args.host:
+        print(
+            "nftgen: error: --stdout requires --host (stdout is a single stream "
+            "— one host)",
+            file=sys.stderr,
+        )
+        return 2
 
     # Probe before generating: a --check that can't run must fail loudly, not
     # silently skip validation the caller (CI, the Ansible play) asked for.
@@ -79,6 +93,23 @@ def _build_cmd(argv: list[str]) -> int:
         return 2
 
     results = build(args.root, host=args.host)
+
+    # --stdout: emit the one host's ruleset and write nothing (previews, pipes,
+    # a deployer rendering on the fly without touching the committed tree).
+    if args.stdout:
+        text = next(iter(results.values()))
+        rc = 0
+        if args.check:
+            result = validate.check(text)
+            if not result.ok:
+                print(
+                    f"nftgen: {args.host}: nft -c FAILED:\n{result.stderr}",
+                    file=sys.stderr,
+                )
+                rc = 1
+        sys.stdout.write(text)
+        return rc
+
     out_dir = (
         pathlib.Path(args.out_dir)
         if args.out_dir
