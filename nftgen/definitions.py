@@ -79,9 +79,22 @@ class Definitions:
         return defs
 
     def _merge(self, data: Mapping[str, Any], source: str) -> None:
+        if not isinstance(data, Mapping):
+            # A malformed layer (e.g. a list where a mapping was expected) would
+            # otherwise blow up with an opaque AttributeError deep in the loop.
+            raise DefinitionError(
+                f"definition layer {source!r} must be a mapping of "
+                f"category -> {{name: list}}, got {type(data).__name__}"
+            )
         for category in CATEGORIES:
+            cat_data = data.get(category) or {}
+            if not isinstance(cat_data, Mapping):
+                raise DefinitionError(
+                    f"{category} in {source} must be a mapping of name -> list, "
+                    f"got {type(cat_data).__name__}"
+                )
             target = getattr(self, category)
-            for name, value in (data.get(category) or {}).items():
+            for name, value in cat_data.items():
                 if name in target:
                     first = self._origin.get((category, name), "?")
                     raise DefinitionError(

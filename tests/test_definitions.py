@@ -163,6 +163,22 @@ def test_value_must_be_list():
         Definitions.from_mappings({"networks": {"lan": "10.0.0.0/8"}})
 
 
+def test_malformed_layer_not_a_mapping_errors_cleanly():
+    # a layer that is a list (not category -> {name: list}) is a clean error,
+    # not an opaque AttributeError.
+    with pytest.raises(
+        DefinitionError, match=r"definition layer 'bad' must be a mapping"
+    ):
+        Definitions.from_named_mappings({"bad": ["not", "a", "mapping"]})
+
+
+def test_malformed_category_not_a_mapping_errors_cleanly():
+    with pytest.raises(
+        DefinitionError, match=r"networks in bad must be a mapping of name -> list"
+    ):
+        Definitions.from_named_mappings({"bad": {"networks": ["a", "b"]}})
+
+
 # -- per-site overlay (the local-definitions mechanism) --------------------- #
 def test_site_overlay_resolves_local_alias():
     common = {
