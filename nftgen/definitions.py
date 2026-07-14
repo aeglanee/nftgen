@@ -29,6 +29,9 @@ class Definitions:
         self.networks: dict[str, list] = {}
         self.services: dict[str, list] = {}
         self.interfaces: dict[str, list] = {}
+        # (category, name) -> the source that first defined it, for dual-origin
+        # provenance in duplicate errors.
+        self._origin: dict[tuple[str, str], str] = {}
 
     # -- construction -------------------------------------------------------- #
     @classmethod
@@ -58,19 +61,38 @@ class Definitions:
             defs._merge(mapping or {}, f"<mapping {i}>")
         return defs
 
+    @classmethod
+    def from_named_mappings(
+        cls, mappings: Mapping[str, Mapping[str, Any]]
+    ) -> Definitions:
+        """Build from named layers ``{layer_name: mapping}``.
+
+        The layer name is the provenance reported in duplicate errors (both the
+        first-seen and the duplicating layer). Layers merge in sorted-name order
+        — determinism, not precedence: names are unique, so order never changes
+        the result, only which duplicate is reported first. This is the surface
+        the Ansible vars front-end feeds (layer name == the chunk var name).
+        """
+        defs = cls()
+        for name in sorted(mappings):
+            defs._merge(mappings[name] or {}, name)
+        return defs
+
     def _merge(self, data: Mapping[str, Any], source: str) -> None:
         for category in CATEGORIES:
             target = getattr(self, category)
             for name, value in (data.get(category) or {}).items():
                 if name in target:
+                    first = self._origin.get((category, name), "?")
                     raise DefinitionError(
-                        f"duplicate {category} definition {name!r} (in {source})"
+                        f"duplicate {category} definition {name!r} ({first}, {source})"
                     )
                 if not isinstance(value, list):
                     raise DefinitionError(
                         f"{category} {name!r} must be a list (in {source})"
                     )
                 target[name] = value
+                self._origin[(category, name)] = source
 
     # -- resolution ---------------------------------------------------------- #
     def network(self, name: str) -> list[str]:

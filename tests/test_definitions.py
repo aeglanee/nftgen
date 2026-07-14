@@ -132,6 +132,32 @@ def test_duplicate_definition_errors():
         )
 
 
+def test_from_named_mappings_merges_named_layers():
+    d = Definitions.from_named_mappings(
+        {
+            "layer_a": {"networks": {"lan": ["10.0.0.0/8"]}},
+            "layer_b": {"networks": {"dmz": ["10.1.0.0/24"]}},
+        }
+    )
+    assert d.network("lan") == ["10.0.0.0/8"]
+    assert d.network("dmz") == ["10.1.0.0/24"]
+
+
+def test_duplicate_across_named_layers_names_both_origins():
+    # provenance: the error must name the first-seen layer AND the duplicating
+    # one (sorted-name merge order → layer_a defines, layer_b duplicates).
+    with pytest.raises(
+        DefinitionError,
+        match=r"duplicate networks definition 'lan' \(layer_a, layer_b\)",
+    ):
+        Definitions.from_named_mappings(
+            {
+                "layer_a": {"networks": {"lan": ["10.0.0.0/8"]}},
+                "layer_b": {"networks": {"lan": ["192.168.0.0/16"]}},
+            }
+        )
+
+
 def test_value_must_be_list():
     with pytest.raises(DefinitionError):
         Definitions.from_mappings({"networks": {"lan": "10.0.0.0/8"}})
