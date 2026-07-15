@@ -259,6 +259,17 @@ def test_port_literals_and_unknown_service():
         R.render({"proto": "tcp", "dport": "htttp", "action": "accept"})
 
 
+def test_unknown_saddr_network_errors():
+    # symmetry with the unknown-service guard: a saddr/daddr that is neither a
+    # known network group / set nor a literal IP/CIDR is a hard build error
+    # (the rule-level undefined-reference path).
+    assert "192.0.2.10" in one({"saddr": "192.0.2.10", "action": "accept"})
+    with pytest.raises(BuildError, match="not a known network group"):
+        R.render({"saddr": "ghost", "action": "accept"})
+    with pytest.raises(BuildError, match="not a known network group"):
+        R.render({"daddr": "ghost", "action": "accept"})
+
+
 def test_named_set_type_mismatch_errors():
     # webhosts is an address set; using it as an interface or port must fail
     with pytest.raises(BuildError, match="not an interface set"):
