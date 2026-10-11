@@ -23,6 +23,9 @@ _POLICY_KEYS = frozenset({"site", "tables"})
 _TABLE_KEYS = frozenset(
     {"family", "name", "sets", "chains", "counters", "raw", "flowtables"}
 )
+# An include file holds these sections; the `- include:` entry's position
+# (a table's `sets:` or a chain's `rules:`) picks which one is pulled.
+_INCLUDE_KEYS = frozenset({"sets", "rules"})
 
 
 class PathResolver:
@@ -38,7 +41,35 @@ class PathResolver:
         path = self.cycle_id(ref)
         if not path.is_file():
             raise BuildError(f"include file not found: {self.base_dir / ref}")
-        return (yaml.safe_load(path.read_text()) or {}).get(key, [])
+        # Strict: a typo'd section (`rule:`) or a file included under the
+        # wrong list would otherwise contribute nothing — an empty chain that
+        # nft -c passes, and with `policy: drop` + flush a lockout on deploy.
+        data = yaml.safe_load(path.read_text()) or {}
+        if not isinstance(data, dict):
+            raise BuildError(
+                f"include {ref}: must be a mapping with `rules:` and/or `sets:`, "
+                f"got {type(data).__name__}"
+            )
+        unknown = set(data) - _INCLUDE_KEYS
+        if unknown:
+            raise BuildError(
+                f"include {ref}: unknown key(s) {sorted(unknown)} "
+                f"(allowed: {sorted(_INCLUDE_KEYS)})"
+            )
+        if key not in data:
+            raise BuildError(
+                f"include {ref} has no `{key}:` section (it has: "
+                f"{', '.join(sorted(data)) or 'nothing'}) — included under the "
+                f"wrong list?"
+            )
+        section = data[key]
+        if not isinstance(section, list):
+            # `rules:` left blank parses as null — write `rules: []` if empty
+            # is meant.
+            raise BuildError(
+                f"include {ref}: `{key}:` must be a list, got {type(section).__name__}"
+            )
+        return section
 
 
 class DictResolver:
@@ -59,7 +90,13 @@ class DictResolver:
             raise BuildError(
                 f"unknown fragment {ref!r} (known: {sorted(self.fragments)})"
             )
-        return self.fragments[ref]
+        fragment = self.fragments[ref]
+        if not isinstance(fragment, list):
+            raise BuildError(
+                f"fragment {ref!r} must be a list (of rules or sets), got "
+                f"{type(fragment).__name__}"
+            )
+        return fragment
 
 
 def _resolve_list(items: list, key: str, resolver, stack: tuple = ()) -> list:

@@ -235,7 +235,12 @@ def build_sets(sets_spec: list, defs: Definitions) -> list[NamedSet]:
             out.append(_set_from_definition(entry, defs))
         elif isinstance(entry, dict):
             if "include" in entry:
-                continue  # includes are resolved in a later phase
+                # render_tables expands includes before this runs; one left
+                # here means a caller skipped that step — fail, don't drop it.
+                raise BuildError(
+                    f"unresolved include {entry['include']!r} — includes are "
+                    f"expanded by render_tables"
+                )
             if "concat" in entry:
                 out.append(_concat_set(entry, defs))
             else:

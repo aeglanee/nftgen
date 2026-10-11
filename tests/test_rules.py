@@ -295,7 +295,6 @@ def test_build_base_chain():
         "policy": "drop",
         "rules": [
             {"ct": ["established", "related"], "action": "accept"},
-            {"include": "x.yaml"},  # skipped for now
             {"saddr": "webhosts", "proto": "tcp", "dport": "web", "action": "accept"},
         ],
     }
@@ -307,6 +306,14 @@ def test_build_base_chain():
         "        ip saddr @webhosts tcp dport @web accept",
         "    }",
     ]
+
+
+def test_build_chain_unresolved_include_errors():
+    # render_tables expands includes first; one reaching build_chain is a
+    # caller bug and must not be silently dropped.
+    spec = {"name": "input", "rules": [{"include": "x.yaml"}]}
+    with pytest.raises(BuildError, match="unresolved include 'x.yaml'"):
+        build_chain(spec, R)
 
 
 def test_build_regular_chain_has_no_header():

@@ -33,6 +33,16 @@ def test_dict_resolver_unknown_fragment_lists_known():
         _resolve_list([{"include": "nope"}], "rules", DictResolver({"icmp": []}))
 
 
+def test_dict_resolver_fragment_must_be_list():
+    # a mapping used to iterate as its keys — `'proto'` became rule keys
+    # ['o', 'p', 'r', 't']; now a clear error.
+    frags = {"in_icmp": {"proto": "icmp", "action": "accept"}}
+    with pytest.raises(
+        BuildError, match="fragment 'in_icmp' must be a list .*got dict"
+    ):
+        _resolve_list([{"include": "in_icmp"}], "rules", DictResolver(frags))
+
+
 def test_dict_resolver_cycle_by_name():
     frags = {"a": [{"include": "b"}], "b": [{"include": "a"}]}
     with pytest.raises(BuildError, match="include cycle: a -> b -> a"):

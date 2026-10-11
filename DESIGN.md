@@ -57,7 +57,12 @@ A project is a directory (`<root>`) with a fixed convention. `nftgen build
   resolves to that site's value.
 - **`policies/includes/`** — fragments holding a `sets:` and/or `rules:` list,
   pulled into a host via `- include: includes/<file>.yaml`. Paths resolve
-  relative to `policies/`; includes may nest.
+  relative to `policies/`; includes may nest. Where the `- include:` sits
+  picks the section (a table's `sets:` → the file's `sets:`, a chain's
+  `rules:` → its `rules:`); that section must exist and be a list
+  (`rules: []` for deliberately empty), and any other top-level key is an
+  error — so a typo'd or misplaced include fails the build instead of
+  silently contributing nothing.
 - **`policies/hosts/<name>.yaml`** — the per-host policy (tables → chains →
   rules). One file = one host = one output.
 - **`generated/<name>.nft`** — the deploy artifact: a complete ruleset with

@@ -75,8 +75,11 @@ def test_undefined_set_errors():
         build_sets(["nope"], DEFS)
 
 
-def test_include_entry_is_skipped_for_now():
-    assert build_sets([{"include": "x.yaml"}], DEFS) == []
+def test_unresolved_include_entry_errors():
+    # render_tables expands includes first; one reaching build_sets is a
+    # caller bug and must not be silently dropped.
+    with pytest.raises(BuildError, match="unresolved include 'x.yaml'"):
+        build_sets([{"include": "x.yaml"}], DEFS)
 
 
 def test_table_render_golden():

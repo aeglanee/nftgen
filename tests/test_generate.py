@@ -146,6 +146,73 @@ def test_include_missing_file_errors(tmp_path):
         )
 
 
+_INCLUDE_IN_INPUT = """
+    tables:
+      - family: inet
+        name: filter
+        chains:
+          - name: input
+            hook: input
+            rules:
+              - include: inc.yaml
+"""
+
+
+def test_include_typo_section_errors(tmp_path):
+    # `rule:` for `rules:` used to contribute nothing — an empty policy-drop
+    # input chain that nft -c passes: a lockout on deploy.
+    (tmp_path / "inc.yaml").write_text("rule:\n  - action: accept\n")
+    with pytest.raises(
+        BuildError, match=r"include inc.yaml: unknown key\(s\) \['rule'\]"
+    ):
+        _gen_tmp(tmp_path, _INCLUDE_IN_INPUT)
+
+
+def test_include_under_wrong_list_errors(tmp_path):
+    # a rules-only file pulled from a table's `sets:` used to yield nothing
+    (tmp_path / "inc.yaml").write_text("rules:\n  - action: accept\n")
+    with pytest.raises(
+        BuildError, match=r"include inc.yaml has no `sets:` section \(it has: rules\)"
+    ):
+        _gen_tmp(
+            tmp_path,
+            """
+            tables:
+              - family: inet
+                name: filter
+                sets:
+                  - include: inc.yaml
+        """,
+        )
+
+
+def test_include_file_must_be_mapping(tmp_path):
+    (tmp_path / "inc.yaml").write_text("- action: accept\n")
+    with pytest.raises(BuildError, match="include inc.yaml: must be a mapping"):
+        _gen_tmp(tmp_path, _INCLUDE_IN_INPUT)
+
+
+def test_include_empty_file_errors(tmp_path):
+    (tmp_path / "inc.yaml").write_text("")
+    with pytest.raises(
+        BuildError, match=r"has no `rules:` section \(it has: nothing\)"
+    ):
+        _gen_tmp(tmp_path, _INCLUDE_IN_INPUT)
+
+
+def test_include_section_null_errors(tmp_path):
+    # `rules:` left blank parses as null — an unfinished edit, not "empty"
+    (tmp_path / "inc.yaml").write_text("rules:\n")
+    with pytest.raises(BuildError, match="`rules:` must be a list, got NoneType"):
+        _gen_tmp(tmp_path, _INCLUDE_IN_INPUT)
+
+
+def test_include_explicit_empty_section_ok(tmp_path):
+    (tmp_path / "inc.yaml").write_text("rules: []\n")
+    out = _gen_tmp(tmp_path, _INCLUDE_IN_INPUT)
+    assert "type filter hook input priority 0; policy drop;" in out
+
+
 def test_include_cycle_errors(tmp_path):
     (tmp_path / "self.yaml").write_text("rules:\n  - include: self.yaml\n")
     with pytest.raises(BuildError, match="include cycle"):

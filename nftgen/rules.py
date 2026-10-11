@@ -808,7 +808,12 @@ def build_chain(spec: dict, renderer: RuleRenderer) -> Chain:
     rule_lines: list[str] = []
     for r in spec.get("rules", []):
         if isinstance(r, dict) and "include" in r:
-            continue  # includes resolved in a later phase
+            # render_tables expands includes before this runs; one left here
+            # means a caller skipped that step — fail, don't drop it.
+            raise BuildError(
+                f"unresolved include {r['include']!r} — includes are expanded "
+                f"by render_tables"
+            )
         rule_lines.extend(renderer.render(r))
     chain = Chain(name=spec["name"], rules=rule_lines)
     if "hook" in spec:
