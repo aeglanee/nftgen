@@ -4,6 +4,11 @@ Durable orientation: where nftgen is, what's decided, what's next. The
 conversation holds nuance; this holds the map. Update on milestones, not every
 turn. Last updated: 2026-07-11.
 
+> **2026-10 review in progress:** findings, agreed decisions, and the
+> working list (where we are, what's next) live in
+> [review-2026-10.md](review-2026-10.md) — start there. Released since this
+> tracker's last update: v0.5.0, v0.6.0, v0.7.0 (tracker refresh = D3).
+
 ## Status
 
 - **Phases 0–6 done** — standalone generator works (defs → named sets →

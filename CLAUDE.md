@@ -102,6 +102,9 @@ findings/proposals. Each has one job — don't duplicate across them:
   - [docs/testing-plan.md](docs/testing-plan.md) — the behavioral (netns) test
     matrix: primitive semantics B01–B26 + the [example-fleet/](example-fleet/)
     reachability truth table P01–P22; harness design + execution order.
+  - [docs/review-2026-10.md](docs/review-2026-10.md) — **the 2026-10
+    review working list**: findings (C/D/E), agreed decisions, where we
+    are, and the user's working preferences. Resume work here.
   - [docs/step1-review.md](docs/step1-review.md) — coverage map, test audit,
     the `nft -c` recipe, and the bugs it found.
   - [docs/concatenations.md](docs/concatenations.md) — the concatenation-set
