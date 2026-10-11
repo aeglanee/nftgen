@@ -128,12 +128,16 @@ groups expand** and cartesian-product into elements:
 - ✅ **Inline vmaps** — `vmap:` rule → verdict. Keys: `iifname`/`oifname`
   (or index `iif`/`oif`; interface
   groups expand; strict — unknown names error), `proto`, `dport`/`sport`
-  (`th dport`; **services resolve** via `services.yaml`, a bundle expands to its
-  ports; a numeric port/range stays literal, anything else errors), `mark`,
+  (a **`meta l4proto . th dport` pair lookup** — a service keeps each port's
+  own proto, `ssh` → `tcp . 22`; a literal is `8080/tcp`; a bare number has no
+  proto and errors — DECISIONS §2.2), `mark`,
   `state` (`ct state`), and `saddr`/`daddr` (network groups, single-family). (done.)
 - ✅ **Concat verdict maps** — `vmap: {key: [iifname, oifname], map: [{match, verdict}]}`
   → `iifname . oifname vmap { … }`; groups/services expand, and `saddr`/`daddr`
-  positions are allowed (family inferred, single-family enforced). (done.)
+  positions are allowed (family inferred, single-family enforced). A
+  `dport`/`sport` position takes the row's `proto` column's ports
+  (`[proto, dport]`, `match: [udp, web]` → only web's udp ports), or renders as
+  a `meta l4proto . th dport` pair when there is no `proto` column. (done.)
 - ✅ **Inline dnat data map** —
   `action: {dnat: {proto: tcp, map: {80: web, 443: db}}}`
   → `dnat ip to tcp dport map { … }` (multi-port-forward; address-only

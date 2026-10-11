@@ -13,3 +13,4 @@ services:
   limited: [7001/tcp]
   quota_svc: [7002/tcp]
   bulk: [7003/tcp]
+  udp_only: [7004/udp] # B22: in the vmap, must not open tcp/7004

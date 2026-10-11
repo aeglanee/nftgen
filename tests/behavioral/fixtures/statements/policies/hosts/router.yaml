@@ -4,7 +4,8 @@
 #   B19: `limited` accepts at most 2 new conns/minute, then falls through
 #   B20: `quota_svc` accepts until 1 mbyte has passed, then falls through
 #   B21: named + anonymous counters increment on traffic
-#   B22: dport vmap dispatches ssh/metrics into per-service chains
+#   B22: dport vmap dispatches ssh/metrics into per-service chains; the
+#        udp-only service in it opens no tcp port (proto . port pairs)
 #   B23: forward offloads established flows into the flowtable
 tables:
   - family: inet
@@ -51,9 +52,11 @@ tables:
           - vmap:
               key: dport
               map:
-                22:
+                ssh:
                   jump: svc_ssh
-                9100:
+                metrics:
+                  jump: svc_metrics
+                udp_only:
                   jump: svc_metrics
 
       - name: svc_ssh

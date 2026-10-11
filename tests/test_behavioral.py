@@ -631,7 +631,7 @@ def fw_statements():
         )
         harness.artifact = build(FIXTURES / "statements")["router"]
         harness.nft_apply(harness.artifact)
-        for port in (22, 7001, 7002, 9100):
+        for port in (22, 7001, 7002, 7004, 9100):
             harness.listen(None, port)
         harness.listen("wan", 7003)
         yield harness
@@ -686,6 +686,15 @@ def test_b22_dport_vmap_dispatches_per_service(fw_statements):
     before = _counter_packets(fw_statements, "ssh_hits")
     assert fw_statements.probe_tcp("lan", ST_ROUTER, 9100) == "connected"
     assert _counter_packets(fw_statements, "ssh_hits") == before
+
+
+@requires_netns
+def test_b22_dport_vmap_keeps_service_proto(fw_statements):
+    # udp_only (7004/udp) is in the vmap. The pre-0.7.0 `th dport vmap`
+    # matched any protocol, so tcp/7004 reached svc_metrics and connected;
+    # the `meta l4proto . th dport` pair lookup lets it hit policy drop.
+    assert "udp . 7004 : jump svc_metrics" in fw_statements.artifact
+    assert fw_statements.probe_tcp("lan", ST_ROUTER, 7004) == "timeout"
 
 
 @requires_netns

@@ -499,8 +499,11 @@ class RuleRenderer:
         "iif": "iif",  # interface index (see iif/oif note in render)
         "oif": "oif",
         "proto": "meta l4proto",
+        # ports never render alone (th = any protocol): a dport/sport vmap is a
+        # `meta l4proto . th dport` pair lookup, or a concat whose own `proto`
+        # column pins the protocol per row (_vmap_port_pairs)
         "dport": "th dport",
-        "sport": "th sport",  # transport-agnostic ports
+        "sport": "th sport",
         "mark": "meta mark",
         "state": "ct state",
     }
@@ -528,10 +531,18 @@ class RuleRenderer:
             raise BuildError(
                 f"a {key} vmap needs a non-empty `map:` of value -> verdict: {spec!r}"
             )
+        ports = key in ("dport", "sport")
+        if ports:  # a service is proto + port: keep both in the lookup
+            keyexpr = f"meta l4proto . {keyexpr}"
         entries = []
         for k, verdict in mapping.items():
             v = self._verdict(verdict)
-            entries.extend(f"{tok} : {v}" for tok in self._vmap_lit_tokens(key, k))
+            toks = (
+                [f"{p} . {port}" for p, port in self._vmap_port_pairs(key, k)]
+                if ports
+                else self._vmap_lit_tokens(key, k)
+            )
+            entries.extend(f"{tok} : {v}" for tok in toks)
         return f"{keyexpr} vmap {render_literal(entries, BODY_INDENT)}"
 
     def _addr_vmap(self, spec: dict, key: str) -> str:
@@ -591,6 +602,9 @@ class RuleRenderer:
                 f"a concat vmap (`key: {keys}`) needs a list `map:` of "
                 f"`{{match: [...], <verdict>}}` entries: {spec!r}"
             )
+        # a `proto` column pins each row's protocol, so a port column takes that
+        # proto's ports; without one, a port column is a proto . port pair
+        proto_col = keys.index("proto") if "proto" in keys else None
         fam, entries = None, []
         for entry in mapping:
             if not isinstance(entry, dict) or "match" not in entry:
@@ -607,14 +621,15 @@ class RuleRenderer:
                     f"concat vmap entry needs exactly one verdict: {entry!r}"
                 )
             v = self._verdict(verdict)
+            row_proto = str(match[proto_col]) if proto_col is not None else None
             cols = []
-            for i, kt in enumerate(keys):
+            for kt, value in zip(keys, match, strict=True):
                 if kt in self._VMAP_ADDR:  # family-aware position
-                    kfam, toks = self._vmap_addr_tokens(kt, match[i])
+                    kfam, toks = self._vmap_addr_tokens(kt, value)
                     fam = self._one_family(kt, fam, kfam)
                     cols.append(toks)
                 else:
-                    cols.append(self._vmap_lit_tokens(kt, match[i]))
+                    cols.append(self._concat_col_tokens(kt, value, row_proto))
             for combo in itertools.product(*cols):
                 entries.append(f"{' . '.join(combo)} : {v}")
         if any(k in self._VMAP_ADDR for k in keys) and fam is None:
@@ -622,9 +637,27 @@ class RuleRenderer:
                 f"concat vmap with an address key needs at least one entry: {spec!r}"
             )
         keyexprs = [
-            f"{fam} {k}" if k in self._VMAP_ADDR else self._VMAP_KEYS[k] for k in keys
+            f"{fam} {k}"
+            if k in self._VMAP_ADDR
+            else self._concat_col_expr(k, proto_col)
+            for k in keys
         ]
         return f"{' . '.join(keyexprs)} vmap {render_literal(entries, BODY_INDENT)}"
+
+    def _concat_col_tokens(self, keytype: str, value, row_proto) -> list:
+        """Element tokens for one non-address concat column. A port column
+        takes the row's proto's ports, or is a proto . port pair without one."""
+        if keytype not in ("dport", "sport"):
+            return self._vmap_lit_tokens(keytype, value)
+        pairs = self._vmap_port_pairs(keytype, value, row_proto)
+        if row_proto:
+            return [port for _p, port in pairs]
+        return [f"{p} . {port}" for p, port in pairs]
+
+    def _concat_col_expr(self, keytype: str, proto_col) -> str:
+        if keytype in ("dport", "sport") and proto_col is None:
+            return f"meta l4proto . {self._VMAP_KEYS[keytype]}"
+        return self._VMAP_KEYS[keytype]
 
     def _vmap_lit_tokens(self, keytype: str, value) -> list:
         """Non-address vmap element tokens for one key — groups and services expand."""
@@ -640,24 +673,43 @@ class RuleRenderer:
                 f"vmap {keytype} value {value!r} is not a known interface group "
                 f"(define it under `interfaces:`)"
             )
-        if keytype in ("dport", "sport"):
-            if isinstance(value, str) and value in self.defs.services:
-                ports = list(
-                    dict.fromkeys(port for _proto, port in self.defs.service(value))
-                )
-                if not ports:
-                    raise BuildError(
-                        f"vmap {keytype} service {value!r} resolves to no ports"
-                    )
-                return ports
-            if isinstance(value, int) or (
-                isinstance(value, str) and _PORT_LITERAL.match(value)
-            ):
-                return [str(value)]
-            raise BuildError(
-                f"vmap {keytype} value {value!r} is not a known service group or a port/range"
-            )
         return [str(value)]  # proto / mark / state literal
+
+    def _vmap_port_pairs(self, keytype: str, value, proto: str | None = None):
+        """A dport/sport vmap value -> [(proto, port)]. A service keeps each
+        port's own proto; ``N/proto`` is a literal pair; a bare number has no
+        proto, so it is only accepted when the row pins one (``proto``)."""
+        if isinstance(value, str) and value in self.defs.services:
+            pairs = self.defs.service(value)
+            if proto is not None:
+                pairs = [(p, port) for p, port in pairs if p == proto]
+                if not pairs:
+                    raise BuildError(f"service {value!r} has no {proto} ports")
+            if not pairs:
+                raise BuildError(
+                    f"vmap {keytype} service {value!r} resolves to no ports"
+                )
+            return pairs
+        text = str(value)
+        port, sep, lproto = text.rpartition("/")
+        if sep and _PORT_LITERAL.match(port) and lproto:
+            if proto is not None and lproto != proto:
+                raise BuildError(
+                    f"vmap {keytype} value {text!r} is {lproto}, but the row's "
+                    f"proto is {proto}"
+                )
+            return [(lproto, port)]
+        if _PORT_LITERAL.match(text):
+            if proto is not None:
+                return [(proto, text)]
+            raise BuildError(
+                f"vmap {keytype} value {text!r} has no protocol — a port vmap "
+                f"matches proto . port; write {text}/tcp (or /udp) or use a service"
+            )
+        raise BuildError(
+            f"vmap {keytype} value {value!r} is not a known service, "
+            f"`port/proto`, or a port/range"
+        )
 
     def _one_family(self, key: str, fam, kfam: str) -> str:
         if fam is None:

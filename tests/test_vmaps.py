@@ -148,14 +148,27 @@ RN = RuleRenderer(
 )
 
 
-def test_dport_vmap_transport_agnostic():
+def test_dport_vmap_literal_port_proto_pairs():
     rule = {
         "vmap": {
             "key": "dport",
-            "map": {22: {"jump": "ssh_in"}, 80: {"jump": "web_in"}},
+            "map": {"22/tcp": {"jump": "ssh_in"}, "53/udp": {"jump": "dns_in"}},
         }
     }
-    assert R.render(rule) == ["th dport vmap { 22 : jump ssh_in, 80 : jump web_in }"]
+    assert R.render(rule) == [
+        "meta l4proto . th dport vmap { tcp . 22 : jump ssh_in, udp . 53 : jump dns_in }"
+    ]
+
+
+def test_dport_vmap_bare_number_needs_proto():
+    # C3: `th dport vmap { 22 : … }` matched any protocol (udp/22 too)
+    with pytest.raises(BuildError, match="'22' has no protocol .* write 22/tcp"):
+        R.render({"vmap": {"key": "dport", "map": {22: {"jump": "ssh_in"}}}})
+
+
+def test_dport_vmap_port_range_pair():
+    rule = {"vmap": {"key": "sport", "map": {"8000-8100/tcp": "drop"}}}
+    assert R.render(rule) == ["meta l4proto . th sport vmap { tcp . 8000-8100 : drop }"]
 
 
 def test_mark_and_state_vmaps():
@@ -203,15 +216,91 @@ def test_saddr_vmap_mixed_family_errors():
 
 
 def test_dport_vmap_resolves_service_bundle():
-    # web -> 80,443 (two elements, same verdict); a number stays literal
-    rule = {"vmap": {"key": "dport", "map": {"web": {"jump": "w"}, 53: {"jump": "d"}}}}
+    # web -> tcp . 80, tcp . 443 (two elements, same verdict)
+    rule = {
+        "vmap": {"key": "dport", "map": {"web": {"jump": "w"}, "53/udp": {"jump": "d"}}}
+    }
     assert RN.render(rule) == [
-        "th dport vmap { 80 : jump w, 443 : jump w, 53 : jump d }"
+        "meta l4proto . th dport vmap { tcp . 80 : jump w, tcp . 443 : jump w, udp . 53 : jump d }"
+    ]
+
+
+_MIXED = Definitions.from_mappings(
+    {
+        "services": {"web": ["80/tcp", "443/tcp", "443/udp"], "ssh": ["22/tcp"]},
+        "interfaces": {"lan": ["lan0"]},
+    }
+)
+_MR = RuleRenderer(_MIXED, {})
+
+
+def test_dport_vmap_service_keeps_each_proto():
+    # C3: a service's ports used to merge into `th dport` (any protocol)
+    rule = {"vmap": {"key": "dport", "map": {"web": "accept"}}}
+    assert _MR.render(rule) == [
+        "meta l4proto . th dport vmap { tcp . 80 : accept, tcp . 443 : accept, udp . 443 : accept }"
+    ]
+
+
+def test_concat_proto_dport_filters_service_by_row_proto():
+    # C3: `match: [udp, web]` used to yield udp . 80 too
+    rule = {
+        "vmap": {
+            "key": ["proto", "dport"],
+            "map": [{"match": ["udp", "web"], "jump": "q"}],
+        }
+    }
+    assert _MR.render(rule) == ["meta l4proto . th dport vmap { udp . 443 : jump q }"]
+
+
+def test_concat_proto_dport_row_proto_without_ports_errors():
+    rule = {
+        "vmap": {
+            "key": ["proto", "dport"],
+            "map": [{"match": ["udp", "ssh"], "jump": "q"}],
+        }
+    }
+    with pytest.raises(BuildError, match="service 'ssh' has no udp ports"):
+        _MR.render(rule)
+
+
+def test_concat_proto_column_allows_bare_number():
+    # the row's proto column pins the protocol, so a bare port is unambiguous
+    rule = {
+        "vmap": {
+            "key": ["proto", "dport"],
+            "map": [{"match": ["tcp", 8080], "jump": "q"}],
+        }
+    }
+    assert _MR.render(rule) == ["meta l4proto . th dport vmap { tcp . 8080 : jump q }"]
+
+
+def test_concat_literal_pair_must_agree_with_row_proto():
+    rule = {
+        "vmap": {
+            "key": ["proto", "dport"],
+            "map": [{"match": ["udp", "8080/tcp"], "jump": "q"}],
+        }
+    }
+    with pytest.raises(BuildError, match="is tcp, but the row's proto is udp"):
+        _MR.render(rule)
+
+
+def test_concat_dport_without_proto_column_becomes_pair():
+    rule = {
+        "vmap": {
+            "key": ["iifname", "dport"],
+            "map": [{"match": ["lan", "web"], "jump": "q"}],
+        }
+    }
+    assert _MR.render(rule) == [
+        'iifname . meta l4proto . th dport vmap { "lan0" . tcp . 80 : jump q, '
+        '"lan0" . tcp . 443 : jump q, "lan0" . udp . 443 : jump q }'
     ]
 
 
 def test_dport_vmap_unknown_name_errors():
-    with pytest.raises(BuildError, match="not a known service group"):
+    with pytest.raises(BuildError, match="not a known service"):
         RN.render({"vmap": {"key": "dport", "map": {"weird": "drop"}}})
 
 
@@ -230,7 +319,7 @@ def test_concat_saddr_dport_family_aware():
         }
     }
     assert RN.render(rule) == [
-        "ip saddr . th dport vmap { 192.168.10.8/29 . 22 : jump admin_ssh }"
+        "ip saddr . meta l4proto . th dport vmap { 192.168.10.8/29 . tcp . 22 : jump admin_ssh }"
     ]
 
 

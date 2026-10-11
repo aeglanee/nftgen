@@ -81,14 +81,20 @@ proto (`proto: tcp`), and every translation keeps the pairing:
 - **inline** → the service's ports *for that proto* (`tcp dport { 80, 443 }`);
 - **named set** (`sets: [web]`) → a `(proto . port)` pair set
   (`type inet_proto . inet_service`, `elements = { tcp . 80, tcp . 443 }`),
-  matched as `meta l4proto tcp meta l4proto . th dport @web`.
+  matched as `meta l4proto tcp meta l4proto . th dport @web`;
+- **`dport`/`sport` vmap** → a pair lookup
+  (`meta l4proto . th dport vmap { tcp . 22 : … }`), since a vmap rule can't
+  carry a `proto:`; a bare port number has no proto and errors (write
+  `8080/tcp`); a `[proto, dport]` concat takes each row's proto's ports.
 
 *Why:* a port-only set (`{ 80, 443 }`, the pre-0.7.0 form) loses which proto
 each port belongs to — with `web: [80/tcp, 443/tcp, 443/udp]`, `proto: udp,
 dport: @web` also opened **udp/80**, while the inline form correctly opened
 only udp/443. Listing a definition under `sets:` must never change what the
 firewall lets through (§2.3); the pair set mirrors the definition exactly.
-Behaviorally proven (testing-plan B27).
+The pre-0.7.0 port vmap (`th dport vmap { 22 : … }`) matched *any*
+protocol — udp/22 for `ssh: [22/tcp]`. Behaviorally proven (testing-plan
+B27, B22).
 *Rejected:* erroring on the leaky combinations (forces `web_tcp`/`web_udp`
 splits for something nft can express exactly); port-only services
 (`web: [80]` — "any protocol" is the leak again; a hand-written `type:
