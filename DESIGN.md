@@ -117,8 +117,8 @@ networks:
 ```
 
 ```yaml
-# definitions/services.yaml   (port carries proto; emitted as a proto-agnostic set,
-#                      the protocol is stated on the rule — kills tcp/udp mixups)
+# definitions/services.yaml   (port carries proto; the rule states its proto and
+#   nftgen keeps the pairing — inline ports per proto, or a (proto . port) named set)
 services:
   ssh: [22/tcp]
   web: [80/tcp, 443/tcp]

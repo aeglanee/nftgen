@@ -30,7 +30,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | Base chain | `hook:`/`type:`/`priority:`/`policy:` | `type filter hook input priority 0; policy drop;` |
 | Regular chain | a chain with no `hook:` | `chain name { … }` (no header; reached by jump/goto) |
 | Named set (network) | `sets: [webhosts]` | `set webhosts { type ipv4_addr; flags interval; elements = { … } }` |
-| Named set (service) | `sets: [web]` | `set web { type inet_service; elements = { 80, 443 } }` |
+| Named set (service) | `sets: [web]` | `set web { type inet_proto . inet_service; elements = { tcp . 80, tcp . 443 } }` (proto kept — DECISIONS §2.2) |
 | Named set (interface) | `sets: [wan]` | `set wan { type ifname; elements = { "wan0", "wwan0" } }` |
 | Bare / live set | `{name: blocklist, type: ipv4_addr, flags: [interval, timeout]}` | empty set, filled at runtime via `nft add element` |
 | Concat set | `{name: f, concat: [saddr, daddr, dport], proto: tcp, tuples: [...]}` | `set f { type ipv4_addr . ipv4_addr . inet_service; elements = { a.b.c, … } }` (paired flows; rule refs it with `set: f` → `ip saddr . ip daddr . tcp dport @f`) |
@@ -57,7 +57,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | `mark` | `mark: "0x1"` | `meta mark 0x1` | match an fwmark (set one with `set-mark:`) |
 | `icmp-type` | `proto: icmpv6` / `icmp-type: [nd-neighbor-solicit, …]` | `icmpv6 type { … }` | family from `proto:` (icmp/icmpv6); single or list |
 | `proto` (standalone) | `proto: icmp` | `meta l4proto icmp` | |
-| `dport` / `sport` | `proto: tcp` / `dport: web` | `tcp dport @web` (or `{ 80, 443 }`) | needs `proto:`; service name → ports |
+| `dport` / `sport` | `proto: tcp` / `dport: web` | `meta l4proto tcp meta l4proto . th dport @web` (named) or `tcp dport { 80, 443 }` (inline) | needs `proto:`; service name → that proto's ports; error if it has none |
 | `flags` | `flags: {match: [syn], mask: [syn, ack]}` | `tcp flags & (syn\|ack) == syn` | a list of clauses multiplies into several lines |
 
 ---
@@ -108,7 +108,7 @@ A rule may be **statement-only** (no verdict) — e.g. an MSS clamp or a fwmark.
 | Feature | YAML | Behaviour |
 | --- | --- | --- |
 | networks | `lan: [192.168.1.0/24]` | IP/CIDR literals + composition |
-| services | `dns: [53/tcp, 53/udp]` | `port/proto`; emits proto-agnostic `inet_service`; proto stated on the rule |
+| services | `dns: [53/tcp, 53/udp]` | `port/proto`; proto stated on the rule; never dropped (inline per-proto ports, named = `(proto . port)` pair set) |
 | interfaces | `wan: [wan0, wwan0]` | device names + composition |
 | composition | `trusted: [lan, mgmt]` | names expand recursively (cycle-guarded, deduped) |
 | site overlay | host `site: site1` | `definitions/` + `sites/<site>.yaml` (additive; collision = error) |

@@ -65,6 +65,7 @@ Small dedicated fixture policies (one concern each) under
 | B24 | tcp-flags scrub | crafted fin+syn + null-scan segments (raw socket, no scapy) | dropped silent + `bad_tcp` rises; a normal SYN still replies |
 | B25 | log statement | structural only (assert rule renders; kernel log capture in ns is not portable) | n/a |
 | B26 | artifact reapply idempotence | `nft -f` the same artifact twice | second apply succeeds; ruleset identical (`nft list ruleset` stable) |
+| B27 | named service set keeps proto | `app: [7000/tcp, 7001/udp]` named + `proto: tcp` rule; tcp to 7000 and to 7001 (listener on both) | 7000 connects; tcp/7001 times out (policy drop). The pre-0.7.0 port-only set `{ 7000, 7001 }` connected — DECISIONS §2.2 |
 
 ## §2 PoC firewall end-to-end (reachability truth table)
 

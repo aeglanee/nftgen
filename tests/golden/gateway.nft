@@ -29,13 +29,13 @@ table inet filter {
     }
 
     set web {
-        type inet_service
-        elements = { 80, 443 }
+        type inet_proto . inet_service
+        elements = { tcp . 80, tcp . 443 }
     }
 
     set ssh {
-        type inet_service
-        elements = { 22 }
+        type inet_proto . inet_service
+        elements = { tcp . 22 }
     }
 
     set wan {
@@ -65,15 +65,15 @@ table inet filter {
         tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 counter name bad_tcp drop
         tcp flags & (fin|syn) == (fin|syn) counter name bad_tcp drop
         tcp flags & (fin|ack) == fin counter name bad_tcp drop
-        ct state new tcp dport @ssh limit rate 4/minute accept
-        tcp dport @ssh limit rate 6/minute log prefix "ssh-excess " level info
-        tcp dport @ssh counter name ssh_excess drop
-        tcp dport @web counter name web_hits accept
+        ct state new meta l4proto tcp meta l4proto . th dport @ssh limit rate 4/minute accept
+        meta l4proto tcp meta l4proto . th dport @ssh limit rate 6/minute log prefix "ssh-excess " level info
+        meta l4proto tcp meta l4proto . th dport @ssh counter name ssh_excess drop
+        meta l4proto tcp meta l4proto . th dport @web counter name web_hits accept
     }
 
     chain input_lan {
         meta l4proto icmp accept
-        ip saddr @mgmt tcp dport @ssh accept
+        ip saddr @mgmt meta l4proto tcp meta l4proto . th dport @ssh accept
     }
 
     chain forward {

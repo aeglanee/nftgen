@@ -113,7 +113,8 @@ nft -c validation → primitives A–E). What's left, à la carte:
 - Mirror nftables structure; author your own chains; no optimizer.
 - A definition becomes a **named set** only when listed under a table's `sets:`;
   else it inlines. Named set = single family (mixed → error, split `_v4`/`_v6`).
-- Services carry proto (`22/tcp`) but emit a proto-agnostic `inet_service` set;
-  the rule states the proto (kills the tcp/udp cross-product footgun).
+- Services carry proto (`22/tcp`) and nftgen never drops it: inline renders
+  the rule's proto's ports, a named service set is a `(proto . port)` pair set
+  (DECISIONS §2.2).
 - `raw:` (per-rule and per-table) is the escape hatch — nothing is ever blocked.
 - ct state is authored, never auto-injected; counters only where you ask.

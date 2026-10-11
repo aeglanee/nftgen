@@ -64,7 +64,7 @@ chain input {
     ct state invalid drop
     meta l4proto icmp accept
     meta l4proto icmpv6 accept
-    ip saddr @mgmt tcp dport @ssh accept
+    ip saddr @mgmt meta l4proto tcp meta l4proto . th dport @ssh accept
 }
 ```
 
@@ -103,7 +103,7 @@ rules:
 →
 
 ```nft
-ip saddr @web_clients ip daddr @web_servers tcp dport @https accept
+ip saddr @web_clients ip daddr @web_servers meta l4proto tcp meta l4proto . th dport @https accept
 ```
 
 This means **(saddr ∈ clients) AND (daddr ∈ servers) AND (dport = 443)** — i.e.
@@ -123,8 +123,13 @@ rules:
     action: accept
 ```
 
-→ `ip saddr @lan ip daddr @dmz tcp dport @web accept` — any LAN host → any
-DMZ host on 80/443.
+→
+
+```nft
+ip saddr @lan ip daddr @dmz meta l4proto tcp meta l4proto . th dport @web accept
+```
+
+— any LAN host → any DMZ host on 80/443.
 
 ### 2b. Paired flows = **concatenation**
 
@@ -236,8 +241,9 @@ A whole policy is three layers:
 1. **Chain skeleton** — base chains, conntrack-early, default `drop`, and any
    `jump`/`vmap` dispatch (§1). The structure the rules live in.
 2. **Group-to-group rules — the bulk.** Regular rules with sets:
-   `ip saddr @users ip daddr @services tcp dport @web accept`. Use these whenever
-   you want **all combinations** of the groups — the common case (~90%).
+   `ip saddr @users ip daddr @services … dport @web accept`. Use these
+   whenever you want **all combinations** of the groups — the common case
+   (~90%).
 3. **Specific paired flows — the exceptions.** A **concatenation** set of tuples,
    for flows where only exact pairings are allowed and cross-combinations must be
    denied.

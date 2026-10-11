@@ -14,14 +14,16 @@ def test_anonymous_counter_still_works():
     r = RuleRenderer(DEFS, NAMED)
     assert r.render(
         {"proto": "tcp", "dport": "http", "counter": True, "action": "accept"}
-    ) == ["tcp dport @http counter accept"]
+    ) == ["meta l4proto tcp meta l4proto . th dport @http counter accept"]
 
 
 def test_named_counter_renders_when_declared():
     r = RuleRenderer(DEFS, NAMED, counters={"http_hits"})
     assert r.render(
         {"proto": "tcp", "dport": "http", "counter": "http_hits", "action": "accept"}
-    ) == ["tcp dport @http counter name http_hits accept"]
+    ) == [
+        "meta l4proto tcp meta l4proto . th dport @http counter name http_hits accept"
+    ]
 
 
 def test_named_counter_undeclared_errors():

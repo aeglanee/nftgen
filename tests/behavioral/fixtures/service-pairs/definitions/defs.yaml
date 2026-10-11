@@ -1,0 +1,9 @@
+---
+# B27 fixture: a mixed-proto service materialised as a named set. 7001 is
+# udp-only, so a `proto: tcp` rule must not open tcp/7001.
+interfaces:
+  client_zone: [r-za]
+services:
+  app:
+    - 7000/tcp
+    - 7001/udp

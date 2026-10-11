@@ -1,0 +1,23 @@
+---
+# Named service set keeps proto (testing-plan B27): `app` is listed under
+# `sets:`, so it renders a (proto . port) pair set and the rule matches
+# `meta l4proto . th dport @app`. A port-only set { 7000, 7001 } with
+# `tcp dport @app` would also accept tcp/7001.
+tables:
+  - family: inet
+    name: filter
+    sets:
+      - app
+    chains:
+      - name: input
+        hook: input
+        type: filter
+        priority: filter
+        policy: drop
+        rules:
+          - ct: [established, related]
+            action: accept
+          - iifname: client_zone
+            proto: tcp
+            dport: app
+            action: accept

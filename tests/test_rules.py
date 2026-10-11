@@ -44,7 +44,82 @@ def test_named_sets_referenced_by_at():
             "action": "accept",
         }
     )
-    assert line == "ip saddr @webhosts tcp dport @web counter accept"
+    assert (
+        line
+        == "ip saddr @webhosts meta l4proto tcp meta l4proto . th dport @web counter accept"
+    )
+
+
+_MIXED = Definitions.from_mappings(
+    {"services": {"web": ["80/tcp", "443/tcp", "443/udp"], "ssh": ["22/tcp"]}}
+)
+_MIXED_R = RuleRenderer(_MIXED, {s.name: s for s in build_sets(["web"], _MIXED)})
+
+
+def test_named_service_set_keeps_proto():
+    # C2: a port-only set { 80, 443 } with `udp dport @web` also opened
+    # udp/80, which the service only has on tcp. The pair set can't.
+    line = _MIXED_R.render({"proto": "udp", "dport": "web", "action": "accept"})
+    assert line == ["meta l4proto udp meta l4proto . th dport @web accept"]
+    s = _MIXED_R.named["web"]
+    assert s.elements == ["tcp . 80", "tcp . 443", "udp . 443"]
+
+
+def test_named_and_inline_service_match_the_same_pairs():
+    # named vs inline must never differ in what they let through
+    inline = RuleRenderer(_MIXED, {})
+    assert inline.render({"proto": "udp", "dport": "web", "action": "accept"}) == [
+        "udp dport 443 accept"
+    ]
+
+
+def test_named_service_set_proto_without_ports_errors():
+    # same error as the inline form
+    with pytest.raises(BuildError, match="service 'web' has no sctp ports"):
+        _MIXED_R.render({"proto": "sctp", "dport": "web", "action": "accept"})
+    with pytest.raises(BuildError, match="service 'web' has no sctp ports"):
+        RuleRenderer(_MIXED, {}).render(
+            {"proto": "sctp", "dport": "web", "action": "accept"}
+        )
+
+
+def test_named_service_set_sport():
+    line = _MIXED_R.render({"proto": "tcp", "sport": "web", "action": "accept"})
+    assert line == ["meta l4proto tcp meta l4proto . th sport @web accept"]
+
+
+def test_pair_set_with_literal_port_skips_redundant_proto_match():
+    # `tcp sport 1024-65535` already pins tcp — no extra `meta l4proto tcp`
+    line = _MIXED_R.render(
+        {"proto": "tcp", "sport": "1024-65535", "dport": "web", "action": "accept"}
+    )
+    assert line == ["tcp sport 1024-65535 meta l4proto . th dport @web accept"]
+
+
+def test_bare_port_only_set_unchanged():
+    # a hand-written `type: inet_service` set stays a port-only match
+    named = {
+        s.name: s for s in build_sets([{"name": "p", "type": "inet_service"}], _MIXED)
+    }
+    line = RuleRenderer(_MIXED, named).render(
+        {"proto": "tcp", "dport": "p", "action": "accept"}
+    )
+    assert line == ["tcp dport @p accept"]
+
+
+def test_bare_pair_set_renders_pair_match():
+    # a hand-written pair set (e.g. filled at runtime) has no service to
+    # check against — it still renders the pair lookup
+    named = {
+        s.name: s
+        for s in build_sets(
+            [{"name": "live", "type": "inet_proto . inet_service"}], _MIXED
+        )
+    }
+    line = RuleRenderer(_MIXED, named).render(
+        {"proto": "udp", "dport": "live", "action": "accept"}
+    )
+    assert line == ["meta l4proto udp meta l4proto . th dport @live accept"]
 
 
 def test_inline_group_not_declared():
@@ -303,7 +378,7 @@ def test_build_base_chain():
         "    chain input {",
         "        type filter hook input priority 0; policy drop;",
         "        ct state established,related accept",
-        "        ip saddr @webhosts tcp dport @web accept",
+        "        ip saddr @webhosts meta l4proto tcp meta l4proto . th dport @web accept",
         "    }",
     ]
 

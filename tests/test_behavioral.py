@@ -775,3 +775,44 @@ def test_b25_log_statement_is_non_terminal(fw_tcp_flags):
         'log prefix "logged-svc "'
         in fw_tcp_flags.run(None, ["nft", "list", "ruleset"]).stdout
     )
+
+
+# --------------------------------------------------------------------------- #
+# B27 — a named service set keeps its proto (fixture: service-pairs)
+# --------------------------------------------------------------------------- #
+
+SVC_ROUTER = "10.81.1.1"
+
+
+@pytest.fixture(scope="module")
+def fw_service_pairs():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": "za",
+                    "router_if": "r-za",
+                    "router_addr": f"{SVC_ROUTER}/24",
+                    "ns_addr": "10.81.1.2/24",
+                    "gw": SVC_ROUTER,
+                },
+            ]
+        )
+        artifact = build(FIXTURES / "service-pairs")["router"]
+        assert "meta l4proto . th dport @app" in artifact  # a pair-set lookup
+        harness.nft_apply(artifact)
+        harness.listen(None, 7000)
+        harness.listen(None, 7001)  # tcp listener on the udp-only port
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b27_named_service_set_keeps_proto(fw_service_pairs):
+    # tcp/7000 is in the service → accepted. 7001 exists only as udp, so
+    # tcp/7001 must hit policy drop (timeout) although a listener is there —
+    # a port-only set { 7000, 7001 } would have connected.
+    assert fw_service_pairs.probe_tcp("za", SVC_ROUTER, 7000) == "connected"
+    assert fw_service_pairs.probe_tcp("za", SVC_ROUTER, 7001) == "timeout"

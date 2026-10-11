@@ -39,13 +39,13 @@ table inet filter {
     }
 
     set web {
-        type inet_service
-        elements = { 80, 443 }
+        type inet_proto . inet_service
+        elements = { tcp . 80, tcp . 443 }
     }
 
     set ssh {
-        type inet_service
-        elements = { 22 }
+        type inet_proto . inet_service
+        elements = { tcp . 22 }
     }
 
     set wan {
@@ -87,7 +87,7 @@ table inet filter {
         ct state established,related accept
         meta l4proto icmp accept
         meta l4proto icmpv6 accept
-        ip saddr @mgmt tcp dport @ssh counter accept
+        ip saddr @mgmt meta l4proto tcp meta l4proto . th dport @ssh counter accept
     }
 
     chain forward {
@@ -95,7 +95,7 @@ table inet filter {
         ct state established,related accept
         ip daddr @no_forward_ipv4 counter drop
         tcp flags syn tcp option maxseg size set rt mtu
-        iifname @lan_if oifname @wan ip saddr 192.168.20.0/24 tcp dport @web counter accept
+        iifname @lan_if oifname @wan ip saddr 192.168.20.0/24 meta l4proto tcp meta l4proto . th dport @web counter accept
     }
 }
 

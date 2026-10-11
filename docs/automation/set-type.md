@@ -41,12 +41,12 @@ set hosts6 { type ipv6_addr
     flags interval
     elements = { 2001:db8::1, 2001:db8::2 } }
 
-set ssh    { type inet_service
-    elements = { 22 } }                       # no interval -> hash backend
+set ssh    { type inet_proto . inet_service
+    elements = { tcp . 22 } }                 # no interval -> hash backend
 
-set etcd   { type inet_service
-    flags interval                            # range -> interval
-    elements = { 2379-2380 } }
+set etcd   { type inet_proto . inet_service
+    flags interval                            # range -> interval (pipapo)
+    elements = { tcp . 2379-2380 } }
 
 set wan    { type ifname
     elements = { "wan0", "wwan0" } }
@@ -56,8 +56,8 @@ set wan    { type ifname
 | --- | --- | --- | --- |
 | v4 addresses | `ipv4_addr` | **yes** | a network group may contain a CIDR |
 | v6 addresses | `ipv6_addr` | **yes** | same |
-| a port | `inet_service` | no → **hash** | exact value, O(1) |
-| a port **range** | `inet_service` | **yes** | ranges need interval |
+| a service port | `inet_proto . inet_service` | no → **hash** | exact `(proto . port)` pair, O(1) |
+| a service port **range** | `inet_proto . inet_service` | **yes** | ranges need interval (pipapo backend for a concatenation) |
 | device names | `ifname` | no | exact strings |
 
 **Default rationale:** networks always get `interval` (always correct — a CIDR

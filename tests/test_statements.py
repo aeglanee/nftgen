@@ -29,7 +29,7 @@ def test_limit():
                 "action": "accept",
             }
         )
-        == "ct state new tcp dport @ssh limit rate 10/minute accept"
+        == "ct state new meta l4proto tcp meta l4proto . th dport @ssh limit rate 10/minute accept"
     )
 
 
@@ -43,7 +43,7 @@ def test_quota():
 def test_log_bool_and_opts():
     assert (
         one({"proto": "tcp", "dport": "ssh", "log": True, "action": "accept"})
-        == "tcp dport @ssh log accept"
+        == "meta l4proto tcp meta l4proto . th dport @ssh log accept"
     )
     assert (
         one(
@@ -54,7 +54,7 @@ def test_log_bool_and_opts():
                 "action": "accept",
             }
         )
-        == 'tcp dport @ssh log prefix "ssh " level info accept'
+        == 'meta l4proto tcp meta l4proto . th dport @ssh log prefix "ssh " level info accept'
     )
 
 
@@ -100,7 +100,10 @@ def test_statement_order_before_verdict():
             "action": "accept",
         }
     )
-    assert line == "tcp dport @ssh limit rate 5/second log counter accept"
+    assert (
+        line
+        == "meta l4proto tcp meta l4proto . th dport @ssh limit rate 5/second log counter accept"
+    )
 
 
 def test_flow_offload_must_not_carry_a_verdict():

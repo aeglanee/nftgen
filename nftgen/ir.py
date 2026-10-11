@@ -115,6 +115,10 @@ def check_nft_name(name, kind: str) -> None:
 
 _WRAP_AT = 4  # a { … } literal with this many entries renders one per line
 
+# A named service set: (l4 protocol, port) pairs, matched with
+# `meta l4proto . th dport @set`.
+SERVICE_PAIR_TYPE = "inet_proto . inet_service"
+
 
 def render_literal(entries: list[str], base_indent: str) -> str:
     """Render a ``{ … }`` literal — single-line while small, one entry per
@@ -145,6 +149,9 @@ class NamedSet:
     concat_fields: list[str] | None = None
     concat_proto: str | None = None
     concat_family: str | None = None  # 'ip' | 'ip6' | None (no address field)
+    # the service definition a (proto . port) pair set was built from (None
+    # otherwise) — lets a rule check its proto against the definition.
+    service: str | None = None
 
     def render(self) -> list[str]:
         lines = [f"{SET_INDENT}set {self.name} {{", f"{BODY_INDENT}type {self.type}"]
@@ -270,11 +277,14 @@ def _set_from_definition(name: str, defs: Definitions) -> NamedSet:
         family = _classify_family(elements, name)
         return NamedSet(name, f"{family}_addr", elements, flags=["interval"])
     if category == "services":
-        ports = _unique_ports(defs.service(name))
-        if not ports:
+        # A service is proto + port, so its set keeps both: a port-only set
+        # would let `proto: udp` match a port the service only has on tcp.
+        pairs = defs.service(name)
+        if not pairs:
             raise BuildError(f"set {name!r}: service group resolves to no ports")
-        flags = ["interval"] if any("-" in p for p in ports) else []
-        return NamedSet(name, "inet_service", ports, flags)
+        elements = [f"{proto} . {port}" for proto, port in pairs]
+        flags = ["interval"] if any("-" in port for _proto, port in pairs) else []
+        return NamedSet(name, SERVICE_PAIR_TYPE, elements, flags, service=name)
     devices = [f'"{d}"' for d in defs.interface(name)]
     if not devices:
         raise BuildError(f"set {name!r}: interface group resolves to no devices")
@@ -447,7 +457,3 @@ def _classify_family(elements: list[str], name: str) -> str:
         f"set {name!r} mixes IPv4 and IPv6; a named set is single-family — "
         f"split into e.g. {name}_v4 / {name}_v6"
     )
-
-
-def _unique_ports(pairs: list[tuple[str, str]]) -> list[str]:
-    return list(dict.fromkeys(port for _proto, port in pairs))

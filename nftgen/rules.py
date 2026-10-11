@@ -18,6 +18,7 @@ from nftgen.definitions import Definitions
 from nftgen.ir import (
     _PORT_LITERAL,
     BODY_INDENT,
+    SERVICE_PAIR_TYPE,
     BuildError,
     Chain,
     Flowtable,
@@ -442,15 +443,35 @@ class RuleRenderer:
         if "sport" in rule or "dport" in rule:
             if not proto:
                 raise BuildError(f"port match needs a proto: {rule!r}")
-            out = []
-            if "sport" in rule:
-                out.append(f"{proto} sport {self._port(rule['sport'], proto)}")
-            if "dport" in rule:
-                out.append(f"{proto} dport {self._port(rule['dport'], proto)}")
-            return out
+            out, pairs = [], []
+            for key in ("sport", "dport"):
+                if key not in rule:
+                    continue
+                value = rule[key]
+                if self._is_pair_set(value):
+                    self._check_pair_proto(value, proto)
+                    pairs.append(f"meta l4proto . th {key} @{value}")
+                else:
+                    out.append(f"{proto} {key} {self._port(value, proto)}")
+            # a pair lookup carries no proto of its own: the rule's `proto:`
+            # needs its own match unless a `<proto> sport/dport` already pins it
+            if pairs and not out:
+                out.append(f"meta l4proto {proto}")
+            return out + pairs
         if proto:
             return [f"meta l4proto {proto}"]
         return []
+
+    def _is_pair_set(self, value) -> bool:
+        s = self.named.get(value) if isinstance(value, str) else None
+        return s is not None and s.type == SERVICE_PAIR_TYPE
+
+    def _check_pair_proto(self, name: str, proto: str) -> None:
+        """A service pair set used with `proto:` must hold ports for it —
+        the same "no <proto> ports" error the inline form gives."""
+        service = self.named[name].service
+        if service is not None and not self.defs.service_ports(service, proto):
+            raise BuildError(f"service {service!r} has no {proto} ports")
 
     def _port(self, value, proto: str) -> str:
         if value in self.named:

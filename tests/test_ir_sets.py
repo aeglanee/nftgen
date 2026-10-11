@@ -41,17 +41,28 @@ def test_mixed_family_named_set_errors():
         build_sets(["dual"], DEFS)
 
 
-def test_service_set_dedupes_ports_and_no_interval():
+def test_service_set_is_proto_port_pairs_no_interval():
     s = build_sets(["web"], DEFS)[0]
-    assert s.type == "inet_service"
-    assert s.elements == ["80", "443"]
+    assert s.type == "inet_proto . inet_service"
+    assert s.elements == ["tcp . 80", "tcp . 443"]
     assert s.flags == []
+    assert s.service == "web"
+
+
+def test_service_set_keeps_each_proto():
+    # a port-only set would merge these into { 53, 123 } and lose which
+    # proto each port belongs to
+    defs = Definitions.from_mappings(
+        {"services": {"mixed": ["53/tcp", "53/udp", "123/udp"]}}
+    )
+    s = build_sets(["mixed"], defs)[0]
+    assert s.elements == ["tcp . 53", "udp . 53", "udp . 123"]
 
 
 def test_service_set_range_gets_interval_flag():
     s = build_sets(["k3s"], DEFS)[0]
     assert "interval" in s.flags
-    assert "2379-2380" in s.elements
+    assert "tcp . 2379-2380" in s.elements
 
 
 def test_interface_set_quotes_devices():
@@ -106,8 +117,8 @@ table inet filter {
     }
 
     set web {
-        type inet_service
-        elements = { 80, 443 }
+        type inet_proto . inet_service
+        elements = { tcp . 80, tcp . 443 }
     }
 
     set wan {

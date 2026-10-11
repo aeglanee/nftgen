@@ -26,7 +26,7 @@ rules:
 ct state established,related accept
 iifname @wan drop
 meta l4proto icmp accept
-ip saddr @mgmt tcp dport @web accept
+ip saddr @mgmt meta l4proto tcp meta l4proto . th dport @web accept
 ```
 
 ## The key → token map
@@ -38,7 +38,7 @@ ip saddr @mgmt tcp dport @web accept
 | `saddr` / `daddr` | `ip`/`ip6 saddr`/`daddr` | family prefix from the address |
 | `proto: X` (alone) | `meta l4proto X` | family-agnostic L4 match |
 | `proto: X` + `sport`/`dport` | `X sport`/`dport …` | proto-qualified port |
-| `dport: <service>` | the service's ports for that proto | e.g. `web` → `@web` / `{ 80, 443 }` |
+| `dport: <service>` | the service's ports for that proto | inline `tcp dport { 80, 443 }`; named set `meta l4proto tcp meta l4proto . th dport @web` (a `(proto . port)` pair set) |
 | `ct: [s, …]` | `ct state s,…` | |
 
 ## Why it's safe to automate
