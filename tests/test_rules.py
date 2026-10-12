@@ -391,6 +391,17 @@ def test_build_chain_unresolved_include_errors():
         build_chain(spec, R)
 
 
+@pytest.mark.parametrize("key", ["type", "priority", "policy"])
+def test_base_chain_setting_without_hook_errors(key):
+    # C6: these were silently dropped — a `policy: drop` "input" chain with no
+    # hook became a regular chain attached to nothing.
+    value = {"type": "filter", "priority": "filter", "policy": "drop"}[key]
+    with pytest.raises(
+        BuildError, match=rf"chain 'input' has \['{key}'\] but no `hook:`"
+    ):
+        build_chain({"name": "input", key: value, "rules": []}, R)
+
+
 def test_build_regular_chain_has_no_header():
     chain = build_chain(
         {"name": "common", "rules": [{"proto": "icmp", "action": "accept"}]}, R

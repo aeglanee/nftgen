@@ -878,6 +878,15 @@ def build_chain(spec: dict, renderer: RuleRenderer) -> Chain:
     if "name" not in spec:
         raise BuildError(f"chain needs a `name:`: {spec!r}")
     check_nft_name(spec["name"], "chain")
+    base_only = sorted(set(spec) & {"type", "priority", "policy"})
+    if base_only and "hook" not in spec:
+        # without a hook it's a regular chain (reached only by jump/goto), which
+        # has no type/priority/policy — dropping them silently would leave an
+        # intended `policy: drop` filter attached to nothing.
+        raise BuildError(
+            f"chain {spec['name']!r} has {base_only} but no `hook:` — add a "
+            f"hook for a base chain, or remove them for a regular chain"
+        )
     rule_lines: list[str] = []
     for r in spec.get("rules", []):
         if isinstance(r, dict) and "include" in r:

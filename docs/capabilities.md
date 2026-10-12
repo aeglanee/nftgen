@@ -28,7 +28,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | --- | --- | --- |
 | Table | `family: inet` / `name: filter` | `table inet filter { … }` |
 | Base chain | `hook:`/`type:`/`priority:`/`policy:` | `type filter hook input priority 0; policy drop;` |
-| Regular chain | a chain with no `hook:` | `chain name { … }` (no header; reached by jump/goto) |
+| Regular chain | a chain with no `hook:` | `chain name { … }` (no header; reached by jump/goto). `type:`/`priority:`/`policy:` without `hook:` is an error |
 | Named set (network) | `sets: [webhosts]` | `set webhosts { type ipv4_addr; flags interval; elements = { … } }` |
 | Named set (service) | `sets: [web]` | `set web { type inet_proto . inet_service; elements = { tcp . 80, tcp . 443 } }` (proto kept — DECISIONS §2.2) |
 | Named set (interface) | `sets: [wan]` | `set wan { type ifname; elements = { "wan0", "wwan0" } }` |
