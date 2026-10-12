@@ -7,8 +7,12 @@ on:
   push:
     branches:
       - main
-      - master
   pull_request:
+  # Weekly, even with no commits: PyYAML/pytest/pre-commit are ranges, not
+  # pins, so a new upstream release can break us without a Renovate PR.
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,10 +22,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: lint + tests + nft -c
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -29,7 +33,35 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
+
+      - name: Install dev dependencies
+        run: |
+          set -euo pipefail
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e '.[dev]'
+
+      - name: Lint (ruff / yamllint / markdownlint / gitleaks)
+        run: make lint
+
+  test:
+    name: tests + nft -c (py${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # every Python `requires-python` (>=3.10) claims to support
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ matrix.python }}
 
       - name: Install nftables + iproute2 (for nft -c and the netns harness)
         run: |
@@ -51,9 +83,6 @@ jobs:
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
-
-      - name: Lint (ruff / yamllint / markdownlint / gitleaks)
-        run: make lint
 
       # Fail loud if the runner can't run nft -c — otherwise the nft-dependent
       # and behavioral tests would silently skip and we'd lose that coverage.

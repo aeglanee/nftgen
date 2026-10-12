@@ -1,0 +1,75 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "branchConcurrentLimit": 5,
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Dependency Dashboard",
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "minimumReleaseAge": "3 days",
+  "platformAutomerge": false,
+  "packageRules": [
+    {
+      "description": "Green minor/patch/pin/digest updates merge themselves; CI is the gate",
+      "automerge": true,
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "digest"
+      ]
+    },
+    {
+      "addLabels": [
+        "major-update"
+      ],
+      "dependencyDashboardApproval": true,
+      "matchUpdateTypes": [
+        "major"
+      ]
+    },
+    {
+      "groupName": "github-actions",
+      "matchManagers": [
+        "github-actions"
+      ]
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "pinDigests": true
+    },
+    {
+      "description": "ruff is pinned in pyproject (dev extra) and pre-commit — keep them in one PR",
+      "groupName": "ruff",
+      "matchPackageNames": [
+        "/(^|/)ruff(-pre-commit)?$/"
+      ]
+    },
+    {
+      "description": "yamllint is pinned in pyproject (dev extra) and pre-commit — keep them in one PR",
+      "groupName": "yamllint",
+      "matchPackageNames": [
+        "/(^|/)yamllint(\\.git)?$/"
+      ]
+    }
+  ],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "pre-commit": {
+    "enabled": true
+  },
+  "rebaseWhen": "behind-base-branch",
+  "semanticCommits": "enabled",
+  "vulnerabilityAlerts": {
+    "automerge": false,
+    "enabled": true,
+    "labels": [
+      "security"
+    ]
+  }
+}
