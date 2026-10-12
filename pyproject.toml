@@ -3,7 +3,7 @@ name = "nftgen"
 version = "0.7.0"
 description = "A small, nftables-only firewall-as-code generator (YAML -> .nft)."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "aeglanee" }]
 dependencies = ["PyYAML>=6.0"]
@@ -31,7 +31,7 @@ packages = ["nftgen"]
 testpaths = ["tests"]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 88
 
 [tool.ruff.lint]
