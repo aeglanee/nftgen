@@ -27,6 +27,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | Construct | YAML | Renders to |
 | --- | --- | --- |
 | Table | `family: inet` / `name: filter` | `table inet filter { … }` |
+| Comment | `comment: "admins → router ssh"` on a rule, chain, set entry, or table | nft native `comment "…"` (kept in the kernel, shown by `nft list ruleset`); on a rule it goes last on every expanded line; no `"`/newline, ≤128 bytes; not on `raw:` rules (write it in the raw string) |
 | Base chain | `hook:`/`type:`/`priority:`/`policy:` | `type filter hook input priority 0; policy drop;` |
 | Regular chain | a chain with no `hook:` | `chain name { … }` (no header; reached by jump/goto). `type:`/`priority:`/`policy:` without `hook:` is an error |
 | Named set (network) | `sets: [webhosts]` | `set webhosts { type ipv4_addr; flags interval; elements = { … } }` |

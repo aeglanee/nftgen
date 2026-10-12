@@ -211,6 +211,15 @@ rendering like addresses. Until promoted, it lives in `raw:` (see gateway exampl
 `udp dport 5060 ip dscp set ef`). *Why:* don't ship a primitive that can silently
 do the wrong thing across families — `raw:` is honest meanwhile.
 
+### 4.3 Comments are native nft comments, authored per object
+
+A `comment:` key (rule, chain, set entry, table) renders nft's native
+`comment "…"`. *Why:* it lives in the kernel with the object, so whoever runs
+`nft list ruleset` on the router sees why a rule exists; a `#` line in the
+`.nft` file is discarded on load. Authored, never generated (§1.5).
+*Rejected:* copying YAML `#` comments into the output (YAML parsers drop
+them, and prose written for the source isn't written for the box).
+
 ---
 
 ## 5. Packaging & invocation

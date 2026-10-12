@@ -23,6 +23,7 @@ from nftgen.ir import (
     Chain,
     Flowtable,
     NamedSet,
+    check_comment,
     check_nft_name,
     render_literal,
 )
@@ -211,7 +212,22 @@ class RuleRenderer:
         self.counters = frozenset(counters)
 
     # -- public ------------------------------------------------------------- #
-    def render(self, rule: dict) -> list[str]:  # noqa: PLR0912, PLR0915 - dispatches per rule key
+    def render(self, rule: dict) -> list[str]:
+        """Render one rule to nft line(s). A `comment:` is appended to every
+        line the rule expands to (v4 + v6, one per flags clause) — nft wants
+        it last on the rule."""
+        if not isinstance(rule, dict) or "comment" not in rule:
+            return self._render(rule)
+        if "raw" in rule:
+            raise BuildError(
+                f'`raw:` can\'t take `comment:` — write `comment "…"` inside the '
+                f"raw string: {rule!r}"
+            )
+        text = check_comment(rule["comment"], "rule")
+        body = {k: v for k, v in rule.items() if k != "comment"}
+        return [f'{line} comment "{text}"' for line in self._render(body)]
+
+    def _render(self, rule: dict) -> list[str]:  # noqa: PLR0912, PLR0915 - dispatches per rule key
         # Reject typos/unknown keys loudly: an unread key silently weakens a rule
         # (e.g. `dprot:` for `dport:`) and nft -c can't catch it (still valid nft).
         unknown = set(rule) - _KNOWN_RULE_KEYS
@@ -838,7 +854,9 @@ class RuleRenderer:
 
 
 _FLOWTABLE_KEYS = frozenset({"name", "hook", "priority", "devices"})
-_CHAIN_KEYS = frozenset({"name", "hook", "type", "priority", "policy", "rules"})
+_CHAIN_KEYS = frozenset(
+    {"name", "hook", "type", "priority", "policy", "rules", "comment"}
+)
 
 
 def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:
@@ -898,6 +916,8 @@ def build_chain(spec: dict, renderer: RuleRenderer) -> Chain:
             )
         rule_lines.extend(renderer.render(r))
     chain = Chain(name=spec["name"], rules=rule_lines)
+    if "comment" in spec:
+        chain.comment = check_comment(spec["comment"], f"chain {spec['name']!r}")
     if "hook" in spec:
         chain.hook = spec["hook"]
         chain.type = spec.get("type", "filter")

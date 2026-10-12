@@ -177,6 +177,10 @@ Match keys: `iifname` / `oifname` (interface name) or `iif` / `oif`
 `counter` (bool), `log` (bool/opts). `action`: `accept` / `drop` / `reject` /
 `masquerade`, or a mapping — `jump: chain` / `goto: chain` /
 `dnat: 10.0.0.5` / `snat: 1.2.3.4` (written as an indented block under `action:`).
+`comment:` (text) renders nft's native `comment "…"` — last on every line the
+rule expands to; tables, chains, and set entries take one too. It is kept in
+the kernel, so `nft list ruleset` on the box shows it (a `#` file comment is
+gone once loaded). No `"` or line break; at most 128 bytes (nft's limit).
 
 ```yaml
 - iifname: lan_if

@@ -13,7 +13,7 @@ from collections.abc import Mapping
 import yaml
 
 from nftgen.definitions import Definitions
-from nftgen.ir import BuildError, Table, build_sets, check_nft_name
+from nftgen.ir import BuildError, Table, build_sets, check_comment, check_nft_name
 from nftgen.rules import RuleRenderer, build_chain, build_flowtables
 
 # Strict authoring surface: an unknown key is a typo, and a typo'd `tables:` or
@@ -21,7 +21,7 @@ from nftgen.rules import RuleRenderer, build_chain, build_flowtables
 # passes — with `flush ruleset` that artifact wipes the firewall on deploy.
 _POLICY_KEYS = frozenset({"site", "tables"})
 _TABLE_KEYS = frozenset(
-    {"family", "name", "sets", "chains", "counters", "raw", "flowtables"}
+    {"family", "name", "sets", "chains", "counters", "raw", "flowtables", "comment"}
 )
 # An include file holds these sections; the `- include:` entry's position
 # (a table's `sets:` or a chain's `rules:`) picks which one is pulled.
@@ -172,6 +172,11 @@ def render_tables(
                 raw=list(tspec.get("raw", [])),
                 counters=counters,
                 flowtables=build_flowtables(tspec.get("flowtables", []), defs),
+                comment=(
+                    check_comment(tspec["comment"], f"table {tspec['name']!r}")
+                    if "comment" in tspec
+                    else None
+                ),
             )
         )
 

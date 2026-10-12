@@ -113,6 +113,30 @@ def check_nft_name(name, kind: str) -> None:
         )
 
 
+_COMMENT_MAX_BYTES = 128  # nft rejects longer: "128 characters maximum allowed"
+
+
+def check_comment(value, where: str) -> str:
+    """A `comment:` value, rendered as nft's native `comment "…"` (kept in the
+    kernel, shown by `nft list ruleset`). nft can't escape a `"` and caps the
+    length in bytes, so both fail here against the YAML, not at load."""
+    if not isinstance(value, str) or not value:
+        raise BuildError(
+            f"{where}: `comment:` must be a non-empty string, got {value!r}"
+        )
+    if '"' in value or "\n" in value or "\r" in value:
+        raise BuildError(
+            f"{where}: `comment:` can't contain a double quote or a line break: {value!r}"
+        )
+    size = len(value.encode())
+    if size > _COMMENT_MAX_BYTES:
+        raise BuildError(
+            f"{where}: `comment:` is {size} bytes; nft allows at most "
+            f"{_COMMENT_MAX_BYTES}: {value!r}"
+        )
+    return value
+
+
 _WRAP_AT = 4  # a { … } literal with this many entries renders one per line
 
 # A named service set: (l4 protocol, port) pairs, matched with
@@ -149,6 +173,7 @@ class NamedSet:
     concat_fields: list[str] | None = None
     concat_proto: str | None = None
     concat_family: str | None = None  # 'ip' | 'ip6' | None (no address field)
+    comment: str | None = None
     # the service definition a (proto . port) pair set was built from (None
     # otherwise) — lets a rule check its proto against the definition.
     service: str | None = None
@@ -157,6 +182,8 @@ class NamedSet:
         lines = [f"{SET_INDENT}set {self.name} {{", f"{BODY_INDENT}type {self.type}"]
         if self.flags:
             lines.append(f"{BODY_INDENT}flags {', '.join(self.flags)}")
+        if self.comment:
+            lines.append(f'{BODY_INDENT}comment "{self.comment}"')
         if self.elements:
             lines.append(
                 f"{BODY_INDENT}elements = {render_literal(self.elements, BODY_INDENT)}"
@@ -174,6 +201,7 @@ class Chain:
     type: str | None = None
     priority: int | str | None = None
     policy: str | None = None
+    comment: str | None = None
 
     def render(self) -> list[str]:
         lines = [f"{SET_INDENT}chain {self.name} {{"]
@@ -182,6 +210,8 @@ class Chain:
                 f"{BODY_INDENT}type {self.type} hook {self.hook} "
                 f"priority {self.priority}; policy {self.policy};"
             )
+        if self.comment:
+            lines.append(f'{BODY_INDENT}comment "{self.comment}"')
         for rule in self.rules:
             lines.append(f"{BODY_INDENT}{rule}")
         lines.append(f"{SET_INDENT}}}")
@@ -213,9 +243,12 @@ class Table:
     raw: list[str] = field(default_factory=list)  # table-level raw object declarations
     counters: list[str] = field(default_factory=list)  # named counter objects
     flowtables: list[Flowtable] = field(default_factory=list)
+    comment: str | None = None
 
     def render(self) -> str:
         out = [f"table {self.family} {self.name} {{"]
+        if self.comment:
+            out.append(f'{SET_INDENT}comment "{self.comment}"')
         blocks: list[list[str]] = []
         blocks += [[f"{SET_INDENT}{r}"] for r in self.raw]
         blocks += [ft.render() for ft in self.flowtables]
@@ -255,6 +288,8 @@ def build_sets(sets_spec: list, defs: Definitions) -> list[NamedSet]:
         else:
             raise BuildError(f"set entry must be a name or a mapping, got {entry!r}")
         check_nft_name(out[-1].name, "set")
+        if isinstance(entry, dict) and "comment" in entry:
+            out[-1].comment = check_comment(entry["comment"], f"set {out[-1].name!r}")
     return out
 
 
@@ -291,8 +326,8 @@ def _set_from_definition(name: str, defs: Definitions) -> NamedSet:
     return NamedSet(name, "ifname", devices)
 
 
-_BARE_SET_KEYS = frozenset({"name", "type", "elements", "flags"})
-_CONCAT_SET_KEYS = frozenset({"name", "concat", "proto", "tuples", "family"})
+_BARE_SET_KEYS = frozenset({"name", "type", "elements", "flags", "comment"})
+_CONCAT_SET_KEYS = frozenset({"name", "concat", "proto", "tuples", "family", "comment"})
 
 
 def _bare_set(entry: dict) -> NamedSet:
