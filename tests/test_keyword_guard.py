@@ -42,7 +42,9 @@ def test_bare_and_concat_set_keyword_rejected():
     with pytest.raises(BuildError, match="reserved nftables keyword"):
         build_sets([{"name": "counter", "type": "ipv4_addr"}], DEFS)
     with pytest.raises(BuildError, match="reserved nftables keyword"):
-        build_sets([{"name": "flow", "concat": ["saddr", "daddr"], "tuples": []}], DEFS)
+        build_sets(
+            [{"name": "flow", "concat": ["saddr", "daddr"], "family": "ip"}], DEFS
+        )
 
 
 def test_chain_name_keyword_rejected():

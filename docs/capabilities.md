@@ -33,7 +33,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | Named set (service) | `sets: [web]` | `set web { type inet_proto . inet_service; elements = { tcp . 80, tcp . 443 } }` (proto kept — DECISIONS §2.2) |
 | Named set (interface) | `sets: [wan]` | `set wan { type ifname; elements = { "wan0", "wwan0" } }` |
 | Bare / live set | `{name: blocklist, type: ipv4_addr, flags: [interval, timeout]}` | empty set, filled at runtime via `nft add element` |
-| Concat set | `{name: f, concat: [saddr, daddr, dport], proto: tcp, tuples: [...]}` | `set f { type ipv4_addr . ipv4_addr . inet_service; elements = { a.b.c, … } }` (paired flows; rule refs it with `set: f` → `ip saddr . ip daddr . tcp dport @f`) |
+| Concat set | `{name: f, concat: [saddr, daddr, dport], proto: tcp, tuples: [...]}` | `set f { type ipv4_addr . ipv4_addr . inet_service; elements = { a.b.c, … } }` (paired flows; rule refs it with `set: f` → `ip saddr . ip daddr . tcp dport @f`). Family from the tuples; an empty (runtime-filled) set with an address field needs `family: ip`/`ip6` |
 | Named counter | table `counters: [bad_tcp]` | `counter bad_tcp { }` |
 | Flowtable | table `flowtables: [{name: ft, devices: [wan]}]` | `flowtable ft { hook ingress priority 0; devices = { "wan0" } }` |
 | Table-level raw | table `raw: ["…"]` | verbatim object declaration inside the table |

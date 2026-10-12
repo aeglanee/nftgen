@@ -162,8 +162,12 @@ These are automated (the mechanics — see [automation/](automation/)); only the
 tuples themselves are author-defined:
 
 - **Set `type`** from the field list (`saddr`→`ipv4_addr`, `{dport: tcp}`→`inet_service`).
-- **Family split** — if the address fields resolve to both v4 and v6, emit
-  `db_flows_v4` / `db_flows_v6` + per-family rules (single-family rule, as today).
+- **Family** — v4 vs v6 is read from the tuples' addresses. Mixed v4/v6 tuples
+  are an error (split into `<name>_v4` / `<name>_v6` yourself — single-family
+  rule). A set with an address field but **no tuples** (filled at runtime with
+  `nft add element`) has nothing to read it from, so it needs
+  `family: ip` / `family: ip6`; a `family:` that contradicts the tuples, or on
+  a set without `saddr`/`daddr`, is an error.
 - **Arity check** — each tuple's length must equal the field count.
 - **Match syntax** — `ip saddr . ip daddr . tcp dport @set`, field order taken
   from the set's `concat:` (so the rule never restates it).

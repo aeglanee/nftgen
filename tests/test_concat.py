@@ -214,6 +214,77 @@ def test_unknown_set_reference_errors():
 
 
 # -- real nft -c ------------------------------------------------------------ #
+def test_empty_addr_concat_needs_family():
+    # C5: no tuples → the family was guessed (ipv6_addr) and the rule
+    # rendered `None saddr . …`
+    with pytest.raises(BuildError, match="add `family: ip` or `family: ip6`"):
+        build_sets([{"name": "f", "concat": ["saddr", "dport"], "proto": "tcp"}], DEFS)
+
+
+def test_empty_addr_concat_with_family():
+    r, sets = _r(
+        [{"name": "f", "concat": ["saddr", "dport"], "proto": "tcp", "family": "ip"}]
+    )
+    assert sets[0].type == "ipv4_addr . inet_service"
+    assert sets[0].elements == []
+    assert r.render({"set": "f", "action": "accept"}) == [
+        "ip saddr . tcp dport @f accept"
+    ]
+    r6, sets6 = _r([{"name": "g", "concat": ["daddr"], "family": "ip6"}])
+    assert sets6[0].type == "ipv6_addr"
+    assert r6.render({"set": "g", "action": "drop"}) == ["ip6 daddr @g drop"]
+
+
+def test_family_must_match_tuples():
+    with pytest.raises(BuildError, match="`family: ip6` contradicts its tuples"):
+        build_sets(
+            [{"name": "f", "concat": ["saddr"], "family": "ip6", "tuples": [["app"]]}],
+            DEFS,
+        )
+    # agreeing is fine
+    assert (
+        build_sets(
+            [{"name": "f", "concat": ["saddr"], "family": "ip", "tuples": [["app"]]}],
+            DEFS,
+        )[0].concat_family
+        == "ip"
+    )
+
+
+def test_family_without_addr_field_errors():
+    with pytest.raises(BuildError, match="only applies to a set with a saddr/daddr"):
+        build_sets(
+            [
+                {
+                    "name": "f",
+                    "concat": ["iifname", "dport"],
+                    "proto": "tcp",
+                    "family": "ip",
+                }
+            ],
+            DEFS,
+        )
+
+
+def test_family_value_checked():
+    with pytest.raises(BuildError, match="must be ip or ip6, got 'ipv4'"):
+        build_sets([{"name": "f", "concat": ["saddr"], "family": "ipv4"}], DEFS)
+
+
+@pytest.mark.skipif(not validate.can_check(), reason="nft -c not usable here")
+def test_empty_concat_with_family_passes_nft_check():
+    r, sets = _r(
+        [{"name": "f", "concat": ["saddr", "dport"], "proto": "tcp", "family": "ip6"}]
+    )
+    chain = build_chain(
+        {"name": "input", "hook": "input", "rules": [{"set": "f", "action": "accept"}]},
+        r,
+    )
+    text = Table(family="inet", name="filter", sets=sets, chains=[chain]).render()
+    result = validate.check(text)
+    assert result.ok, result.stderr
+
+
 @pytest.mark.skipif(not validate.can_check(), reason="nft -c not usable here")
 def test_generated_concat_passes_nft_check():
     sets = build_sets(

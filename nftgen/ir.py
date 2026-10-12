@@ -292,7 +292,7 @@ def _set_from_definition(name: str, defs: Definitions) -> NamedSet:
 
 
 _BARE_SET_KEYS = frozenset({"name", "type", "elements", "flags"})
-_CONCAT_SET_KEYS = frozenset({"name", "concat", "proto", "tuples"})
+_CONCAT_SET_KEYS = frozenset({"name", "concat", "proto", "tuples", "family"})
 
 
 def _bare_set(entry: dict) -> NamedSet:
@@ -365,17 +365,12 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:  # noqa: PLR0912 - 
             interval = interval or is_iv
         rows.append(" . ".join(parts))
 
-    if families == {"ip"}:
-        family = "ip"
-    elif families == {"ip6"}:
-        family = "ip6"
-    elif not families:
-        family = None
-    else:
+    if len(families) > 1:
         raise BuildError(
             f"concat set {name!r} mixes IPv4 and IPv6; single-family only — "
             f"split into {name}_v4 / {name}_v6"
         )
+    family = _concat_family(name, fields, entry.get("family"), families)
 
     addr_type = "ipv4_addr" if family == "ip" else "ipv6_addr"
     type_str = " . ".join(
@@ -387,6 +382,38 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:  # noqa: PLR0912 - 
     s.concat_proto = proto
     s.concat_family = family
     return s
+
+
+def _concat_family(name, fields, explicit, derived: set) -> str | None:
+    """The address family of a concat set: from its tuples, or the authored
+    `family:` — required when an address field has no tuples to derive it
+    from (a set filled at runtime), since both the set type and the rule's
+    `ip`/`ip6 saddr` must be spelled out at load time."""
+    has_addr = any(_CONCAT_FIELD_TYPE[f] == "addr" for f in fields)
+    if explicit is not None:
+        if explicit not in ("ip", "ip6"):
+            raise BuildError(
+                f"concat set {name!r}: `family:` must be ip or ip6, got {explicit!r}"
+            )
+        if not has_addr:
+            raise BuildError(
+                f"concat set {name!r}: `family:` only applies to a set with a "
+                f"saddr/daddr field"
+            )
+        if derived and derived != {explicit}:
+            raise BuildError(
+                f"concat set {name!r}: `family: {explicit}` contradicts its "
+                f"tuples ({derived.pop()})"
+            )
+        return explicit
+    if derived:
+        return derived.pop()
+    if has_addr:
+        raise BuildError(
+            f"concat set {name!r} has an address field but no tuples to tell "
+            f"IPv4 from IPv6 — add `family: ip` or `family: ip6`"
+        )
+    return None
 
 
 def _resolve_concat_value(setname, field, val, proto, defs):
