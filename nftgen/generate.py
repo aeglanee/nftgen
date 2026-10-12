@@ -225,7 +225,8 @@ def generate(
 def build(root: str | pathlib.Path, host: str | None = None) -> dict[str, str]:
     """Generate the deploy `.nft` for every host under ``<root>`` (or just ``host``).
 
-    Convention layout: ``<root>/{def, sites, policies/includes, policies/hosts}``.
+    Convention layout: ``<root>/{definitions, sites, policies/includes,
+    policies/hosts}``.
     Returns ``{host_name: text}`` where each text is a complete, applyable ruleset
     (with ``flush ruleset``). The host name is the policy filename stem — the
     ``inventory_hostname == policies/hosts/<name>.yaml == generated/<name>.nft``
@@ -243,6 +244,10 @@ def build(root: str | pathlib.Path, host: str | None = None) -> dict[str, str]:
             raise FileNotFoundError(f"no host policy {host!r} under {hosts_dir}")
     else:
         host_files = sorted(hosts_dir.glob("*.y*ml"))
+        if not host_files:
+            # Zero hosts would "succeed" with nothing built or checked — a
+            # typo'd root passing CI/--check. Fail before anything is written.
+            raise FileNotFoundError(f"no host policies under {hosts_dir}")
 
     return {
         hf.stem: generate(hf, defs_dir, include_base, sites_dir, flush=True)

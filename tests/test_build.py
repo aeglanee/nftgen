@@ -34,6 +34,22 @@ def test_build_missing_host_errors():
         build(EXAMPLE, host="does-not-exist")
 
 
+def test_build_no_hosts_errors(tmp_path):
+    # a typo'd/empty root used to return {} — exit 0 with nothing checked
+    (tmp_path / "policies" / "hosts").mkdir(parents=True)
+    with pytest.raises(FileNotFoundError, match="no host policies under"):
+        build(tmp_path)
+    with pytest.raises(FileNotFoundError, match="no host policies under"):
+        build(tmp_path / "nope")
+
+
+def test_cli_build_missing_root_fails_and_writes_nothing(tmp_path, capsys):
+    root = tmp_path / "exmaple"
+    assert main(["build", str(root)]) == 1
+    assert "no host policies under" in capsys.readouterr().err
+    assert not root.exists()  # no stray generated/ created
+
+
 def test_flush_precedes_tables():
     text = build(EXAMPLE, host="router1")["router1"]
     assert text.index("flush ruleset") < text.index("table inet")
