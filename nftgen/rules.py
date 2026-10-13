@@ -927,7 +927,12 @@ def build_chain(spec: dict, renderer: RuleRenderer, annotate=None) -> Chain:
             )
         lines = renderer.render(r)
         suffix = _note_suffix(annotate(r)) if annotate else ""
-        rule_lines.extend(f"{line}{suffix}" for line in lines)
+        # a wrapped rule (a large vmap) spans several physical lines: the note
+        # goes on its first, where the rule starts (a `#` ends any line)
+        rule_lines.extend(
+            line.replace("\n", f"{suffix}\n", 1) if "\n" in line else f"{line}{suffix}"
+            for line in lines
+        )
     chain = Chain(name=spec["name"], rules=rule_lines)
     if "comment" in spec:
         chain.comment = check_comment(spec["comment"], f"chain {spec['name']!r}")

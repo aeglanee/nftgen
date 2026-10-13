@@ -71,6 +71,24 @@ def test_without_annotate_output_is_unchanged():
     assert stripped == plain
 
 
+def test_note_goes_on_the_first_line_of_a_wrapped_rule():
+    defs = Definitions.from_mappings(
+        {"interfaces": {"a": ["a0"], "b": ["b0"], "c": ["c0"], "d": ["d0"]}}
+    )
+    big = {
+        "vmap": {
+            "key": "iifname",
+            "map": {"a": "accept", "b": "accept", "c": "drop", "d": "drop"},
+        }
+    }
+    tables = [
+        {"family": "inet", "name": "f", "chains": [{"name": "c", "rules": [big]}]}
+    ]
+    out = render_tables(tables, defs, DictResolver({}), annotate=lambda r: "n")
+    assert "        iifname vmap {  # n\n" in out
+    assert out.count("# n") == 1
+
+
 def test_multiline_note_rejected():
     with pytest.raises(BuildError, match="single-line"):
         render_tables(
