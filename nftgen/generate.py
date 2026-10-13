@@ -124,13 +124,14 @@ def _resolve_list(items: list, key: str, resolver, stack: tuple = ()) -> list:
     return out
 
 
-def render_tables(
+def render_tables(  # noqa: PLR0913 - the extras are keyword-only options
     tables: list,
     defs: Definitions,
     resolver,
     *,
     source: str | None = None,
     flush: bool = False,
+    annotate=None,
 ) -> str:
     """Render a policy `tables:` list to a complete nftables ruleset string.
 
@@ -139,6 +140,13 @@ def render_tables(
     for the Ansible vars mode), render tables -> sets -> chains. ``source`` labels
     the header and error messages (a policy file name or an inventory hostname);
     ``flush`` prepends ``flush ruleset`` for the deploy artifact.
+
+    ``annotate`` (optional) is called with each authored rule mapping (after
+    include expansion, the same object the caller passed in) and may return a
+    single-line note; it is appended to every line that rule renders to as a
+    ``  # <note>`` file comment. nft discards ``#`` comments on load, so the
+    kernel ruleset is identical with or without notes. nftgen knows nothing
+    about where notes come from — a front-end supplies them (e.g. git blame).
     """
     where = f"{source}: " if source else ""
     if not tables:
@@ -162,7 +170,7 @@ def render_tables(
         for spec in tspec.get("chains", []):
             cspec = dict(spec)
             cspec["rules"] = _resolve_list(cspec.get("rules", []), "rules", resolver)
-            chains.append(build_chain(cspec, renderer))
+            chains.append(build_chain(cspec, renderer, annotate=annotate))
         out_tables.append(
             Table(
                 family=tspec["family"],

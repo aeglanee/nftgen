@@ -220,6 +220,18 @@ A `comment:` key (rule, chain, set entry, table) renders nft's native
 *Rejected:* copying YAML `#` comments into the output (YAML parsers drop
 them, and prose written for the source isn't written for the box).
 
+### 4.4 Per-rule file notes are a front-end hook, not an nftgen feature
+
+`render_tables(…, annotate=fn)` calls `fn(rule)` for each authored rule and
+appends a returned note as a trailing `# <note>` on every line the rule
+renders to. The Ansible front-end uses it for opt-in git-blame notes
+(`# nftgen-blame: <author> · <sha> · <date>`) from the source file:line Ansible
+tags each value with. *Why a hook:* nftgen stays git- and Ansible-agnostic;
+`#` comments vanish on load, so the kernel ruleset is identical with or
+without notes, and stripping them gives back the plain render byte for byte.
+*Why `#`, not `comment:`:* git metadata isn't the author's words, and the
+native comment's 128 bytes stay the author's.
+
 ---
 
 ## 5. Packaging & invocation
