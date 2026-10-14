@@ -84,6 +84,9 @@ def _has_port(addr: str) -> bool:
     return addr.count(":") == 1  # bare IPv6 has >1 colon; one colon == host:port
 
 
+# protocols that exist in one IP family only
+_PROTO_FAMILY = {"icmp": "ip", "icmpv6": "ip6", "ipv6-icmp": "ip6"}
+
 _TCP_FLAGS = ("fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr")
 _TCP_ALL = (
     "fin",
@@ -259,6 +262,17 @@ class RuleRenderer:
             families = sorted(set.intersection(*[set(a) for a in addr.values()]))
             if not families:
                 raise BuildError(f"rule mixes incompatible address families: {rule!r}")
+            # icmp exists only in IPv4 and icmpv6 only in IPv6: the other
+            # family's line could never match, so it isn't rendered
+            only = _PROTO_FAMILY.get(str(rule.get("proto")))
+            if only is not None:
+                if only not in families:
+                    raise BuildError(
+                        f"`proto: {rule['proto']}` is {'IPv4' if only == 'ip' else 'IPv6'}"
+                        f"-only, but the rule's addresses are "
+                        f"{'IPv6' if only == 'ip' else 'IPv4'}: {rule!r}"
+                    )
+                families = [only]
         else:
             families = [None]
 

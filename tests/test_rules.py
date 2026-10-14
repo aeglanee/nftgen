@@ -470,3 +470,34 @@ def test_iif_with_a_named_interface_set_errors():
     assert RuleRenderer(DEFS, {}).render({"iif": "lan_if", "action": "accept"}) == [
         'iif "lan0" accept'
     ]
+
+
+_DUAL = Definitions.from_mappings(
+    {"networks": {"mgmt": ["192.168.9.0/24", "fd00:9::/64"], "v6": ["fd00::/8"]}}
+)
+
+
+def test_icmp_renders_only_the_ipv4_line():
+    # C13: a dual-stack group + `proto: icmp` also rendered a dead
+    # `ip6 saddr … icmp type …` line, which can never match
+    r = RuleRenderer(_DUAL, {})
+    rule = {
+        "saddr": "mgmt",
+        "proto": "icmp",
+        "icmp-type": "echo-request",
+        "action": "accept",
+    }
+    assert r.render(rule) == ["ip saddr 192.168.9.0/24 icmp type echo-request accept"]
+
+
+def test_icmpv6_renders_only_the_ipv6_line():
+    r = RuleRenderer(_DUAL, {})
+    assert r.render({"saddr": "mgmt", "proto": "icmpv6", "action": "accept"}) == [
+        "ip6 saddr fd00:9::/64 meta l4proto icmpv6 accept"
+    ]
+
+
+def test_icmp_with_only_ipv6_addresses_errors():
+    r = RuleRenderer(_DUAL, {})
+    with pytest.raises(BuildError, match="`proto: icmp` is IPv4-only"):
+        r.render({"saddr": "v6", "proto": "icmp", "action": "accept"})
