@@ -54,7 +54,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | `iifname` / `oifname` | `iifname: wan` | `iifname @wan` / `{ "wan0", … }` / `"wan0"` | interface-*name* match (string, robust to load order); named set or interface group (strict — unknown names error); one device inlines bare |
 | `iif` / `oif` | `iif: wan` | `iif { "wan0", … }` / `iif "wan0"` | interface-*index* match (faster; nft resolves the name at load). Ruleset fails to load if the interface is absent and needs a reload if recreated — prefer for static-named interfaces. See best-practices §8a |
 | `saddr` / `daddr` | `saddr: webhosts` | `ip saddr @webhosts` | **family-aware**; named set, group, or IP/CIDR literal; renders once per common family |
-| `ct` | `ct: [established, related]` | `ct state established,related` | authored, never auto-injected |
+| `ct` | `ct: established` or `ct: [established, related]` | `ct state established,related` | authored, never auto-injected; states: new, established, related, invalid, untracked |
 | `mark` | `mark: "0x1"` | `meta mark 0x1` | match an fwmark (set one with `set-mark:`) |
 | `icmp-type` | `proto: icmpv6` / `icmp-type: [nd-neighbor-solicit, …]` | `icmpv6 type { … }` | family from `proto:` (icmp/icmpv6); single or list |
 | `proto` (standalone) | `proto: icmp` | `meta l4proto icmp` | |
@@ -70,7 +70,9 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | `limit` | `limit: 4/minute` | `limit rate 4/minute` |
 | `meter` | `meter: {set: m, key: saddr, rate: 4/minute, timeout: 1m}` | `update @m { ip saddr timeout 1m limit rate 4/minute }` — per-key rate on a `flags: [dynamic]` set (keys: `saddr`/`daddr`/`iifname`/`oifname`) |
 | `quota` | `quota: over 10240 mbytes` | `quota over 10240 mbytes` |
-| `log` | `log: {prefix: "ssh ", level: info, group: 2}` | `log prefix "ssh " level info group 2` (or bare `log`; `group` = NFLOG) |
+| `log` | `log: {prefix: "ssh ", level: info, group: 2}` | `log prefix "ssh " level info group 2` (or bare `log`; `group` = NFLOG; `log: false` = none) |
+| `action` | `action: accept` / `reject with tcp reset` / `{jump: c}` | the verdict — words: accept, drop, reject, return, continue, masquerade, `reject with …`; mapping: exactly one of jump/goto/dnat/snat; other verdicts via `raw:` |
+| lists | `dport: [ssh, 8080]`, `saddr: [mgmt, 10.0.0.5]`, `iifname: [lan, wan]` | `tcp dport { 22, 8080 }` (inline set) — any matching key takes one value or a list; addresses split per family; no named set inside a list |
 | `set-mark` | `set-mark: "0x1"` | `meta mark set 0x1` |
 | `set-mss` | `set-mss: pmtu` / `set-mss: 1460` | `tcp flags syn tcp option maxseg size set rt mtu` / `… set 1460` |
 | `flow-offload` | `flow-offload: ft` | `flow add @ft` (must be its own rule — a verdict in the same rule is a `BuildError`; see best-practices §8c) |

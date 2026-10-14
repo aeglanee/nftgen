@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import functools
+import os
 import pathlib
 import sys
 
@@ -16,7 +17,9 @@ from nftgen.ir import BuildError
 
 
 def _clean_errors(fn):
-    """Authoring mistakes get a one-line `nftgen: error:` instead of a traceback."""
+    """Authoring mistakes get a one-line `nftgen: error:` instead of a traceback.
+    Anything else is a bug in nftgen: one line saying so, the traceback only
+    with NFTGEN_DEBUG=1."""
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
@@ -25,6 +28,15 @@ def _clean_errors(fn):
         except (BuildError, DefinitionError, FileNotFoundError, yaml.YAMLError) as e:
             print(f"nftgen: error: {e}", file=sys.stderr)
             return 1
+        except Exception as e:
+            if os.environ.get("NFTGEN_DEBUG"):
+                raise
+            print(
+                f"nftgen: internal error: {type(e).__name__}: {e} — this is a bug "
+                f"in nftgen, please report it (NFTGEN_DEBUG=1 shows the traceback)",
+                file=sys.stderr,
+            )
+            return 70  # EX_SOFTWARE
 
     return wrapper
 

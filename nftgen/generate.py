@@ -143,8 +143,12 @@ def render_tables(
     where = f"{source}: " if source else ""
     if not tables:
         raise BuildError(f"{where}no `tables:` — refusing to render an empty ruleset")
+    if not isinstance(tables, list):
+        raise BuildError(f"{where}`tables:` must be a list of tables, got {tables!r}")
     out_tables = []
     for tspec in tables:
+        if not isinstance(tspec, dict):
+            raise BuildError(f"{where}a table must be a mapping, got {tspec!r}")
         unknown = set(tspec) - _TABLE_KEYS
         if unknown:
             raise BuildError(
@@ -160,6 +164,12 @@ def render_tables(
         renderer = RuleRenderer(defs, {s.name: s for s in sets}, counters=set(counters))
         chains = []
         for spec in tspec.get("chains", []):
+            if not isinstance(spec, dict):
+                raise BuildError(f"{where}a chain must be a mapping, got {spec!r}")
+            if not isinstance(spec.get("rules", []), list):
+                raise BuildError(
+                    f"{where}chain {spec.get('name')!r}: `rules:` must be a list"
+                )
             cspec = dict(spec)
             cspec["rules"] = _resolve_list(cspec.get("rules", []), "rules", resolver)
             chains.append(build_chain(cspec, renderer))

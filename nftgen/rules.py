@@ -27,6 +27,7 @@ from nftgen.ir import (
     check_nft_name,
     render_literal,
 )
+from nftgen.schema import check_rule
 
 PRIORITIES = {
     "raw": -300,
@@ -228,11 +229,15 @@ class RuleRenderer:
         return [f'{line} comment "{text}"' for line in self._render(body)]
 
     def _render(self, rule: dict) -> list[str]:  # noqa: PLR0912, PLR0915 - dispatches per rule key
+        if not isinstance(rule, dict):
+            check_rule(rule)  # raises: a rule must be a mapping
         # Reject typos/unknown keys loudly: an unread key silently weakens a rule
         # (e.g. `dprot:` for `dport:`) and nft -c can't catch it (still valid nft).
         unknown = set(rule) - _KNOWN_RULE_KEYS
         if unknown:
             raise BuildError(f"unknown rule key(s) {sorted(unknown)}: {rule!r}")
+        # then every value's shape, before anything reads it (nftgen/schema.py)
+        rule = check_rule(rule)
         if "raw" in rule:
             if len(rule) != 1:
                 raise BuildError(f"`raw:` must be a rule's only key: {rule!r}")
@@ -321,7 +326,7 @@ class RuleRenderer:
             out.append(f"limit rate {rule['limit']}")
         if "quota" in rule:
             out.append(f"quota {rule['quota']}")
-        if "log" in rule:
+        if rule.get("log"):  # `log: false` = no log, like `counter: false`
             out.append(self._log(rule["log"]))
         if "set-mark" in rule:
             out.append(f"meta mark set {rule['set-mark']}")
@@ -401,8 +406,22 @@ class RuleRenderer:
         return " ".join(parts)
 
     # -- match helpers ------------------------------------------------------ #
-    def _addr(self, value: str) -> dict[str, str]:
-        """Return {family('ip'|'ip6'): nft token} for an address match."""
+    def _addr(self, value) -> dict[str, str]:
+        """Return {family('ip'|'ip6'): nft token} for an address match.
+
+        A list is an inline set of its elements, each resolved as a single
+        value would be (group or literal), split per family; a named set
+        can't sit inside a list (nft has no set-in-anonymous-set)."""
+        if isinstance(value, list):
+            buckets: dict[str, list[str]] = {}
+            for item in value:
+                self._no_set_in_list(item)
+                for fam, items in self._addr_items(item).items():
+                    buckets.setdefault(fam, []).extend(items)
+            return {
+                fam: _anon(list(dict.fromkeys(items)))
+                for fam, items in sorted(buckets.items())
+            }
         name = value[1:] if isinstance(value, str) and value.startswith("@") else value
         if name in self.named:
             s = self.named[name]
@@ -411,6 +430,17 @@ class RuleRenderer:
             return {("ip" if s.type == "ipv4_addr" else "ip6"): f"@{name}"}
         if isinstance(value, str) and value.startswith("@"):
             raise BuildError(f"unknown set reference {value!r}")
+        return {fam: _anon(items) for fam, items in self._addr_items(value).items()}
+
+    def _no_set_in_list(self, item) -> None:
+        if isinstance(item, str) and (item.startswith("@") or item in self.named):
+            raise BuildError(
+                f"set {item!r} can't go inside a list — nft has no set inside an "
+                f"inline set; use it on its own"
+            )
+
+    def _addr_items(self, value) -> dict[str, list[str]]:
+        """A network group or an IP/CIDR literal -> {family: [addresses]}."""
         if value in self.defs.networks:
             addrs = self.defs.network(value)
             if not addrs:
@@ -423,33 +453,42 @@ class RuleRenderer:
                     else "ip6"
                 )
                 buckets.setdefault(fam, []).append(a)
-            return {fam: _anon(addrs) for fam, addrs in buckets.items()}
+            return buckets
         try:
             fam = (
                 "ip"
-                if ipaddress.ip_network(value, strict=False).version == 4
+                if ipaddress.ip_network(str(value), strict=False).version == 4
                 else "ip6"
             )
         except ValueError:
             raise BuildError(
                 f"address {value!r} is not a known network group, set, or IP/CIDR"
             ) from None
-        return {fam: value}
+        return {fam: [str(value)]}
 
-    def _iface(self, value: str) -> str:
+    def _iface(self, value) -> str:
         # Strict: an unknown name would otherwise render as a literal device and
         # silently never match — a typo'd group must fail the build instead. A
         # genuine one-off device gets a one-device group under `interfaces:`.
+        if isinstance(value, list):  # an inline set of the groups' devices
+            devices: list[str] = []
+            for item in value:
+                self._no_set_in_list(item)
+                devices.extend(self._iface_devices(item))
+            return _anon([f'"{d}"' for d in dict.fromkeys(devices)])
         if value in self.named:
             s = self.named[value]
             if s.type != "ifname":
                 raise BuildError(f"set @{value} is {s.type}, not an interface set")
             return f"@{value}"
+        return _anon([f'"{d}"' for d in self._iface_devices(value)])
+
+    def _iface_devices(self, value) -> list[str]:
         if value in self.defs.interfaces:
             devices = self.defs.interface(value)
             if not devices:
                 raise BuildError(f"interface group {value!r} resolves to no devices")
-            return _anon([f'"{d}"' for d in devices])
+            return devices
         raise BuildError(
             f"unknown interface group {value!r} (define it under `interfaces:`)"
         )
@@ -490,20 +529,30 @@ class RuleRenderer:
             raise BuildError(f"service {service!r} has no {proto} ports")
 
     def _port(self, value, proto: str) -> str:
-        if value in self.named:
+        if isinstance(value, list):  # an inline set of each element's ports
+            ports: list[str] = []
+            for item in value:
+                self._no_set_in_list(item)
+                ports.extend(self._port_items(item, proto))
+            return _anon(list(dict.fromkeys(ports)))
+        if isinstance(value, str) and value in self.named:
             s = self.named[value]
             if s.type != "inet_service":
                 raise BuildError(f"set @{value} is {s.type}, not a port set")
             return f"@{value}"
+        return _anon(self._port_items(value, proto))
+
+    def _port_items(self, value, proto: str) -> list[str]:
+        """A service (its ports for `proto`) or a port/range literal."""
         if isinstance(value, str) and value in self.defs.services:
             ports = self.defs.service_ports(value, proto)
             if not ports:
                 raise BuildError(f"service {value!r} has no {proto} ports")
-            return _anon(ports)
+            return ports
         if isinstance(value, int) or (
             isinstance(value, str) and _PORT_LITERAL.match(value)
         ):
-            return str(value)
+            return [str(value)]
         raise BuildError(
             f"port {value!r} is not a known service group or a port/range "
             f"(define it under `services:`)"
