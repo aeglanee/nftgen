@@ -238,3 +238,43 @@ def test_lists_and_reject_with_pass_nft_check():
     ).render()
     result = validate.check(text)
     assert result.ok, result.stderr
+
+
+# -- C15: unvalidated passthroughs ----------------------------------------------- #
+def test_flow_offload_must_name_a_declared_flowtable():
+    # nft said only "Could not process rule: No such file or directory"
+    tables = [
+        {
+            "family": "inet",
+            "name": "f",
+            "flowtables": [{"name": "ft", "devices": ["lan"]}],
+            "chains": [
+                {
+                    "name": "forward",
+                    "hook": "forward",
+                    "rules": [{"ct": "established", "flow-offload": "fft"}],
+                }
+            ],
+        }
+    ]
+    with pytest.raises(
+        BuildError, match=r"flowtable 'fft' is not declared .*declared: ft"
+    ):
+        render_tables(tables, DEFS, DictResolver({}))
+    tables[0]["chains"][0]["rules"][0]["flow-offload"] = "ft"
+    assert "flow add @ft" in render_tables(tables, DEFS, DictResolver({}))
+
+
+def test_mark_values_are_numbers():
+    assert R.render({"mark": "0x1", "action": "accept"}) == ["meta mark 0x1 accept"]
+    assert R.render({"mark": 7, "action": "accept"}) == ["meta mark 7 accept"]
+    assert R.render({"mark": "0x10-0x1f", "action": "accept"}) == [
+        "meta mark 0x10-0x1f accept"
+    ]
+    bad({"mark": "gold", "action": "accept"}, "rule key 'mark'")
+    bad({"set-mark": "0x1-0x2"}, "rule key 'set-mark'")  # a range can't be set
+
+
+def test_concat_mark_values_are_numbers():
+    with pytest.raises(BuildError, match=r"field mark='gold' is not a mark"):
+        build_sets([{"name": "m", "concat": ["mark"], "tuples": [["gold"]]}], DEFS)

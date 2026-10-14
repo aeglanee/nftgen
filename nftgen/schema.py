@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 
-from nftgen.ir import BuildError, check_comment
+from nftgen.ir import MARK_SET_VALUE, MARK_VALUE, BuildError, check_comment
 
 CT_STATES = ("new", "established", "related", "invalid", "untracked")
 LOG_LEVELS = (
@@ -227,6 +227,15 @@ def _plain(what):
     return check
 
 
+def _pattern(regex, what):
+    def check(key, value):
+        if isinstance(value, bool) or not regex.match(str(value)):
+            _fail(key, what, value)
+        return value
+
+    return check
+
+
 def _comment(key, value):
     return check_comment(value, "rule")
 
@@ -245,7 +254,7 @@ RULE_SCHEMA = {
     "iif": _IFACE,
     "oif": _IFACE,
     "ct": _ct,
-    "mark": _plain("a mark value (a number or 0x…)"),
+    "mark": _pattern(MARK_VALUE, "a mark (a number or 0x…, or a range a-b)"),
     "proto": _proto,
     "icmp-type": _one_or_list("an icmp type name", _scalar),
     "flags": _flags,
@@ -253,7 +262,7 @@ RULE_SCHEMA = {
     "limit": _plain("a rate such as 10/minute"),
     "quota": _plain("a quota such as 25 mbytes"),
     "log": _log,
-    "set-mark": _plain("a mark value (a number or 0x…)"),
+    "set-mark": _pattern(MARK_SET_VALUE, "a mark (a number or 0x…)"),
     "set-mss": _set_mss,
     "flow-offload": _text("a flowtable name"),
     "counter": _counter,

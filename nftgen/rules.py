@@ -209,11 +209,17 @@ def _reject_offload_with_verdict(rule: dict) -> None:
 
 class RuleRenderer:
     def __init__(
-        self, defs: Definitions, named: dict[str, NamedSet], counters=frozenset()
+        self,
+        defs: Definitions,
+        named: dict[str, NamedSet],
+        counters=frozenset(),
+        flowtables=None,
     ):
         self.defs = defs
         self.named = named
         self.counters = frozenset(counters)
+        # None = not known (a renderer used on its own): no flowtable check
+        self.flowtables = None if flowtables is None else frozenset(flowtables)
 
     # -- public ------------------------------------------------------------- #
     def render(self, rule: dict) -> list[str]:
@@ -349,7 +355,16 @@ class RuleRenderer:
             target = "rt mtu" if str(mss) in ("pmtu", "rt-mtu", "rt_mtu") else str(mss)
             out.append(f"tcp flags syn tcp option maxseg size set {target}")
         if "flow-offload" in rule:
-            out.append(f"flow add @{rule['flow-offload']}")
+            name = rule["flow-offload"]
+            if self.flowtables is not None and name not in self.flowtables:
+                # nft would say only "Could not process rule: No such file or
+                # directory", pointing at the generated file
+                declared = ", ".join(sorted(self.flowtables)) or "none"
+                raise BuildError(
+                    f"flowtable {name!r} is not declared in the table's "
+                    f"`flowtables:` (declared: {declared})"
+                )
+            out.append(f"flow add @{name}")
         return out
 
     _METER_KEYS = frozenset({"saddr", "daddr", "iifname", "oifname"})

@@ -161,7 +161,13 @@ def render_tables(
         counters = list(tspec.get("counters", []))
         for c in counters:
             check_nft_name(c, "counter")
-        renderer = RuleRenderer(defs, {s.name: s for s in sets}, counters=set(counters))
+        flowtables = build_flowtables(tspec.get("flowtables", []), defs)
+        renderer = RuleRenderer(
+            defs,
+            {s.name: s for s in sets},
+            counters=set(counters),
+            flowtables={ft.name for ft in flowtables},
+        )
         chains = []
         for spec in tspec.get("chains", []):
             if not isinstance(spec, dict):
@@ -181,7 +187,7 @@ def render_tables(
                 chains=chains,
                 raw=list(tspec.get("raw", [])),
                 counters=counters,
-                flowtables=build_flowtables(tspec.get("flowtables", []), defs),
+                flowtables=flowtables,
                 comment=(
                     check_comment(tspec["comment"], f"table {tspec['name']!r}")
                     if "comment" in tspec
