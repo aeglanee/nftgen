@@ -454,3 +454,19 @@ def test_iif_oif_index_match():
     # a typo'd interface group still fails loudly
     with pytest.raises(BuildError, match="unknown interface group 'nope'"):
         r.render({"iif": "nope", "action": "accept"})
+
+
+def test_iif_with_a_named_interface_set_errors():
+    # C9: `iif @lan_if` passed the build, then nft -c failed with "datatype
+    # mismatch" — a named interface set holds names, iif compares indexes.
+    # The same set works with iifname; the group works inline with iif.
+    with pytest.raises(BuildError, match=r"`iif`/`oif` match interface indexes"):
+        R.render({"iif": "lan_if", "action": "accept"})
+    with pytest.raises(BuildError, match="holds names"):
+        R.render({"oif": "wan", "action": "accept"})
+    assert R.render({"iifname": "lan_if", "action": "accept"}) == [
+        "iifname @lan_if accept"
+    ]
+    assert RuleRenderer(DEFS, {}).render({"iif": "lan_if", "action": "accept"}) == [
+        'iif "lan0" accept'
+    ]

@@ -275,9 +275,9 @@ class RuleRenderer:
                 # is absent, and a recreated interface needs a reload. Prefer
                 # for static-named interfaces; see docs/best-practices.md §8a.
                 if "iif" in rule:
-                    parts.append(f"iif {self._iface(rule['iif'])}")
+                    parts.append(f"iif {self._iface(rule['iif'], index=True)}")
                 if "oif" in rule:
-                    parts.append(f"oif {self._iface(rule['oif'])}")
+                    parts.append(f"oif {self._iface(rule['oif'], index=True)}")
                 if "saddr" in rule:
                     parts.append(f"{fam} saddr {addr['saddr'][fam]}")
                 if "daddr" in rule:
@@ -466,7 +466,7 @@ class RuleRenderer:
             ) from None
         return {fam: [str(value)]}
 
-    def _iface(self, value) -> str:
+    def _iface(self, value, index: bool = False) -> str:
         # Strict: an unknown name would otherwise render as a literal device and
         # silently never match — a typo'd group must fail the build instead. A
         # genuine one-off device gets a one-device group under `interfaces:`.
@@ -480,6 +480,14 @@ class RuleRenderer:
             s = self.named[value]
             if s.type != "ifname":
                 raise BuildError(f"set @{value} is {s.type}, not an interface set")
+            if index:
+                # an `ifname` set holds names; iif/oif compare interface
+                # indexes — nft rejects the pair as a datatype mismatch
+                raise BuildError(
+                    f"`iif`/`oif` match interface indexes, but set @{value} holds "
+                    f"names — use `iifname`/`oifname` with the set, or "
+                    f"`iif`/`oif` with the group inline (not under `sets:`)"
+                )
             return f"@{value}"
         return _anon([f'"{d}"' for d in self._iface_devices(value)])
 
