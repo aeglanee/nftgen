@@ -7,6 +7,7 @@ import pytest
 from nftgen import validate
 from nftgen.cli import main
 from nftgen.generate import build
+from nftgen.ir import BuildError
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 EXAMPLE = ROOT / "example"
@@ -48,6 +49,41 @@ def test_cli_build_missing_root_fails_and_writes_nothing(tmp_path, capsys):
     assert main(["build", str(root)]) == 1
     assert "no host policies under" in capsys.readouterr().err
     assert not root.exists()  # no stray generated/ created
+
+
+def _host_tree(tmp_path, *names):
+    (tmp_path / "definitions").mkdir()
+    hosts = tmp_path / "policies" / "hosts"
+    hosts.mkdir(parents=True)
+    policy = "tables:\n  - family: inet\n    name: f\n"
+    for n in names:
+        (hosts / n).write_text(policy)
+    return tmp_path
+
+
+def test_build_same_host_twice_errors(tmp_path):
+    # C14: fw1.yaml + fw1.yml both became host 'fw1'; one silently won
+    root = _host_tree(tmp_path, "fw1.yaml", "fw1.yml", "fw2.yaml")
+    with pytest.raises(
+        BuildError, match=r"two host policies for 'fw1': fw1.yaml, fw1.yml"
+    ):
+        build(root)
+    with pytest.raises(BuildError, match="two host policies for 'fw1'"):
+        build(root, host="fw1")
+    assert list(build(root, host="fw2")) == ["fw2"]
+
+
+def test_build_host_is_an_exact_name(tmp_path):
+    # C14: `--host '*'` globbed; with --stdout it printed the first host
+    root = _host_tree(tmp_path, "fw1.yaml", "fw2.yml")
+    with pytest.raises(FileNotFoundError, match="no host policy '\\*'"):
+        build(root, host="*")
+    assert list(build(root, host="fw2")) == ["fw2"]
+
+
+def test_build_ignores_non_yaml_files(tmp_path):
+    root = _host_tree(tmp_path, "fw1.yaml", "notes.txt", "fw1.yaml.bak")
+    assert list(build(root)) == ["fw1"]
 
 
 def test_flush_precedes_tables():
