@@ -638,7 +638,7 @@ class RuleRenderer:
             keyexpr = f"meta l4proto . {keyexpr}"
         entries = []
         for k, verdict in mapping.items():
-            v = self._verdict(verdict)
+            v = self._vmap_verdict(verdict)
             toks = (
                 [f"{p} . {port}" for p, port in self._vmap_port_pairs(key, k)]
                 if ports
@@ -662,7 +662,7 @@ class RuleRenderer:
         for k, verdict in mapping.items():
             kfam, cidrs = self._vmap_addr_tokens(key, k)
             fam = self._one_family(key, fam, kfam)
-            v = self._verdict(verdict)
+            v = self._vmap_verdict(verdict)
             entries.extend(f"{c} : {v}" for c in cidrs)
         return f"{fam} {key} vmap {render_literal(entries, BODY_INDENT)}"
 
@@ -717,12 +717,14 @@ class RuleRenderer:
                     f"concat vmap `match` must list {len(keys)} value(s), "
                     f"one per key {keys}: {entry!r}"
                 )
-            verdict = {k: v for k, v in entry.items() if k != "match"}
-            if len(verdict) != 1:
+            rest = {k: v for k, v in entry.items() if k != "match"}
+            if len(rest) != 1:
                 raise BuildError(
-                    f"concat vmap entry needs exactly one verdict: {entry!r}"
+                    f"concat vmap entry needs exactly one verdict (`action:`, "
+                    f"`jump:` or `goto:`): {entry!r}"
                 )
-            v = self._verdict(verdict)
+            # `action: <verdict>` like a rule's, or the `jump:`/`goto:` shorthand
+            v = self._vmap_verdict(rest.get("action", rest))
             row_proto = str(match[proto_col]) if proto_col is not None else None
             cols = []
             for kt, value in zip(keys, match, strict=True):
@@ -860,6 +862,28 @@ class RuleRenderer:
         if "action" in rule:
             parts.append(self._verdict(rule["action"]))
         return " ".join(p for p in parts if p)
+
+    _VMAP_VERDICTS = ("accept", "drop", "return", "continue")
+
+    def _vmap_verdict(self, value) -> str:
+        """A vmap value: only real verdicts. `reject`, `masquerade` and NAT are
+        statements, not verdicts — nft refuses them in a vmap (syntax error)."""
+        if isinstance(value, str):
+            if value in self._VMAP_VERDICTS:
+                return value
+            raise BuildError(
+                f"{value!r} can't go in a vmap — a vmap can only route "
+                f"({', '.join(self._VMAP_VERDICTS)}, jump, goto); use `jump:` to "
+                f"a chain that does it"
+            )
+        if isinstance(value, dict) and len(value) == 1:
+            ((kind, target),) = value.items()
+            if kind in ("jump", "goto") and isinstance(target, str) and target:
+                return f"{kind} {target}"
+        raise BuildError(
+            f"vmap verdict must be one of {', '.join(self._VMAP_VERDICTS)}, or "
+            f"`jump:`/`goto:` a chain, got {value!r}"
+        )
 
     def _verdict(self, action) -> str:
         if isinstance(action, dict):

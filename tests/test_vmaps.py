@@ -2,9 +2,10 @@
 
 import pytest
 
+from nftgen import validate
 from nftgen.definitions import Definitions
-from nftgen.ir import BuildError
-from nftgen.rules import RuleRenderer
+from nftgen.ir import BuildError, Table
+from nftgen.rules import RuleRenderer, build_chain
 
 R = RuleRenderer(Definitions.from_mappings({}), {})
 # per-device dispatch happens through one-device groups (strict: no literals)
@@ -343,3 +344,90 @@ def test_large_vmap_wraps_one_entry_per_line():
         "            sctp : jump s\n"
         "        }"
     ]
+
+
+# -- C16: verdicts in vmaps ------------------------------------------------------ #
+_IF = Definitions.from_mappings(
+    {"interfaces": {"lan": ["lan0"], "wan": ["wan0"], "mgmt": ["mgmt0"]}}
+)
+_IR = RuleRenderer(_IF, {})
+
+
+def test_concat_vmap_rows_take_action():
+    # C16: rows could only jump/goto; `accept`/`drop` needed a one-rule chain
+    rule = {
+        "vmap": {
+            "key": ["iifname", "oifname"],
+            "map": [
+                {"match": ["lan", "wan"], "jump": "lan_to_wan"},
+                {"match": ["lan", "mgmt"], "action": "accept"},
+                {"match": ["wan", "lan"], "action": "drop"},
+                {"match": ["mgmt", "lan"], "action": {"goto": "mgmt_in"}},
+            ],
+        }
+    }
+    assert _IR.render(rule) == [
+        "iifname . oifname vmap {\n"
+        '            "lan0" . "wan0" : jump lan_to_wan,\n'
+        '            "lan0" . "mgmt0" : accept,\n'
+        '            "wan0" . "lan0" : drop,\n'
+        '            "mgmt0" . "lan0" : goto mgmt_in\n'
+        "        }"
+    ]
+
+
+@pytest.mark.parametrize(
+    "bad_verdict", ["reject", "reject with tcp reset", "masquerade"]
+)
+def test_non_verdicts_cannot_go_in_a_vmap(bad_verdict):
+    # nft refuses these in a vmap with a syntax error — single-key vmaps used
+    # to pass any word straight through
+    with pytest.raises(BuildError, match="can't go in a vmap"):
+        _IR.render({"vmap": {"key": "iifname", "map": {"lan": bad_verdict}}})
+    with pytest.raises(BuildError, match="can't go in a vmap"):
+        _IR.render(
+            {
+                "vmap": {
+                    "key": ["iifname", "oifname"],
+                    "map": [{"match": ["lan", "wan"], "action": bad_verdict}],
+                }
+            }
+        )
+
+
+def test_concat_vmap_row_needs_exactly_one_verdict():
+    rule = {
+        "vmap": {
+            "key": ["iifname", "oifname"],
+            "map": [{"match": ["lan", "wan"], "action": "accept", "jump": "x"}],
+        }
+    }
+    with pytest.raises(BuildError, match="exactly one verdict"):
+        _IR.render(rule)
+
+
+@pytest.mark.skipif(not validate.can_check(), reason="nft -c not usable here")
+def test_vmap_verdicts_pass_nft_check():
+    chain = build_chain(
+        {
+            "name": "forward",
+            "hook": "forward",
+            "rules": [
+                {
+                    "vmap": {
+                        "key": ["iifname", "oifname"],
+                        "map": [
+                            {"match": ["lan", "mgmt"], "action": "accept"},
+                            {"match": ["wan", "lan"], "action": "drop"},
+                            {"match": ["lan", "wan"], "action": "return"},
+                        ],
+                    }
+                }
+            ],
+        },
+        _IR,
+    )
+    result = validate.check(
+        Table(family="inet", name="filter", chains=[chain]).render()
+    )
+    assert result.ok, result.stderr

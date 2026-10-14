@@ -101,7 +101,7 @@ A rule may be **statement-only** (no verdict) — e.g. an MSS clamp or a fwmark.
 | Form | YAML | nft |
 | --- | --- | --- |
 | `raw:` | `raw: "udp dport 5060 ip dscp set ef"` | verbatim (the escape hatch) |
-| `vmap:` (inline) | `vmap: {key: iifname, map: {wan0: {jump: wan_in}}}` | `iifname vmap { … }` — keys `iifname`/`oifname`/`proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`; groups & services resolve; `key: [iifname, oifname]` concatenates; `dport`/`sport` keep each service's proto (`meta l4proto . th dport`, `tcp . 22`; a bare number needs `/tcp`) |
+| `vmap:` (inline) | `vmap: {key: iifname, map: {wan0: {jump: wan_in}}}` | `iifname vmap { … }` — keys `iifname`/`oifname`/`proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`; groups & services resolve; `key: [iifname, oifname]` concatenates; `dport`/`sport` keep each service's proto (`meta l4proto . th dport`, `tcp . 22`; a bare number needs `/tcp`); values/rows: `accept`/`drop`/`return`/`continue` or `jump`/`goto` only (a concat row: `action:` or `jump:`/`goto:`) |
 | `include:` | `- include: includes/common-input.yaml` | inlined rules/sets at build time |
 
 ---
