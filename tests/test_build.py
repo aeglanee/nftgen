@@ -108,6 +108,27 @@ def test_cli_build_check_unusable_fails_loudly(tmp_path, monkeypatch, capsys):
     assert not list(tmp_path.glob("*.nft"))  # refused before writing
 
 
+def test_cli_single_policy_check_unusable_fails_loudly(tmp_path, monkeypatch, capsys):
+    # C11: the single-policy form used to probe only "is an nft binary there?"
+    # and only after writing the output; it now uses the same probe as build,
+    # before rendering anything.
+    monkeypatch.setattr(validate, "can_check", lambda: False)
+    out = tmp_path / "r1.nft"
+    rc = main(
+        [
+            str(EXAMPLE / "policies" / "hosts" / "router1.yaml"),
+            "--defs",
+            str(EXAMPLE / "definitions"),
+            "--out",
+            str(out),
+            "--check",
+        ]
+    )
+    assert rc == 2
+    assert "`nft -c` is not usable here" in capsys.readouterr().err
+    assert not out.exists()  # refused before writing
+
+
 def test_cli_authoring_error_is_clean(tmp_path, capsys):
     # authoring mistakes exit 1 with a one-line message, not a traceback
     root = tmp_path / "proj"

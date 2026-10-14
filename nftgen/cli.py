@@ -154,6 +154,16 @@ def main(argv: list[str] | None = None) -> int:
         build_parser().print_help()
         return 0
 
+    # Same probe as `build --check`, before rendering: a check that can't run
+    # must fail loudly, not after output was already written.
+    if args.check and not validate.can_check():
+        print(
+            "nftgen: error: --check requested but `nft -c` is not usable here "
+            "(nft missing, or no netlink and no unshare fallback)",
+            file=sys.stderr,
+        )
+        return 2
+
     policy = pathlib.Path(args.policy)
     def_default, base_default, sites_default = _defaults(policy)
     text = generate(
@@ -172,9 +182,6 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(text)
 
     if args.check:
-        if not validate.nft_available():
-            print("nftgen: --check requested but `nft` was not found", file=sys.stderr)
-            return 2
         result = validate.check(text)
         if result.ok:
             print("nftgen: nft -c passed", file=sys.stderr)
