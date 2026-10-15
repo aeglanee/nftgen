@@ -2,8 +2,9 @@
 
 import pytest
 
+from nftgen import validate
 from nftgen.definitions import Definitions
-from nftgen.ir import BuildError, build_sets
+from nftgen.ir import BuildError, Table, build_sets
 from nftgen.rules import RuleRenderer, build_chain, resolve_priority
 
 DEFS = Definitions.from_mappings(
@@ -316,9 +317,14 @@ def test_incompatible_families_error():
         R.render({"saddr": "v6only", "daddr": "192.0.2.0/24", "action": "accept"})
 
 
-def test_port_without_proto_errors():
-    with pytest.raises(BuildError):
-        R.render({"dport": "web", "action": "accept"})
+def test_port_without_proto_uses_the_services_pairs():
+    # 5b/N7: without `proto:` a service keeps its own protocol (named set →
+    # its pairs; a bare number still needs a proto)
+    assert R.render({"dport": "web", "action": "accept"}) == [
+        "meta l4proto . th dport @web accept"
+    ]
+    with pytest.raises(BuildError, match="has no protocol"):
+        R.render({"dport": 80, "action": "accept"})
 
 
 def test_port_literals_and_unknown_service():
@@ -454,3 +460,207 @@ def test_iif_oif_index_match():
     # a typo'd interface group still fails loudly
     with pytest.raises(BuildError, match="unknown interface group 'nope'"):
         r.render({"iif": "nope", "action": "accept"})
+
+
+def test_iif_with_a_named_interface_set_errors():
+    # C9: `iif @lan_if` passed the build, then nft -c failed with "datatype
+    # mismatch" — a named interface set holds names, iif compares indexes.
+    # The same set works with iifname; the group works inline with iif.
+    with pytest.raises(BuildError, match=r"`iif`/`oif` match interface indexes"):
+        R.render({"iif": "lan_if", "action": "accept"})
+    with pytest.raises(BuildError, match="holds names"):
+        R.render({"oif": "wan", "action": "accept"})
+    assert R.render({"iifname": "lan_if", "action": "accept"}) == [
+        "iifname @lan_if accept"
+    ]
+    assert RuleRenderer(DEFS, {}).render({"iif": "lan_if", "action": "accept"}) == [
+        'iif "lan0" accept'
+    ]
+
+
+_DUAL = Definitions.from_mappings(
+    {"networks": {"mgmt": ["192.168.9.0/24", "fd00:9::/64"], "v6": ["fd00::/8"]}}
+)
+
+
+def test_icmp_renders_only_the_ipv4_line():
+    # C13: a dual-stack group + `proto: icmp` also rendered a dead
+    # `ip6 saddr … icmp type …` line, which can never match
+    r = RuleRenderer(_DUAL, {})
+    rule = {
+        "saddr": "mgmt",
+        "proto": "icmp",
+        "icmp-type": "echo-request",
+        "action": "accept",
+    }
+    assert r.render(rule) == ["ip saddr 192.168.9.0/24 icmp type echo-request accept"]
+
+
+def test_icmpv6_renders_only_the_ipv6_line():
+    r = RuleRenderer(_DUAL, {})
+    assert r.render({"saddr": "mgmt", "proto": "icmpv6", "action": "accept"}) == [
+        "ip6 saddr fd00:9::/64 meta l4proto icmpv6 accept"
+    ]
+
+
+def test_icmp_with_only_ipv6_addresses_errors():
+    r = RuleRenderer(_DUAL, {})
+    with pytest.raises(BuildError, match="`proto: icmp` is IPv4-only"):
+        r.render({"saddr": "v6", "proto": "icmp", "action": "accept"})
+
+
+# -- review N5: numeric protocols ------------------------------------------------- #
+_NUM = Definitions.from_mappings(
+    {
+        "services": {"dns": ["53/tcp", "53/udp"]},
+        "networks": {"dual": ["10.0.0.1", "::1"]},
+    }
+)
+
+
+def test_numeric_proto_is_checked_and_rendered_by_name_for_ports():
+    r = RuleRenderer(_NUM, {})
+    # `17 dport` isn't nft: a port match spells the keyword
+    assert r.render({"proto": 17, "dport": "dns", "action": "accept"}) == [
+        "udp dport 53 accept"
+    ]
+    # without ports the number stays as written
+    assert r.render({"proto": 112, "action": "accept"}) == ["meta l4proto 112 accept"]
+
+
+def test_numeric_proto_with_a_named_service_set():
+    named = {s.name: s for s in build_sets(["dns"], _NUM)}
+    r = RuleRenderer(_NUM, named)
+    assert r.render({"proto": "17", "dport": "dns", "action": "accept"}) == [
+        "meta l4proto udp meta l4proto . th dport @dns accept"
+    ]
+
+
+def test_numeric_icmp_pins_the_family():
+    # C13 now also holds for `proto: 1`
+    r = RuleRenderer(_NUM, {})
+    assert r.render({"proto": 1, "saddr": "dual", "action": "accept"}) == [
+        "ip saddr 10.0.0.1 meta l4proto 1 accept"
+    ]
+
+
+def test_ports_need_a_protocol_with_ports():
+    r = RuleRenderer(_NUM, {})
+    with pytest.raises(BuildError, match="`proto: icmp` has no ports"):
+        r.render({"proto": "icmp", "dport": 22, "action": "accept"})
+    with pytest.raises(BuildError, match="`proto: 112` has no ports"):
+        r.render({"proto": 112, "dport": 22, "action": "accept"})
+
+
+def test_numeric_proto_column_in_a_concat_vmap():
+    r = RuleRenderer(_NUM, {})
+    rule = {
+        "vmap": {
+            "key": ["proto", "dport"],
+            "map": [{"match": [17, "dns"], "action": "accept"}],
+        }
+    }
+    assert r.render(rule) == ["meta l4proto . th dport vmap { 17 . 53 : accept }"]
+
+
+# -- 5b + N7: `proto:` optional when ports come from services -------------------- #
+_SVC = Definitions.from_mappings(
+    {
+        "services": {
+            "dns": ["53/tcp", "53/udp"],
+            "ssh": ["22/tcp"],
+            "range": ["8000-8100/tcp"],
+            "dhcpc": ["68/udp"],
+            "dhcps": ["67/udp"],
+            "weird": ["1/icmp"],
+        }
+    }
+)
+_SR = RuleRenderer(_SVC, {})
+_SN = RuleRenderer(
+    _SVC,
+    {
+        s.name: s
+        for s in build_sets(["dns", {"name": "ports", "type": "inet_service"}], _SVC)
+    },
+)
+
+
+@pytest.mark.parametrize(
+    ("rule", "line"),
+    [
+        # several protocols → a protocol+port pair lookup
+        ({"dport": "dns"}, "meta l4proto . th dport { tcp . 53, udp . 53 } accept"),
+        # one protocol → the classic form, as if `proto: tcp` were written
+        ({"dport": "ssh"}, "tcp dport 22 accept"),
+        (
+            {"dport": ["dns", "ssh"]},
+            "meta l4proto . th dport { tcp . 53, udp . 53, tcp . 22 } accept",
+        ),
+        (
+            {"dport": ["range", "dns"]},
+            "meta l4proto . th dport { tcp . 8000-8100, tcp . 53, udp . 53 } accept",
+        ),
+        ({"sport": "dhcpc"}, "udp sport 68 accept"),
+    ],
+)
+def test_ports_without_proto_keep_each_services_protocol(rule, line):
+    assert _SR.render({**rule, "action": "accept"}) == [line]
+
+
+def test_named_service_set_without_proto_matches_all_its_pairs():
+    # N7: the pair set already pins each port's protocol
+    assert _SN.render({"dport": "dns", "action": "accept"}) == [
+        "meta l4proto . th dport @dns accept"
+    ]
+
+
+def test_with_proto_nothing_changes():
+    assert _SR.render({"proto": "udp", "dport": "dns", "action": "accept"}) == [
+        "udp dport 53 accept"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("rule", "match"),
+    [
+        ({"dport": 22}, "port 22 has no protocol"),
+        ({"dport": ["dns", 8080]}, "port 8080 has no protocol"),
+        ({"sport": "dhcpc", "dport": "dhcps"}, "both sport and dport needs `proto:`"),
+        ({"dport": "weird"}, "a protocol without ports"),
+    ],
+)
+def test_ports_without_proto_errors(rule, match):
+    with pytest.raises(BuildError, match=match):
+        _SR.render({**rule, "action": "accept"})
+
+
+def test_port_only_named_set_without_proto_errors():
+    with pytest.raises(BuildError, match="holds ports without protocols"):
+        _SN.render({"dport": "ports", "action": "accept"})
+
+
+@pytest.mark.skipif(not validate.can_check(), reason="nft -c not usable here")
+def test_ports_without_proto_pass_nft_check():
+    inline = build_chain(
+        {
+            "name": "inline_ports",
+            "rules": [
+                {"dport": "dns", "action": "accept"},
+                {"dport": ["range", "dns"], "action": "accept"},
+                {"sport": "dhcpc", "action": "accept"},
+            ],
+        },
+        _SR,
+    )
+    named = build_chain(
+        {"name": "named_ports", "rules": [{"dport": "dns", "action": "accept"}]}, _SN
+    )
+    text = Table(
+        family="inet",
+        name="filter",
+        sets=list(_SN.named.values()),
+        chains=[inline, named],
+    ).render()
+    result = validate.check(text)
+    assert result.ok, result.stderr

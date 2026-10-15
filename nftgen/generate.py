@@ -151,8 +151,12 @@ def render_tables(  # noqa: PLR0913 - the extras are keyword-only options
     where = f"{source}: " if source else ""
     if not tables:
         raise BuildError(f"{where}no `tables:` — refusing to render an empty ruleset")
+    if not isinstance(tables, list):
+        raise BuildError(f"{where}`tables:` must be a list of tables, got {tables!r}")
     out_tables = []
     for tspec in tables:
+        if not isinstance(tspec, dict):
+            raise BuildError(f"{where}a table must be a mapping, got {tspec!r}")
         unknown = set(tspec) - _TABLE_KEYS
         if unknown:
             raise BuildError(
@@ -165,9 +169,21 @@ def render_tables(  # noqa: PLR0913 - the extras are keyword-only options
         counters = list(tspec.get("counters", []))
         for c in counters:
             check_nft_name(c, "counter")
-        renderer = RuleRenderer(defs, {s.name: s for s in sets}, counters=set(counters))
+        flowtables = build_flowtables(tspec.get("flowtables", []), defs)
+        renderer = RuleRenderer(
+            defs,
+            {s.name: s for s in sets},
+            counters=set(counters),
+            flowtables={ft.name for ft in flowtables},
+        )
         chains = []
         for spec in tspec.get("chains", []):
+            if not isinstance(spec, dict):
+                raise BuildError(f"{where}a chain must be a mapping, got {spec!r}")
+            if not isinstance(spec.get("rules", []), list):
+                raise BuildError(
+                    f"{where}chain {spec.get('name')!r}: `rules:` must be a list"
+                )
             cspec = dict(spec)
             cspec["rules"] = _resolve_list(cspec.get("rules", []), "rules", resolver)
             chains.append(build_chain(cspec, renderer, annotate=annotate))
@@ -179,7 +195,7 @@ def render_tables(  # noqa: PLR0913 - the extras are keyword-only options
                 chains=chains,
                 raw=list(tspec.get("raw", [])),
                 counters=counters,
-                flowtables=build_flowtables(tspec.get("flowtables", []), defs),
+                flowtables=flowtables,
                 comment=(
                     check_comment(tspec["comment"], f"table {tspec['name']!r}")
                     if "comment" in tspec
@@ -251,16 +267,37 @@ def build(root: str | pathlib.Path, host: str | None = None) -> dict[str, str]:
     sites_dir = root / "sites"
     hosts_dir = root / "policies" / "hosts"
 
+    # Host files are <name>.yaml / <name>.yml; the name is the file stem.
     if host is not None:
-        host_files = sorted(hosts_dir.glob(f"{host}.y*ml"))
+        # a plain name: no path parts, so it can't leave policies/hosts/ and
+        # the host name == file name == output name contract holds
+        if not host or host.startswith(".") or any(sep in host for sep in ("/", "\\")):
+            raise BuildError(f"--host must be a plain host name, got {host!r}")
+        # an exact name, not a pattern: `--host '*'` must not pick a host
+        host_files = [
+            f
+            for f in (hosts_dir / f"{host}.yaml", hosts_dir / f"{host}.yml")
+            if f.is_file()
+        ]
         if not host_files:
             raise FileNotFoundError(f"no host policy {host!r} under {hosts_dir}")
     else:
-        host_files = sorted(hosts_dir.glob("*.y*ml"))
+        host_files = sorted(
+            f for f in hosts_dir.glob("*") if f.suffix in (".yaml", ".yml")
+        )
         if not host_files:
             # Zero hosts would "succeed" with nothing built or checked — a
             # typo'd root passing CI/--check. Fail before anything is written.
             raise FileNotFoundError(f"no host policies under {hosts_dir}")
+    # fw1.yaml + fw1.yml are one host twice: one would silently replace the other
+    stems: dict[str, list[str]] = {}
+    for f in host_files:
+        stems.setdefault(f.stem, []).append(f.name)
+    for name, files in sorted(stems.items()):
+        if len(files) > 1:
+            raise BuildError(
+                f"two host policies for {name!r}: {', '.join(sorted(files))} — keep one"
+            )
 
     return {
         hf.stem: generate(hf, defs_dir, include_base, sites_dir, flush=True)

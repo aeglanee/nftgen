@@ -2,9 +2,10 @@
 
 import pytest
 
+from nftgen import validate
 from nftgen.definitions import Definitions
-from nftgen.ir import BuildError
-from nftgen.rules import RuleRenderer
+from nftgen.ir import BuildError, Table
+from nftgen.rules import RuleRenderer, build_chain
 
 R = RuleRenderer(Definitions.from_mappings({}), {})
 # per-device dispatch happens through one-device groups (strict: no literals)
@@ -343,3 +344,184 @@ def test_large_vmap_wraps_one_entry_per_line():
         "            sctp : jump s\n"
         "        }"
     ]
+
+
+# -- C16: verdicts in vmaps ------------------------------------------------------ #
+_IF = Definitions.from_mappings(
+    {"interfaces": {"lan": ["lan0"], "wan": ["wan0"], "mgmt": ["mgmt0"]}}
+)
+_IR = RuleRenderer(_IF, {})
+
+
+def test_concat_vmap_rows_take_action():
+    # C16: rows could only jump/goto; `accept`/`drop` needed a one-rule chain
+    rule = {
+        "vmap": {
+            "key": ["iifname", "oifname"],
+            "map": [
+                {"match": ["lan", "wan"], "jump": "lan_to_wan"},
+                {"match": ["lan", "mgmt"], "action": "accept"},
+                {"match": ["wan", "lan"], "action": "drop"},
+                {"match": ["mgmt", "lan"], "action": {"goto": "mgmt_in"}},
+            ],
+        }
+    }
+    assert _IR.render(rule) == [
+        "iifname . oifname vmap {\n"
+        '            "lan0" . "wan0" : jump lan_to_wan,\n'
+        '            "lan0" . "mgmt0" : accept,\n'
+        '            "wan0" . "lan0" : drop,\n'
+        '            "mgmt0" . "lan0" : goto mgmt_in\n'
+        "        }"
+    ]
+
+
+@pytest.mark.parametrize(
+    "bad_verdict", ["reject", "reject with tcp reset", "masquerade"]
+)
+def test_non_verdicts_cannot_go_in_a_vmap(bad_verdict):
+    # nft refuses these in a vmap with a syntax error — single-key vmaps used
+    # to pass any word straight through
+    with pytest.raises(BuildError, match="can't go in a vmap"):
+        _IR.render({"vmap": {"key": "iifname", "map": {"lan": bad_verdict}}})
+    with pytest.raises(BuildError, match="can't go in a vmap"):
+        _IR.render(
+            {
+                "vmap": {
+                    "key": ["iifname", "oifname"],
+                    "map": [{"match": ["lan", "wan"], "action": bad_verdict}],
+                }
+            }
+        )
+
+
+def test_concat_vmap_row_needs_exactly_one_verdict():
+    rule = {
+        "vmap": {
+            "key": ["iifname", "oifname"],
+            "map": [{"match": ["lan", "wan"], "action": "accept", "jump": "x"}],
+        }
+    }
+    with pytest.raises(BuildError, match="exactly one verdict"):
+        _IR.render(rule)
+
+
+@pytest.mark.skipif(not validate.can_check(), reason="nft -c not usable here")
+def test_vmap_verdicts_pass_nft_check():
+    chain = build_chain(
+        {
+            "name": "forward",
+            "hook": "forward",
+            "rules": [
+                {
+                    "vmap": {
+                        "key": ["iifname", "oifname"],
+                        "map": [
+                            {"match": ["lan", "mgmt"], "action": "accept"},
+                            {"match": ["wan", "lan"], "action": "drop"},
+                            {"match": ["lan", "wan"], "action": "return"},
+                        ],
+                    }
+                }
+            ],
+        },
+        _IR,
+    )
+    result = validate.check(
+        Table(family="inet", name="filter", chains=[chain]).render()
+    )
+    assert result.ok, result.stderr
+
+
+# -- review N3: duplicate keys --------------------------------------------------- #
+_DUP = Definitions.from_mappings(
+    {
+        "services": {
+            "dns": ["53/tcp", "53/udp"],
+            "web": ["80/tcp"],
+            "http": ["80/tcp"],
+        },
+        "interfaces": {"lan": ["lan0"], "all": ["lan0", "wan0"]},
+        "networks": {"a": ["10.0.0.0/8"], "b": ["10.0.0.0/8", "192.168.0.0/16"]},
+    }
+)
+_DR = RuleRenderer(_DUP, {})
+
+
+def test_vmap_same_key_different_verdict_errors():
+    # nft refused this at load ("element exists") on the generated file
+    with pytest.raises(BuildError, match=r"vmap key 'udp . 53' comes from both 'dns'"):
+        _DR.render(
+            {"vmap": {"key": "dport", "map": {"dns": "accept", "53/udp": "drop"}}}
+        )
+    with pytest.raises(BuildError, match="comes from both 'lan'"):
+        _DR.render(
+            {"vmap": {"key": "iifname", "map": {"lan": "accept", "all": "drop"}}}
+        )
+    with pytest.raises(BuildError, match="comes from both 'a'"):
+        _DR.render({"vmap": {"key": "saddr", "map": {"a": "accept", "b": "drop"}}})
+    with pytest.raises(BuildError, match="comes from both"):
+        _DR.render(
+            {
+                "vmap": {
+                    "key": ["iifname", "dport"],
+                    "map": [
+                        {"match": ["lan", "web"], "action": "accept"},
+                        {"match": ["all", "http"], "action": "drop"},
+                    ],
+                }
+            }
+        )
+
+
+def test_vmap_same_key_same_verdict_is_folded():
+    assert _DR.render(
+        {"vmap": {"key": "iifname", "map": {"lan": "accept", "all": "accept"}}}
+    ) == ['iifname vmap { "lan0" : accept, "wan0" : accept }']
+
+
+def test_dnat_map_duplicate_port_errors():
+    rule = {
+        "proto": "tcp",
+        "action": {
+            "dnat": {"proto": "tcp", "map": {"web": "10.0.0.5", 80: "10.0.0.6"}}
+        },
+    }
+    with pytest.raises(BuildError, match=r"dnat map key '80' comes from both 'web'"):
+        _DR.render(rule)
+
+
+def test_sport_and_dport_vmap_needs_a_proto_column():
+    # review N4: without one, each port column got its own l4proto slot and
+    # rows crossed protocols (`udp . 53 . tcp . 53`)
+    spec = {
+        "key": ["sport", "dport"],
+        "map": [{"match": ["dns", "dns"], "action": "accept"}],
+    }
+    with pytest.raises(BuildError, match="needs a `proto` column"):
+        _DR.render({"vmap": spec})
+    rule = {
+        "vmap": {
+            "key": ["proto", "sport", "dport"],
+            "map": [
+                {"match": ["udp", "dns", "dns"], "action": "accept"},
+                {"match": ["tcp", "dns", "dns"], "action": "accept"},
+            ],
+        }
+    }
+    assert _DR.render(rule) == [
+        "meta l4proto . th sport . th dport vmap { udp . 53 . 53 : accept, tcp . 53 . 53 : accept }"
+    ]
+
+
+# -- review N9: a vmap row's proto column is checked like a rule's proto --------- #
+@pytest.mark.parametrize("bad_proto", [["tcp", "udp"], "t cp", 300, True])
+def test_vmap_proto_column_is_checked(bad_proto):
+    rule = {
+        "vmap": {
+            "key": ["proto", "dport"],
+            "map": [{"match": [bad_proto, 8080], "action": "accept"}],
+        }
+    }
+    with pytest.raises(BuildError, match=r"vmap row .*: expected a protocol name"):
+        _DR.render(rule)

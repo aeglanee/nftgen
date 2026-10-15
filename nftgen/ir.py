@@ -14,6 +14,11 @@ from dataclasses import dataclass, field
 from nftgen.definitions import Definitions
 
 _PORT_LITERAL = re.compile(r"^\d+(-\d+)?$")  # port or port-range
+_MARK_NUMBER = r"(?:0x[0-9a-fA-F]+|\d+)"
+MARK_VALUE = re.compile(
+    rf"^{_MARK_NUMBER}(?:-{_MARK_NUMBER})?$"
+)  # match: may be a range
+MARK_SET_VALUE = re.compile(rf"^{_MARK_NUMBER}$")  # set: one value
 
 SET_INDENT = "    "
 BODY_INDENT = "        "
@@ -491,6 +496,11 @@ def _resolve_concat_value(setname, field, val, proto, defs):
             )
         return val, None, "-" in val  # a port range needs interval
     if kind == "mark":
+        if not MARK_VALUE.match(val):
+            raise BuildError(
+                f"concat set {setname!r}: field mark={val!r} is not a mark "
+                f"(a number or 0x…, or a range a-b)"
+            )
         return val, None, "-" in val  # bare fwmark number; no name resolution
     # ifname — strict: a typo'd group would silently become a literal device
     if val not in defs.interfaces:

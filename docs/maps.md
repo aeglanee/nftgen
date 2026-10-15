@@ -137,7 +137,12 @@ groups expand** and cartesian-product into elements:
   positions are allowed (family inferred, single-family enforced). A
   `dport`/`sport` position takes the row's `proto` column's ports
   (`[proto, dport]`, `match: [udp, web]` → only web's udp ports), or renders as
-  a `meta l4proto . th dport` pair when there is no `proto` column. (done.)
+  a `meta l4proto . th dport` pair when there is no `proto` column. A row's
+  verdict is `action:` (as in a rule) or the `jump:`/`goto:` shorthand. (done.)
+- **Vmap verdicts** — a vmap can only route: `accept`, `drop`, `return`,
+  `continue`, `jump`, `goto`. `reject`, `masquerade` and NAT are statements,
+  not verdicts, and nft refuses them in a vmap (syntax error) — nftgen errors
+  at build; `jump` to a chain that rejects instead.
 - ✅ **Inline dnat data map** —
   `action: {dnat: {proto: tcp, map: {80: web, 443: db}}}`
   → `dnat ip to tcp dport map { … }` (multi-port-forward; address-only

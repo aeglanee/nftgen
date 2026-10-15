@@ -95,6 +95,12 @@ firewall lets through (§2.3); the pair set mirrors the definition exactly.
 The pre-0.7.0 port vmap (`th dport vmap { 22 : … }`) matched *any*
 protocol — udp/22 for `ssh: [22/tcp]`. Behaviorally proven (testing-plan
 B27, B22).
+**`proto:` is optional when the ports come from services:** each port then
+keeps its own protocol — one protocol renders the classic `tcp dport 22`,
+several render `meta l4proto . th dport { tcp . 53, udp . 53 }` (inline) or
+`meta l4proto . th dport @dns` (named), the same packets either way. A bare
+port number, a port-only set, or `sport` + `dport` together still need
+`proto:`.
 *Rejected:* erroring on the leaky combinations (forces `web_tcp`/`web_udp`
 splits for something nft can express exactly); port-only services
 (`web: [80]` — "any protocol" is the leak again; a hand-written `type:
@@ -126,6 +132,21 @@ Sorted emission, order-preserving dedupe (`list(dict.fromkeys(...))`).
 git-diff-based change detection** in deployment (§ DEPLOYMENT.md): a `.nft` diff
 means a *real* rule change, not reordering noise. Treat determinism as a
 correctness property, not a nicety.
+
+### 2.6 Values are schema-checked, and one value or a list works everywhere
+
+Every rule value is checked against one table (`nftgen/schema.py`) before
+rendering; an error names the key, what it got, and what it takes. Matching
+keys take one value or a list (an inline set), the same for all of them.
+*Why:* keys were strict but values were read in ~30 places, each assuming a
+shape — `ct: established` rendered `ct state e,s,t,…`, `log: {prefx: …}`
+silently dropped the prefix, `icmp-type` silently dropped `dport` (a wider
+rule than written), lists and `log: false` crashed. One table closes the
+class, and can later be exported as a JSON Schema (editor + lint checks).
+Verdict words are a fixed list plus `reject with …`; everything else (`queue`,
+`notrack`) goes through `raw:`. `proto` stays open (a name or 0–255: `vrrp`,
+`112` are in use). *Rejected:* a `jsonschema` dependency (worse messages, no
+normalising `ct: established` → a list).
 
 ---
 

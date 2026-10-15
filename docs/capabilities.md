@@ -54,11 +54,11 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | `iifname` / `oifname` | `iifname: wan` | `iifname @wan` / `{ "wan0", … }` / `"wan0"` | interface-*name* match (string, robust to load order); named set or interface group (strict — unknown names error); one device inlines bare |
 | `iif` / `oif` | `iif: wan` | `iif { "wan0", … }` / `iif "wan0"` | interface-*index* match (faster; nft resolves the name at load). Ruleset fails to load if the interface is absent and needs a reload if recreated — prefer for static-named interfaces. See best-practices §8a |
 | `saddr` / `daddr` | `saddr: webhosts` | `ip saddr @webhosts` | **family-aware**; named set, group, or IP/CIDR literal; renders once per common family |
-| `ct` | `ct: [established, related]` | `ct state established,related` | authored, never auto-injected |
+| `ct` | `ct: established` or `ct: [established, related]` | `ct state established,related` | authored, never auto-injected; states: new, established, related, invalid, untracked |
 | `mark` | `mark: "0x1"` | `meta mark 0x1` | match an fwmark (set one with `set-mark:`) |
 | `icmp-type` | `proto: icmpv6` / `icmp-type: [nd-neighbor-solicit, …]` | `icmpv6 type { … }` | family from `proto:` (icmp/icmpv6); single or list |
 | `proto` (standalone) | `proto: icmp` | `meta l4proto icmp` | |
-| `dport` / `sport` | `proto: tcp` / `dport: web` | `meta l4proto tcp meta l4proto . th dport @web` (named) or `tcp dport { 80, 443 }` (inline) | needs `proto:`; service name → that proto's ports; error if it has none |
+| `dport` / `sport` | `proto: tcp` / `dport: web` | `meta l4proto tcp meta l4proto . th dport @web` (named) or `tcp dport { 80, 443 }` (inline) | with `proto:`: that proto's ports (error if none). Without: each service port keeps its protocol — `tcp dport 22`, or `meta l4proto . th dport { tcp . 53, udp . 53 }` for several; a bare number or `sport`+`dport` still needs `proto:` |
 | `flags` | `flags: {match: [syn], mask: [syn, ack]}` | `tcp flags & (syn\|ack) == syn` | a list of clauses multiplies into several lines |
 
 ---
@@ -70,7 +70,9 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | `limit` | `limit: 4/minute` | `limit rate 4/minute` |
 | `meter` | `meter: {set: m, key: saddr, rate: 4/minute, timeout: 1m}` | `update @m { ip saddr timeout 1m limit rate 4/minute }` — per-key rate on a `flags: [dynamic]` set (keys: `saddr`/`daddr`/`iifname`/`oifname`) |
 | `quota` | `quota: over 10240 mbytes` | `quota over 10240 mbytes` |
-| `log` | `log: {prefix: "ssh ", level: info, group: 2}` | `log prefix "ssh " level info group 2` (or bare `log`; `group` = NFLOG) |
+| `log` | `log: {prefix: "ssh ", level: info, group: 2}` | `log prefix "ssh " level info group 2` (or bare `log`; `group` = NFLOG; `log: false` = none) |
+| `action` | `action: accept` / `reject with tcp reset` / `{jump: c}` | the verdict — words: accept, drop, reject, return, continue, masquerade, `reject with …`; mapping: exactly one of jump/goto/dnat/snat; other verdicts via `raw:` |
+| lists | `dport: [ssh, 8080]`, `saddr: [mgmt, 10.0.0.5]`, `iifname: [lan, wan]` | `tcp dport { 22, 8080 }` (inline set) — any matching key takes one value or a list; addresses split per family; no named set inside a list |
 | `set-mark` | `set-mark: "0x1"` | `meta mark set 0x1` |
 | `set-mss` | `set-mss: pmtu` / `set-mss: 1460` | `tcp flags syn tcp option maxseg size set rt mtu` / `… set 1460` |
 | `flow-offload` | `flow-offload: ft` | `flow add @ft` (must be its own rule — a verdict in the same rule is a `BuildError`; see best-practices §8c) |
@@ -99,7 +101,7 @@ A rule may be **statement-only** (no verdict) — e.g. an MSS clamp or a fwmark.
 | Form | YAML | nft |
 | --- | --- | --- |
 | `raw:` | `raw: "udp dport 5060 ip dscp set ef"` | verbatim (the escape hatch) |
-| `vmap:` (inline) | `vmap: {key: iifname, map: {wan0: {jump: wan_in}}}` | `iifname vmap { … }` — keys `iifname`/`oifname`/`proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`; groups & services resolve; `key: [iifname, oifname]` concatenates; `dport`/`sport` keep each service's proto (`meta l4proto . th dport`, `tcp . 22`; a bare number needs `/tcp`) |
+| `vmap:` (inline) | `vmap: {key: iifname, map: {wan0: {jump: wan_in}}}` | `iifname vmap { … }` — keys `iifname`/`oifname`/`proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`; groups & services resolve; `key: [iifname, oifname]` concatenates; `dport`/`sport` keep each service's proto (`meta l4proto . th dport`, `tcp . 22`; a bare number needs `/tcp`); values/rows: `accept`/`drop`/`return`/`continue` or `jump`/`goto` only (a concat row: `action:` or `jump:`/`goto:`) |
 | `include:` | `- include: includes/common-input.yaml` | inlined rules/sets at build time |
 
 ---

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import functools
+import os
 import pathlib
 import sys
 
@@ -16,7 +18,9 @@ from nftgen.ir import BuildError
 
 
 def _clean_errors(fn):
-    """Authoring mistakes get a one-line `nftgen: error:` instead of a traceback."""
+    """Authoring mistakes get a one-line `nftgen: error:` instead of a traceback.
+    Anything else is a bug in nftgen: one line saying so, the traceback only
+    with NFTGEN_DEBUG=1."""
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
@@ -25,6 +29,26 @@ def _clean_errors(fn):
         except (BuildError, DefinitionError, FileNotFoundError, yaml.YAMLError) as e:
             print(f"nftgen: error: {e}", file=sys.stderr)
             return 1
+        except BrokenPipeError:
+            # the reader went away (`… --stdout | head`): stop quietly, and
+            # point stdout at /dev/null so the exit flush doesn't fail again
+            with contextlib.suppress(OSError, ValueError):  # not a real file
+                os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+            return 141  # 128 + SIGPIPE, the shell convention
+        except OSError as e:
+            # permission denied, a directory where a file goes, a full disk:
+            # the environment, not a bug in nftgen
+            print(f"nftgen: error: {e}", file=sys.stderr)
+            return 1
+        except Exception as e:
+            if os.environ.get("NFTGEN_DEBUG"):
+                raise
+            print(
+                f"nftgen: internal error: {type(e).__name__}: {e} — this is a bug "
+                f"in nftgen, please report it (NFTGEN_DEBUG=1 shows the traceback)",
+                file=sys.stderr,
+            )
+            return 70  # EX_SOFTWARE
 
     return wrapper
 
@@ -142,6 +166,16 @@ def main(argv: list[str] | None = None) -> int:
         build_parser().print_help()
         return 0
 
+    # Same probe as `build --check`, before rendering: a check that can't run
+    # must fail loudly, not after output was already written.
+    if args.check and not validate.can_check():
+        print(
+            "nftgen: error: --check requested but `nft -c` is not usable here "
+            "(nft missing, or no netlink and no unshare fallback)",
+            file=sys.stderr,
+        )
+        return 2
+
     policy = pathlib.Path(args.policy)
     def_default, base_default, sites_default = _defaults(policy)
     text = generate(
@@ -160,9 +194,6 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(text)
 
     if args.check:
-        if not validate.nft_available():
-            print("nftgen: --check requested but `nft` was not found", file=sys.stderr)
-            return 2
         result = validate.check(text)
         if result.ok:
             print("nftgen: nft -c passed", file=sys.stderr)

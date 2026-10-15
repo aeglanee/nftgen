@@ -27,6 +27,7 @@ from nftgen.ir import (
     check_nft_name,
     render_literal,
 )
+from nftgen.schema import check_proto, check_rule
 
 PRIORITIES = {
     "raw": -300,
@@ -81,6 +82,40 @@ def _has_port(addr: str) -> bool:
     if addr.startswith("["):
         return "]:" in addr
     return addr.count(":") == 1  # bare IPv6 has >1 colon; one colon == host:port
+
+
+# protocols that exist in one IP family only
+_PROTO_FAMILY = {"icmp": "ip", "icmpv6": "ip6", "ipv6-icmp": "ip6"}
+
+# IANA numbers of the protocols nftgen checks by name; `proto: 17` is checked
+# (and, where nft needs a keyword, rendered) as `udp`
+PROTO_NUMBERS = {
+    1: "icmp",
+    2: "igmp",
+    6: "tcp",
+    17: "udp",
+    33: "dccp",
+    47: "gre",
+    50: "esp",
+    51: "ah",
+    58: "icmpv6",
+    112: "vrrp",
+    132: "sctp",
+    136: "udplite",
+}
+# protocols with ports: `<proto> dport …` needs one of these as its keyword
+PORT_PROTOS = ("tcp", "udp", "sctp", "dccp", "udplite")
+
+
+def proto_name(value) -> str | None:
+    """A rule's `proto` as a name: a known number becomes its name, anything
+    else stays as written. None when there is no proto."""
+    if value is None:
+        return None
+    text = str(value)
+    if text.isdigit():
+        return PROTO_NUMBERS.get(int(text), text)
+    return text
 
 
 _TCP_FLAGS = ("fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr")
@@ -203,13 +238,41 @@ def _reject_offload_with_verdict(rule: dict) -> None:
         )
 
 
+def _unique_entries(rows, what: str) -> list[str]:
+    """Map rows (key, value, written-as) -> `key : value` entries, first seen
+    first. The same key twice with the same value is folded; with a different
+    value it is an error — nft refuses a map with a duplicate key, and only on
+    the generated file."""
+    seen: dict[str, tuple[str, object]] = {}
+    out: list[str] = []
+    for key, value, source in rows:
+        if key in seen:
+            first_value, first_source = seen[key]
+            if first_value != value:
+                raise BuildError(
+                    f"{what} key {key!r} comes from both {first_source!r} "
+                    f"({first_value}) and {source!r} ({value}) — a key maps to "
+                    f"one value only"
+                )
+            continue
+        seen[key] = (value, source)
+        out.append(f"{key} : {value}")
+    return out
+
+
 class RuleRenderer:
     def __init__(
-        self, defs: Definitions, named: dict[str, NamedSet], counters=frozenset()
+        self,
+        defs: Definitions,
+        named: dict[str, NamedSet],
+        counters=frozenset(),
+        flowtables=None,
     ):
         self.defs = defs
         self.named = named
         self.counters = frozenset(counters)
+        # None = not known (a renderer used on its own): no flowtable check
+        self.flowtables = None if flowtables is None else frozenset(flowtables)
 
     # -- public ------------------------------------------------------------- #
     def render(self, rule: dict) -> list[str]:
@@ -228,11 +291,15 @@ class RuleRenderer:
         return [f'{line} comment "{text}"' for line in self._render(body)]
 
     def _render(self, rule: dict) -> list[str]:  # noqa: PLR0912, PLR0915 - dispatches per rule key
+        if not isinstance(rule, dict):
+            check_rule(rule)  # raises: a rule must be a mapping
         # Reject typos/unknown keys loudly: an unread key silently weakens a rule
         # (e.g. `dprot:` for `dport:`) and nft -c can't catch it (still valid nft).
         unknown = set(rule) - _KNOWN_RULE_KEYS
         if unknown:
             raise BuildError(f"unknown rule key(s) {sorted(unknown)}: {rule!r}")
+        # then every value's shape, before anything reads it (nftgen/schema.py)
+        rule = check_rule(rule)
         if "raw" in rule:
             if len(rule) != 1:
                 raise BuildError(f"`raw:` must be a rule's only key: {rule!r}")
@@ -254,6 +321,17 @@ class RuleRenderer:
             families = sorted(set.intersection(*[set(a) for a in addr.values()]))
             if not families:
                 raise BuildError(f"rule mixes incompatible address families: {rule!r}")
+            # icmp exists only in IPv4 and icmpv6 only in IPv6: the other
+            # family's line could never match, so it isn't rendered
+            only = _PROTO_FAMILY.get(proto_name(rule.get("proto")))
+            if only is not None:
+                if only not in families:
+                    raise BuildError(
+                        f"`proto: {rule['proto']}` is {'IPv4' if only == 'ip' else 'IPv6'}"
+                        f"-only, but the rule's addresses are "
+                        f"{'IPv6' if only == 'ip' else 'IPv4'}: {rule!r}"
+                    )
+                families = [only]
         else:
             families = [None]
 
@@ -270,9 +348,9 @@ class RuleRenderer:
                 # is absent, and a recreated interface needs a reload. Prefer
                 # for static-named interfaces; see docs/best-practices.md §8a.
                 if "iif" in rule:
-                    parts.append(f"iif {self._iface(rule['iif'])}")
+                    parts.append(f"iif {self._iface(rule['iif'], index=True)}")
                 if "oif" in rule:
-                    parts.append(f"oif {self._iface(rule['oif'])}")
+                    parts.append(f"oif {self._iface(rule['oif'], index=True)}")
                 if "saddr" in rule:
                     parts.append(f"{fam} saddr {addr['saddr'][fam]}")
                 if "daddr" in rule:
@@ -282,7 +360,7 @@ class RuleRenderer:
                 if "mark" in rule:
                     parts.append(f"meta mark {rule['mark']}")
                 if "icmp-type" in rule:
-                    proto = rule.get("proto")
+                    proto = proto_name(rule.get("proto"))
                     if proto not in ("icmp", "icmpv6"):
                         raise BuildError(
                             f"icmp-type needs `proto: icmp` or `proto: icmpv6`, got {proto!r}: {rule!r}"
@@ -321,7 +399,9 @@ class RuleRenderer:
             out.append(f"limit rate {rule['limit']}")
         if "quota" in rule:
             out.append(f"quota {rule['quota']}")
-        if "log" in rule:
+        # only `log: false` means no log; `log: {}` is a plain log (an empty
+        # mapping is falsy, so test for False, not for truthiness)
+        if "log" in rule and rule["log"] is not False:
             out.append(self._log(rule["log"]))
         if "set-mark" in rule:
             out.append(f"meta mark set {rule['set-mark']}")
@@ -330,7 +410,16 @@ class RuleRenderer:
             target = "rt mtu" if str(mss) in ("pmtu", "rt-mtu", "rt_mtu") else str(mss)
             out.append(f"tcp flags syn tcp option maxseg size set {target}")
         if "flow-offload" in rule:
-            out.append(f"flow add @{rule['flow-offload']}")
+            name = rule["flow-offload"]
+            if self.flowtables is not None and name not in self.flowtables:
+                # nft would say only "Could not process rule: No such file or
+                # directory", pointing at the generated file
+                declared = ", ".join(sorted(self.flowtables)) or "none"
+                raise BuildError(
+                    f"flowtable {name!r} is not declared in the table's "
+                    f"`flowtables:` (declared: {declared})"
+                )
+            out.append(f"flow add @{name}")
         return out
 
     _METER_KEYS = frozenset({"saddr", "daddr", "iifname", "oifname"})
@@ -401,8 +490,22 @@ class RuleRenderer:
         return " ".join(parts)
 
     # -- match helpers ------------------------------------------------------ #
-    def _addr(self, value: str) -> dict[str, str]:
-        """Return {family('ip'|'ip6'): nft token} for an address match."""
+    def _addr(self, value) -> dict[str, str]:
+        """Return {family('ip'|'ip6'): nft token} for an address match.
+
+        A list is an inline set of its elements, each resolved as a single
+        value would be (group or literal), split per family; a named set
+        can't sit inside a list (nft has no set-in-anonymous-set)."""
+        if isinstance(value, list):
+            buckets: dict[str, list[str]] = {}
+            for item in value:
+                self._no_set_in_list(item)
+                for fam, items in self._addr_items(item).items():
+                    buckets.setdefault(fam, []).extend(items)
+            return {
+                fam: _anon(list(dict.fromkeys(items)))
+                for fam, items in sorted(buckets.items())
+            }
         name = value[1:] if isinstance(value, str) and value.startswith("@") else value
         if name in self.named:
             s = self.named[name]
@@ -411,6 +514,17 @@ class RuleRenderer:
             return {("ip" if s.type == "ipv4_addr" else "ip6"): f"@{name}"}
         if isinstance(value, str) and value.startswith("@"):
             raise BuildError(f"unknown set reference {value!r}")
+        return {fam: _anon(items) for fam, items in self._addr_items(value).items()}
+
+    def _no_set_in_list(self, item) -> None:
+        if isinstance(item, str) and (item.startswith("@") or item in self.named):
+            raise BuildError(
+                f"set {item!r} can't go inside a list — nft has no set inside an "
+                f"inline set; use it on its own"
+            )
+
+    def _addr_items(self, value) -> dict[str, list[str]]:
+        """A network group or an IP/CIDR literal -> {family: [addresses]}."""
         if value in self.defs.networks:
             addrs = self.defs.network(value)
             if not addrs:
@@ -423,42 +537,73 @@ class RuleRenderer:
                     else "ip6"
                 )
                 buckets.setdefault(fam, []).append(a)
-            return {fam: _anon(addrs) for fam, addrs in buckets.items()}
+            return buckets
         try:
             fam = (
                 "ip"
-                if ipaddress.ip_network(value, strict=False).version == 4
+                if ipaddress.ip_network(str(value), strict=False).version == 4
                 else "ip6"
             )
         except ValueError:
             raise BuildError(
                 f"address {value!r} is not a known network group, set, or IP/CIDR"
             ) from None
-        return {fam: value}
+        return {fam: [str(value)]}
 
-    def _iface(self, value: str) -> str:
+    def _iface(self, value, index: bool = False) -> str:
         # Strict: an unknown name would otherwise render as a literal device and
         # silently never match — a typo'd group must fail the build instead. A
         # genuine one-off device gets a one-device group under `interfaces:`.
+        if isinstance(value, list):  # an inline set of the groups' devices
+            devices: list[str] = []
+            for item in value:
+                self._no_set_in_list(item)
+                devices.extend(self._iface_devices(item))
+            return _anon([f'"{d}"' for d in dict.fromkeys(devices)])
         if value in self.named:
             s = self.named[value]
             if s.type != "ifname":
                 raise BuildError(f"set @{value} is {s.type}, not an interface set")
+            if index:
+                # an `ifname` set holds names; iif/oif compare interface
+                # indexes — nft rejects the pair as a datatype mismatch
+                raise BuildError(
+                    f"`iif`/`oif` match interface indexes, but set @{value} holds "
+                    f"names — use `iifname`/`oifname` with the set, or "
+                    f"`iif`/`oif` with the group inline (not under `sets:`)"
+                )
             return f"@{value}"
+        return _anon([f'"{d}"' for d in self._iface_devices(value)])
+
+    def _iface_devices(self, value) -> list[str]:
         if value in self.defs.interfaces:
             devices = self.defs.interface(value)
             if not devices:
                 raise BuildError(f"interface group {value!r} resolves to no devices")
-            return _anon([f'"{d}"' for d in devices])
+            return devices
         raise BuildError(
             f"unknown interface group {value!r} (define it under `interfaces:`)"
         )
 
     def _proto_ports(self, rule: dict) -> list[str]:
-        proto = rule.get("proto")
+        written = rule.get("proto")
         if "sport" in rule or "dport" in rule:
-            if not proto:
-                raise BuildError(f"port match needs a proto: {rule!r}")
+            if written is None:
+                # no proto: each port keeps the protocol its service defines
+                if "sport" in rule and "dport" in rule:
+                    raise BuildError(
+                        f"a rule with both sport and dport needs `proto:`: {rule!r}"
+                    )
+                key = "sport" if "sport" in rule else "dport"
+                return [self._service_pairs(key, rule[key])]
+            # the port match spells the protocol as a keyword (`udp dport`),
+            # so a number is rendered by its name; nft has no `17 dport`
+            proto = proto_name(written)
+            if proto not in PORT_PROTOS:
+                raise BuildError(
+                    f"`proto: {written}` has no ports — a port match needs one of "
+                    f"{', '.join(PORT_PROTOS)}: {rule!r}"
+                )
             out, pairs = [], []
             for key in ("sport", "dport"):
                 if key not in rule:
@@ -474,9 +619,43 @@ class RuleRenderer:
             if pairs and not out:
                 out.append(f"meta l4proto {proto}")
             return out + pairs
-        if proto:
-            return [f"meta l4proto {proto}"]
+        if written is not None:
+            return [f"meta l4proto {written}"]
         return []
+
+    def _service_pairs(self, key: str, value) -> str:
+        """A port match without `proto:` — services carry their own protocol.
+        One protocol renders the classic `tcp dport …`; several render a
+        `meta l4proto . th dport { tcp . 53, udp . 53 }` pair lookup, the
+        inline twin of a named service pair set."""
+        if self._is_pair_set(value):
+            return f"meta l4proto . th {key} @{value}"
+        if isinstance(value, str) and value in self.named:
+            raise BuildError(
+                f"set @{value} holds ports without protocols — add `proto:`"
+            )
+        pairs: list[tuple[str, str]] = []
+        for item in value if isinstance(value, list) else [value]:
+            self._no_set_in_list(item)
+            if not (isinstance(item, str) and item in self.defs.services):
+                raise BuildError(
+                    f"port {item!r} has no protocol — add `proto:`, or use a "
+                    f"service (`{key}: <service>`)"
+                )
+            for proto, port in self.defs.service(item):
+                if proto not in PORT_PROTOS:
+                    raise BuildError(
+                        f"service {item!r} has {port}/{proto}, a protocol without "
+                        f"ports ({', '.join(PORT_PROTOS)})"
+                    )
+                pairs.append((proto, port))
+        pairs = list(dict.fromkeys(pairs))
+        protos = list(dict.fromkeys(proto for proto, _port in pairs))
+        if len(protos) == 1:
+            return f"{protos[0]} {key} {_anon([port for _p, port in pairs])}"
+        return (
+            f"meta l4proto . th {key} {_anon([f'{p} . {port}' for p, port in pairs])}"
+        )
 
     def _is_pair_set(self, value) -> bool:
         s = self.named.get(value) if isinstance(value, str) else None
@@ -490,20 +669,30 @@ class RuleRenderer:
             raise BuildError(f"service {service!r} has no {proto} ports")
 
     def _port(self, value, proto: str) -> str:
-        if value in self.named:
+        if isinstance(value, list):  # an inline set of each element's ports
+            ports: list[str] = []
+            for item in value:
+                self._no_set_in_list(item)
+                ports.extend(self._port_items(item, proto))
+            return _anon(list(dict.fromkeys(ports)))
+        if isinstance(value, str) and value in self.named:
             s = self.named[value]
             if s.type != "inet_service":
                 raise BuildError(f"set @{value} is {s.type}, not a port set")
             return f"@{value}"
+        return _anon(self._port_items(value, proto))
+
+    def _port_items(self, value, proto: str) -> list[str]:
+        """A service (its ports for `proto`) or a port/range literal."""
         if isinstance(value, str) and value in self.defs.services:
             ports = self.defs.service_ports(value, proto)
             if not ports:
                 raise BuildError(f"service {value!r} has no {proto} ports")
-            return _anon(ports)
+            return ports
         if isinstance(value, int) or (
             isinstance(value, str) and _PORT_LITERAL.match(value)
         ):
-            return str(value)
+            return [str(value)]
         raise BuildError(
             f"port {value!r} is not a known service group or a port/range "
             f"(define it under `services:`)"
@@ -550,15 +739,16 @@ class RuleRenderer:
         ports = key in ("dport", "sport")
         if ports:  # a service is proto + port: keep both in the lookup
             keyexpr = f"meta l4proto . {keyexpr}"
-        entries = []
+        rows = []
         for k, verdict in mapping.items():
-            v = self._verdict(verdict)
+            v = self._vmap_verdict(verdict)
             toks = (
                 [f"{p} . {port}" for p, port in self._vmap_port_pairs(key, k)]
                 if ports
                 else self._vmap_lit_tokens(key, k)
             )
-            entries.extend(f"{tok} : {v}" for tok in toks)
+            rows.extend((tok, v, k) for tok in toks)
+        entries = _unique_entries(rows, "vmap")
         return f"{keyexpr} vmap {render_literal(entries, BODY_INDENT)}"
 
     def _addr_vmap(self, spec: dict, key: str) -> str:
@@ -572,12 +762,13 @@ class RuleRenderer:
             raise BuildError(
                 f"a {key} vmap needs a `map:` of address -> verdict: {spec!r}"
             )
-        fam, entries = None, []
+        fam, rows = None, []
         for k, verdict in mapping.items():
             kfam, cidrs = self._vmap_addr_tokens(key, k)
             fam = self._one_family(key, fam, kfam)
-            v = self._verdict(verdict)
-            entries.extend(f"{c} : {v}" for c in cidrs)
+            v = self._vmap_verdict(verdict)
+            rows.extend((c, v, k) for c in cidrs)
+        entries = _unique_entries(rows, "vmap")
         return f"{fam} {key} vmap {render_literal(entries, BODY_INDENT)}"
 
     def _vmap_addr_tokens(self, key: str, value) -> tuple:
@@ -600,6 +791,20 @@ class RuleRenderer:
             raise BuildError(f"vmap {key} value {value!r} mixes IP families")
         return fams.pop(), cidrs
 
+    def _check_concat_keys(self, spec: dict, keys: list) -> None:
+        for k in keys:
+            if k not in self._VMAP_KEYS and k not in self._VMAP_ADDR:
+                raise BuildError(
+                    f"vmap key {k!r} not supported (use {self._VMAP_HELP})"
+                )
+        if "proto" not in keys and {"sport", "dport"} <= set(keys):
+            # each port column would get its own l4proto slot and the product
+            # would pair udp with tcp — entries no packet can match
+            raise BuildError(
+                f"a vmap with both sport and dport needs a `proto` column — "
+                f"key: [proto, ...] with one row per protocol: {spec!r}"
+            )
+
     def _concat_vmap(self, spec: dict, keys: list) -> str:
         """Concatenated vmap, e.g. ``key: [iifname, oifname]`` -> ``iifname . oifname vmap``.
 
@@ -607,11 +812,7 @@ class RuleRenderer:
         match value resolves like a normal iifname/oifname (an interface group expands to
         its devices, cartesian-producting into elements), proto stays literal.
         """
-        for k in keys:
-            if k not in self._VMAP_KEYS and k not in self._VMAP_ADDR:
-                raise BuildError(
-                    f"vmap key {k!r} not supported (use {self._VMAP_HELP})"
-                )
+        self._check_concat_keys(spec, keys)
         mapping = spec.get("map")
         if not isinstance(mapping, list):
             raise BuildError(
@@ -621,7 +822,7 @@ class RuleRenderer:
         # a `proto` column pins each row's protocol, so a port column takes that
         # proto's ports; without one, a port column is a proto . port pair
         proto_col = keys.index("proto") if "proto" in keys else None
-        fam, entries = None, []
+        fam, rows = None, []
         for entry in mapping:
             if not isinstance(entry, dict) or "match" not in entry:
                 raise BuildError(f"concat vmap entry needs `match: [...]`: {entry!r}")
@@ -631,13 +832,19 @@ class RuleRenderer:
                     f"concat vmap `match` must list {len(keys)} value(s), "
                     f"one per key {keys}: {entry!r}"
                 )
-            verdict = {k: v for k, v in entry.items() if k != "match"}
-            if len(verdict) != 1:
+            rest = {k: v for k, v in entry.items() if k != "match"}
+            if len(rest) != 1:
                 raise BuildError(
-                    f"concat vmap entry needs exactly one verdict: {entry!r}"
+                    f"concat vmap entry needs exactly one verdict (`action:`, "
+                    f"`jump:` or `goto:`): {entry!r}"
                 )
-            v = self._verdict(verdict)
-            row_proto = str(match[proto_col]) if proto_col is not None else None
+            # `action: <verdict>` like a rule's, or the `jump:`/`goto:` shorthand
+            v = self._vmap_verdict(rest.get("action", rest))
+            row_proto = None
+            if proto_col is not None:
+                # the same check as a rule's `proto:` (rows skip the rule schema)
+                check_proto(match[proto_col], f"vmap row {match!r}")
+                row_proto = proto_name(match[proto_col])
             cols = []
             for kt, value in zip(keys, match, strict=True):
                 if kt in self._VMAP_ADDR:  # family-aware position
@@ -647,11 +854,12 @@ class RuleRenderer:
                 else:
                     cols.append(self._concat_col_tokens(kt, value, row_proto))
             for combo in itertools.product(*cols):
-                entries.append(f"{' . '.join(combo)} : {v}")
+                rows.append((" . ".join(combo), v, match))
         if any(k in self._VMAP_ADDR for k in keys) and fam is None:
             raise BuildError(
                 f"concat vmap with an address key needs at least one entry: {spec!r}"
             )
+        entries = _unique_entries(rows, "vmap")
         keyexprs = [
             f"{fam} {k}"
             if k in self._VMAP_ADDR
@@ -775,6 +983,28 @@ class RuleRenderer:
             parts.append(self._verdict(rule["action"]))
         return " ".join(p for p in parts if p)
 
+    _VMAP_VERDICTS = ("accept", "drop", "return", "continue")
+
+    def _vmap_verdict(self, value) -> str:
+        """A vmap value: only real verdicts. `reject`, `masquerade` and NAT are
+        statements, not verdicts — nft refuses them in a vmap (syntax error)."""
+        if isinstance(value, str):
+            if value in self._VMAP_VERDICTS:
+                return value
+            raise BuildError(
+                f"{value!r} can't go in a vmap — a vmap can only route "
+                f"({', '.join(self._VMAP_VERDICTS)}, jump, goto); use `jump:` to "
+                f"a chain that does it"
+            )
+        if isinstance(value, dict) and len(value) == 1:
+            ((kind, target),) = value.items()
+            if kind in ("jump", "goto") and isinstance(target, str) and target:
+                return f"{kind} {target}"
+        raise BuildError(
+            f"vmap verdict must be one of {', '.join(self._VMAP_VERDICTS)}, or "
+            f"`jump:`/`goto:` a chain, got {value!r}"
+        )
+
     def _verdict(self, action) -> str:
         if isinstance(action, dict):
             ((kind, target),) = action.items()
@@ -809,13 +1039,18 @@ class RuleRenderer:
         key = spec.get("key", "dport")
         if key not in ("dport", "sport"):
             raise BuildError(f"{kind} map key must be dport/sport, got {key!r}")
-        proto = spec.get("proto")
+        proto = proto_name(spec.get("proto"))
         if not proto:
             raise BuildError(f"{kind} map needs `proto:` for the {key} key")
+        if proto not in PORT_PROTOS:
+            raise BuildError(
+                f"{kind} map `proto: {spec.get('proto')}` has no ports — use one of "
+                f"{', '.join(PORT_PROTOS)}"
+            )
         mapping = spec.get("map")
         if not mapping:
             raise BuildError(f"{kind} map needs `map:` entries: {spec!r}")
-        entries, families = [], set()
+        rows, families = [], set()
         for k, v in mapping.items():
             keytok = self._map_port_key(kind, k, proto)
             valtok = str(v)
@@ -833,7 +1068,8 @@ class RuleRenderer:
                     f"address-only for now (port translation in a map is unsupported)"
                 )
             families.add(_nat_family(valtok))
-            entries.append(f"{keytok} : {valtok}")
+            rows.append((keytok, valtok, k))
+        entries = _unique_entries(rows, f"{kind} map")
         if len(families) > 1:
             raise BuildError(f"{kind} map mixes v4 and v6 targets: {sorted(families)}")
         fam = families.pop()
