@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import functools
 import os
 import pathlib
@@ -26,6 +27,17 @@ def _clean_errors(fn):
         try:
             return fn(*args, **kwargs)
         except (BuildError, DefinitionError, FileNotFoundError, yaml.YAMLError) as e:
+            print(f"nftgen: error: {e}", file=sys.stderr)
+            return 1
+        except BrokenPipeError:
+            # the reader went away (`… --stdout | head`): stop quietly, and
+            # point stdout at /dev/null so the exit flush doesn't fail again
+            with contextlib.suppress(OSError, ValueError):  # not a real file
+                os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+            return 141  # 128 + SIGPIPE, the shell convention
+        except OSError as e:
+            # permission denied, a directory where a file goes, a full disk:
+            # the environment, not a bug in nftgen
             print(f"nftgen: error: {e}", file=sys.stderr)
             return 1
         except Exception as e:

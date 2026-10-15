@@ -286,3 +286,29 @@ def test_mark_values_are_numbers():
 def test_concat_mark_values_are_numbers():
     with pytest.raises(BuildError, match=r"field mark='gold' is not a mark"):
         build_sets([{"name": "m", "concat": ["mark"], "tuples": [["gold"]]}], DEFS)
+
+
+# -- review N6: OS errors are not "internal errors" ------------------------------ #
+def test_cli_os_error_is_a_clean_error(tmp_path, capsys):
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    policy = tmp_path / "p.yaml"
+    policy.write_text("tables:\n  - family: inet\n    name: f\n")
+    (tmp_path / "definitions").mkdir()
+    # --out pointing at a directory: IsADirectoryError
+    rc = cli.main(
+        [str(policy), "--defs", str(tmp_path / "definitions"), "--out", str(out_dir)]
+    )
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert err.startswith("nftgen: error: ")
+    assert "internal error" not in err
+
+
+def test_cli_broken_pipe_exits_quietly(monkeypatch, capsys):
+    def closed_pipe(*_args, **_kwargs):
+        raise BrokenPipeError(32, "Broken pipe")
+
+    monkeypatch.setattr(cli, "generate", closed_pipe)
+    assert cli.main(["policy.yaml"]) == 141
+    assert capsys.readouterr().err == ""
