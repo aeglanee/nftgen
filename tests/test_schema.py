@@ -161,6 +161,9 @@ def test_set_mss_values():
         "meta l4proto tcp tcp flags syn tcp option maxseg size set 1452"
     ]
     bad({"proto": "tcp", "set-mss": "huge"}, "rule key 'set-mss'")
+    # review N8: "0" passed while 0 failed; both and 65536+ are out of range
+    for v in (0, "0", "00", 65536, "99999"):
+        bad({"proto": "tcp", "set-mss": v}, r"1-65535")
 
 
 # -- shapes around rules (C8) ---------------------------------------------------- #

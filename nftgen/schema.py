@@ -166,11 +166,17 @@ def _counter(key, value):
 
 
 def _set_mss(key, value):
-    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+    if value in MSS_ALIASES:
         return value
-    if value in MSS_ALIASES or (isinstance(value, str) and value.isdigit()):
+    # the TCP MSS option is 16 bits; 0 would stall every connection it touches
+    number = value if isinstance(value, int) and not isinstance(value, bool) else None
+    if isinstance(value, str) and value.isdigit():
+        number = int(value)
+    if number is not None and 1 <= number <= 65535:
         return value
-    return _fail(key, f"a size in bytes or one of {', '.join(MSS_ALIASES)}", value)
+    return _fail(
+        key, f"a size in bytes (1-65535) or one of {', '.join(MSS_ALIASES)}", value
+    )
 
 
 def _action(key, value):
