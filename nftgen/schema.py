@@ -116,6 +116,16 @@ def _proto(key, value):
     )
 
 
+def check_proto(value, where: str):
+    """The `proto` check for a value outside a rule (a vmap row's proto
+    column), with the error placed at `where`."""
+    try:
+        return _proto("proto", value)
+    except BuildError as e:
+        detail = str(e).removeprefix("rule key 'proto': ")
+        raise BuildError(f"{where}: {detail}") from None
+
+
 def _flags(key, value):
     checks = value if isinstance(value, list) else [value]
     if not checks:

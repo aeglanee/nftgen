@@ -512,3 +512,16 @@ def test_sport_and_dport_vmap_needs_a_proto_column():
     assert _DR.render(rule) == [
         "meta l4proto . th sport . th dport vmap { udp . 53 . 53 : accept, tcp . 53 . 53 : accept }"
     ]
+
+
+# -- review N9: a vmap row's proto column is checked like a rule's proto --------- #
+@pytest.mark.parametrize("bad_proto", [["tcp", "udp"], "t cp", 300, True])
+def test_vmap_proto_column_is_checked(bad_proto):
+    rule = {
+        "vmap": {
+            "key": ["proto", "dport"],
+            "map": [{"match": [bad_proto, 8080], "action": "accept"}],
+        }
+    }
+    with pytest.raises(BuildError, match=r"vmap row .*: expected a protocol name"):
+        _DR.render(rule)

@@ -27,7 +27,7 @@ from nftgen.ir import (
     check_nft_name,
     render_literal,
 )
-from nftgen.schema import check_rule
+from nftgen.schema import check_proto, check_rule
 
 PRIORITIES = {
     "raw": -300,
@@ -840,7 +840,11 @@ class RuleRenderer:
                 )
             # `action: <verdict>` like a rule's, or the `jump:`/`goto:` shorthand
             v = self._vmap_verdict(rest.get("action", rest))
-            row_proto = proto_name(match[proto_col]) if proto_col is not None else None
+            row_proto = None
+            if proto_col is not None:
+                # the same check as a rule's `proto:` (rows skip the rule schema)
+                check_proto(match[proto_col], f"vmap row {match!r}")
+                row_proto = proto_name(match[proto_col])
             cols = []
             for kt, value in zip(keys, match, strict=True):
                 if kt in self._VMAP_ADDR:  # family-aware position
