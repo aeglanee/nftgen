@@ -589,7 +589,13 @@ class RuleRenderer:
         written = rule.get("proto")
         if "sport" in rule or "dport" in rule:
             if written is None:
-                raise BuildError(f"port match needs a proto: {rule!r}")
+                # no proto: each port keeps the protocol its service defines
+                if "sport" in rule and "dport" in rule:
+                    raise BuildError(
+                        f"a rule with both sport and dport needs `proto:`: {rule!r}"
+                    )
+                key = "sport" if "sport" in rule else "dport"
+                return [self._service_pairs(key, rule[key])]
             # the port match spells the protocol as a keyword (`udp dport`),
             # so a number is rendered by its name; nft has no `17 dport`
             proto = proto_name(written)
@@ -616,6 +622,40 @@ class RuleRenderer:
         if written is not None:
             return [f"meta l4proto {written}"]
         return []
+
+    def _service_pairs(self, key: str, value) -> str:
+        """A port match without `proto:` — services carry their own protocol.
+        One protocol renders the classic `tcp dport …`; several render a
+        `meta l4proto . th dport { tcp . 53, udp . 53 }` pair lookup, the
+        inline twin of a named service pair set."""
+        if self._is_pair_set(value):
+            return f"meta l4proto . th {key} @{value}"
+        if isinstance(value, str) and value in self.named:
+            raise BuildError(
+                f"set @{value} holds ports without protocols — add `proto:`"
+            )
+        pairs: list[tuple[str, str]] = []
+        for item in value if isinstance(value, list) else [value]:
+            self._no_set_in_list(item)
+            if not (isinstance(item, str) and item in self.defs.services):
+                raise BuildError(
+                    f"port {item!r} has no protocol — add `proto:`, or use a "
+                    f"service (`{key}: <service>`)"
+                )
+            for proto, port in self.defs.service(item):
+                if proto not in PORT_PROTOS:
+                    raise BuildError(
+                        f"service {item!r} has {port}/{proto}, a protocol without "
+                        f"ports ({', '.join(PORT_PROTOS)})"
+                    )
+                pairs.append((proto, port))
+        pairs = list(dict.fromkeys(pairs))
+        protos = list(dict.fromkeys(proto for proto, _port in pairs))
+        if len(protos) == 1:
+            return f"{protos[0]} {key} {_anon([port for _p, port in pairs])}"
+        return (
+            f"meta l4proto . th {key} {_anon([f'{p} . {port}' for p, port in pairs])}"
+        )
 
     def _is_pair_set(self, value) -> bool:
         s = self.named.get(value) if isinstance(value, str) else None

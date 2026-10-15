@@ -58,7 +58,7 @@ The authoritative reference for what the generator turns YAML into, grounded in
 | `mark` | `mark: "0x1"` | `meta mark 0x1` | match an fwmark (set one with `set-mark:`) |
 | `icmp-type` | `proto: icmpv6` / `icmp-type: [nd-neighbor-solicit, …]` | `icmpv6 type { … }` | family from `proto:` (icmp/icmpv6); single or list |
 | `proto` (standalone) | `proto: icmp` | `meta l4proto icmp` | |
-| `dport` / `sport` | `proto: tcp` / `dport: web` | `meta l4proto tcp meta l4proto . th dport @web` (named) or `tcp dport { 80, 443 }` (inline) | needs `proto:`; service name → that proto's ports; error if it has none |
+| `dport` / `sport` | `proto: tcp` / `dport: web` | `meta l4proto tcp meta l4proto . th dport @web` (named) or `tcp dport { 80, 443 }` (inline) | with `proto:`: that proto's ports (error if none). Without: each service port keeps its protocol — `tcp dport 22`, or `meta l4proto . th dport { tcp . 53, udp . 53 }` for several; a bare number or `sport`+`dport` still needs `proto:` |
 | `flags` | `flags: {match: [syn], mask: [syn, ack]}` | `tcp flags & (syn\|ack) == syn` | a list of clauses multiplies into several lines |
 
 ---

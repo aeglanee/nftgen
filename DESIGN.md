@@ -171,15 +171,16 @@ tables:
 A rule is a small mapping of **match keys** + an **action** (the recommended
 form), or a `raw:` string for full nft power.
 
-Match keys: `iifname` / `oifname` (interface name) or `iif` / `oif`
-(interface index — faster, load-order-sensitive), `saddr` / `daddr` (address),
-`proto` (a name such as `tcp`/`vrrp`, or a number 0–255), `sport` / `dport`
-(service or port), `ct` (state), `counter` (bool or a declared name), `log`
+Match keys: `iifname` / `oifname` (interface name) or `iif` / `oif` (interface
+index — faster, load-order-sensitive), `saddr` / `daddr` (address), `proto` (a
+name such as `tcp`/`vrrp`, or a number 0–255), `sport` / `dport` (service or
+port; `proto:` may be left out when the ports come from services — each keeps
+its own protocol), `ct` (state), `counter` (bool or a declared name), `log`
 (bool, or `prefix`/`level`/`group`). `action`: `accept` / `drop` / `reject` /
 `return` / `continue` / `masquerade`, `reject with …` (e.g. `reject with tcp
-reset`), or a mapping with exactly one of `jump: chain` / `goto: chain` /
-`dnat: 10.0.0.5` / `snat: 1.2.3.4` (written as an indented block under
-`action:`); anything else goes through `raw:`.
+reset`), or a mapping with exactly one of `jump: chain` / `goto: chain` / `dnat:
+10.0.0.5` / `snat: 1.2.3.4` (written as an indented block under `action:`);
+anything else goes through `raw:`.
 
 **One value or a list:** every matching key (`saddr`/`daddr`, `sport`/`dport`,
 `iifname`/`oifname`/`iif`/`oif`, `ct`, `icmp-type`) takes one value plain or

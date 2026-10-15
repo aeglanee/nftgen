@@ -95,6 +95,12 @@ firewall lets through (§2.3); the pair set mirrors the definition exactly.
 The pre-0.7.0 port vmap (`th dport vmap { 22 : … }`) matched *any*
 protocol — udp/22 for `ssh: [22/tcp]`. Behaviorally proven (testing-plan
 B27, B22).
+**`proto:` is optional when the ports come from services:** each port then
+keeps its own protocol — one protocol renders the classic `tcp dport 22`,
+several render `meta l4proto . th dport { tcp . 53, udp . 53 }` (inline) or
+`meta l4proto . th dport @dns` (named), the same packets either way. A bare
+port number, a port-only set, or `sport` + `dport` together still need
+`proto:`.
 *Rejected:* erroring on the leaky combinations (forces `web_tcp`/`web_udp`
 splits for something nft can express exactly); port-only services
 (`web: [80]` — "any protocol" is the leak again; a hand-written `type:

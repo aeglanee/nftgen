@@ -2,8 +2,9 @@
 
 import pytest
 
+from nftgen import validate
 from nftgen.definitions import Definitions
-from nftgen.ir import BuildError, build_sets
+from nftgen.ir import BuildError, Table, build_sets
 from nftgen.rules import RuleRenderer, build_chain, resolve_priority
 
 DEFS = Definitions.from_mappings(
@@ -316,9 +317,14 @@ def test_incompatible_families_error():
         R.render({"saddr": "v6only", "daddr": "192.0.2.0/24", "action": "accept"})
 
 
-def test_port_without_proto_errors():
-    with pytest.raises(BuildError):
-        R.render({"dport": "web", "action": "accept"})
+def test_port_without_proto_uses_the_services_pairs():
+    # 5b/N7: without `proto:` a service keeps its own protocol (named set →
+    # its pairs; a bare number still needs a proto)
+    assert R.render({"dport": "web", "action": "accept"}) == [
+        "meta l4proto . th dport @web accept"
+    ]
+    with pytest.raises(BuildError, match="has no protocol"):
+        R.render({"dport": 80, "action": "accept"})
 
 
 def test_port_literals_and_unknown_service():
@@ -555,3 +561,106 @@ def test_numeric_proto_column_in_a_concat_vmap():
         }
     }
     assert r.render(rule) == ["meta l4proto . th dport vmap { 17 . 53 : accept }"]
+
+
+# -- 5b + N7: `proto:` optional when ports come from services -------------------- #
+_SVC = Definitions.from_mappings(
+    {
+        "services": {
+            "dns": ["53/tcp", "53/udp"],
+            "ssh": ["22/tcp"],
+            "range": ["8000-8100/tcp"],
+            "dhcpc": ["68/udp"],
+            "dhcps": ["67/udp"],
+            "weird": ["1/icmp"],
+        }
+    }
+)
+_SR = RuleRenderer(_SVC, {})
+_SN = RuleRenderer(
+    _SVC,
+    {
+        s.name: s
+        for s in build_sets(["dns", {"name": "ports", "type": "inet_service"}], _SVC)
+    },
+)
+
+
+@pytest.mark.parametrize(
+    ("rule", "line"),
+    [
+        # several protocols → a protocol+port pair lookup
+        ({"dport": "dns"}, "meta l4proto . th dport { tcp . 53, udp . 53 } accept"),
+        # one protocol → the classic form, as if `proto: tcp` were written
+        ({"dport": "ssh"}, "tcp dport 22 accept"),
+        (
+            {"dport": ["dns", "ssh"]},
+            "meta l4proto . th dport { tcp . 53, udp . 53, tcp . 22 } accept",
+        ),
+        (
+            {"dport": ["range", "dns"]},
+            "meta l4proto . th dport { tcp . 8000-8100, tcp . 53, udp . 53 } accept",
+        ),
+        ({"sport": "dhcpc"}, "udp sport 68 accept"),
+    ],
+)
+def test_ports_without_proto_keep_each_services_protocol(rule, line):
+    assert _SR.render({**rule, "action": "accept"}) == [line]
+
+
+def test_named_service_set_without_proto_matches_all_its_pairs():
+    # N7: the pair set already pins each port's protocol
+    assert _SN.render({"dport": "dns", "action": "accept"}) == [
+        "meta l4proto . th dport @dns accept"
+    ]
+
+
+def test_with_proto_nothing_changes():
+    assert _SR.render({"proto": "udp", "dport": "dns", "action": "accept"}) == [
+        "udp dport 53 accept"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("rule", "match"),
+    [
+        ({"dport": 22}, "port 22 has no protocol"),
+        ({"dport": ["dns", 8080]}, "port 8080 has no protocol"),
+        ({"sport": "dhcpc", "dport": "dhcps"}, "both sport and dport needs `proto:`"),
+        ({"dport": "weird"}, "a protocol without ports"),
+    ],
+)
+def test_ports_without_proto_errors(rule, match):
+    with pytest.raises(BuildError, match=match):
+        _SR.render({**rule, "action": "accept"})
+
+
+def test_port_only_named_set_without_proto_errors():
+    with pytest.raises(BuildError, match="holds ports without protocols"):
+        _SN.render({"dport": "ports", "action": "accept"})
+
+
+@pytest.mark.skipif(not validate.can_check(), reason="nft -c not usable here")
+def test_ports_without_proto_pass_nft_check():
+    inline = build_chain(
+        {
+            "name": "inline_ports",
+            "rules": [
+                {"dport": "dns", "action": "accept"},
+                {"dport": ["range", "dns"], "action": "accept"},
+                {"sport": "dhcpc", "action": "accept"},
+            ],
+        },
+        _SR,
+    )
+    named = build_chain(
+        {"name": "named_ports", "rules": [{"dport": "dns", "action": "accept"}]}, _SN
+    )
+    text = Table(
+        family="inet",
+        name="filter",
+        sets=list(_SN.named.values()),
+        chains=[inline, named],
+    ).render()
+    result = validate.check(text)
+    assert result.ok, result.stderr
