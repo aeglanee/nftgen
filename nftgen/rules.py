@@ -87,6 +87,37 @@ def _has_port(addr: str) -> bool:
 # protocols that exist in one IP family only
 _PROTO_FAMILY = {"icmp": "ip", "icmpv6": "ip6", "ipv6-icmp": "ip6"}
 
+# IANA numbers of the protocols nftgen checks by name; `proto: 17` is checked
+# (and, where nft needs a keyword, rendered) as `udp`
+PROTO_NUMBERS = {
+    1: "icmp",
+    2: "igmp",
+    6: "tcp",
+    17: "udp",
+    33: "dccp",
+    47: "gre",
+    50: "esp",
+    51: "ah",
+    58: "icmpv6",
+    112: "vrrp",
+    132: "sctp",
+    136: "udplite",
+}
+# protocols with ports: `<proto> dport …` needs one of these as its keyword
+PORT_PROTOS = ("tcp", "udp", "sctp", "dccp", "udplite")
+
+
+def proto_name(value) -> str | None:
+    """A rule's `proto` as a name: a known number becomes its name, anything
+    else stays as written. None when there is no proto."""
+    if value is None:
+        return None
+    text = str(value)
+    if text.isdigit():
+        return PROTO_NUMBERS.get(int(text), text)
+    return text
+
+
 _TCP_FLAGS = ("fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr")
 _TCP_ALL = (
     "fin",
@@ -292,7 +323,7 @@ class RuleRenderer:
                 raise BuildError(f"rule mixes incompatible address families: {rule!r}")
             # icmp exists only in IPv4 and icmpv6 only in IPv6: the other
             # family's line could never match, so it isn't rendered
-            only = _PROTO_FAMILY.get(str(rule.get("proto")))
+            only = _PROTO_FAMILY.get(proto_name(rule.get("proto")))
             if only is not None:
                 if only not in families:
                     raise BuildError(
@@ -329,7 +360,7 @@ class RuleRenderer:
                 if "mark" in rule:
                     parts.append(f"meta mark {rule['mark']}")
                 if "icmp-type" in rule:
-                    proto = rule.get("proto")
+                    proto = proto_name(rule.get("proto"))
                     if proto not in ("icmp", "icmpv6"):
                         raise BuildError(
                             f"icmp-type needs `proto: icmp` or `proto: icmpv6`, got {proto!r}: {rule!r}"
@@ -555,10 +586,18 @@ class RuleRenderer:
         )
 
     def _proto_ports(self, rule: dict) -> list[str]:
-        proto = rule.get("proto")
+        written = rule.get("proto")
         if "sport" in rule or "dport" in rule:
-            if not proto:
+            if written is None:
                 raise BuildError(f"port match needs a proto: {rule!r}")
+            # the port match spells the protocol as a keyword (`udp dport`),
+            # so a number is rendered by its name; nft has no `17 dport`
+            proto = proto_name(written)
+            if proto not in PORT_PROTOS:
+                raise BuildError(
+                    f"`proto: {written}` has no ports — a port match needs one of "
+                    f"{', '.join(PORT_PROTOS)}: {rule!r}"
+                )
             out, pairs = [], []
             for key in ("sport", "dport"):
                 if key not in rule:
@@ -574,8 +613,8 @@ class RuleRenderer:
             if pairs and not out:
                 out.append(f"meta l4proto {proto}")
             return out + pairs
-        if proto:
-            return [f"meta l4proto {proto}"]
+        if written is not None:
+            return [f"meta l4proto {written}"]
         return []
 
     def _is_pair_set(self, value) -> bool:
@@ -761,7 +800,7 @@ class RuleRenderer:
                 )
             # `action: <verdict>` like a rule's, or the `jump:`/`goto:` shorthand
             v = self._vmap_verdict(rest.get("action", rest))
-            row_proto = str(match[proto_col]) if proto_col is not None else None
+            row_proto = proto_name(match[proto_col]) if proto_col is not None else None
             cols = []
             for kt, value in zip(keys, match, strict=True):
                 if kt in self._VMAP_ADDR:  # family-aware position
@@ -956,9 +995,14 @@ class RuleRenderer:
         key = spec.get("key", "dport")
         if key not in ("dport", "sport"):
             raise BuildError(f"{kind} map key must be dport/sport, got {key!r}")
-        proto = spec.get("proto")
+        proto = proto_name(spec.get("proto"))
         if not proto:
             raise BuildError(f"{kind} map needs `proto:` for the {key} key")
+        if proto not in PORT_PROTOS:
+            raise BuildError(
+                f"{kind} map `proto: {spec.get('proto')}` has no ports — use one of "
+                f"{', '.join(PORT_PROTOS)}"
+            )
         mapping = spec.get("map")
         if not mapping:
             raise BuildError(f"{kind} map needs `map:` entries: {spec!r}")

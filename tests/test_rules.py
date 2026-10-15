@@ -501,3 +501,57 @@ def test_icmp_with_only_ipv6_addresses_errors():
     r = RuleRenderer(_DUAL, {})
     with pytest.raises(BuildError, match="`proto: icmp` is IPv4-only"):
         r.render({"saddr": "v6", "proto": "icmp", "action": "accept"})
+
+
+# -- review N5: numeric protocols ------------------------------------------------- #
+_NUM = Definitions.from_mappings(
+    {
+        "services": {"dns": ["53/tcp", "53/udp"]},
+        "networks": {"dual": ["10.0.0.1", "::1"]},
+    }
+)
+
+
+def test_numeric_proto_is_checked_and_rendered_by_name_for_ports():
+    r = RuleRenderer(_NUM, {})
+    # `17 dport` isn't nft: a port match spells the keyword
+    assert r.render({"proto": 17, "dport": "dns", "action": "accept"}) == [
+        "udp dport 53 accept"
+    ]
+    # without ports the number stays as written
+    assert r.render({"proto": 112, "action": "accept"}) == ["meta l4proto 112 accept"]
+
+
+def test_numeric_proto_with_a_named_service_set():
+    named = {s.name: s for s in build_sets(["dns"], _NUM)}
+    r = RuleRenderer(_NUM, named)
+    assert r.render({"proto": "17", "dport": "dns", "action": "accept"}) == [
+        "meta l4proto udp meta l4proto . th dport @dns accept"
+    ]
+
+
+def test_numeric_icmp_pins_the_family():
+    # C13 now also holds for `proto: 1`
+    r = RuleRenderer(_NUM, {})
+    assert r.render({"proto": 1, "saddr": "dual", "action": "accept"}) == [
+        "ip saddr 10.0.0.1 meta l4proto 1 accept"
+    ]
+
+
+def test_ports_need_a_protocol_with_ports():
+    r = RuleRenderer(_NUM, {})
+    with pytest.raises(BuildError, match="`proto: icmp` has no ports"):
+        r.render({"proto": "icmp", "dport": 22, "action": "accept"})
+    with pytest.raises(BuildError, match="`proto: 112` has no ports"):
+        r.render({"proto": 112, "dport": 22, "action": "accept"})
+
+
+def test_numeric_proto_column_in_a_concat_vmap():
+    r = RuleRenderer(_NUM, {})
+    rule = {
+        "vmap": {
+            "key": ["proto", "dport"],
+            "map": [{"match": [17, "dns"], "action": "accept"}],
+        }
+    }
+    assert r.render(rule) == ["meta l4proto . th dport vmap { 17 . 53 : accept }"]
