@@ -207,6 +207,28 @@ def _reject_offload_with_verdict(rule: dict) -> None:
         )
 
 
+def _unique_entries(rows, what: str) -> list[str]:
+    """Map rows (key, value, written-as) -> `key : value` entries, first seen
+    first. The same key twice with the same value is folded; with a different
+    value it is an error — nft refuses a map with a duplicate key, and only on
+    the generated file."""
+    seen: dict[str, tuple[str, object]] = {}
+    out: list[str] = []
+    for key, value, source in rows:
+        if key in seen:
+            first_value, first_source = seen[key]
+            if first_value != value:
+                raise BuildError(
+                    f"{what} key {key!r} comes from both {first_source!r} "
+                    f"({first_value}) and {source!r} ({value}) — a key maps to "
+                    f"one value only"
+                )
+            continue
+        seen[key] = (value, source)
+        out.append(f"{key} : {value}")
+    return out
+
+
 class RuleRenderer:
     def __init__(
         self,
@@ -638,7 +660,7 @@ class RuleRenderer:
         ports = key in ("dport", "sport")
         if ports:  # a service is proto + port: keep both in the lookup
             keyexpr = f"meta l4proto . {keyexpr}"
-        entries = []
+        rows = []
         for k, verdict in mapping.items():
             v = self._vmap_verdict(verdict)
             toks = (
@@ -646,7 +668,8 @@ class RuleRenderer:
                 if ports
                 else self._vmap_lit_tokens(key, k)
             )
-            entries.extend(f"{tok} : {v}" for tok in toks)
+            rows.extend((tok, v, k) for tok in toks)
+        entries = _unique_entries(rows, "vmap")
         return f"{keyexpr} vmap {render_literal(entries, BODY_INDENT)}"
 
     def _addr_vmap(self, spec: dict, key: str) -> str:
@@ -660,12 +683,13 @@ class RuleRenderer:
             raise BuildError(
                 f"a {key} vmap needs a `map:` of address -> verdict: {spec!r}"
             )
-        fam, entries = None, []
+        fam, rows = None, []
         for k, verdict in mapping.items():
             kfam, cidrs = self._vmap_addr_tokens(key, k)
             fam = self._one_family(key, fam, kfam)
             v = self._vmap_verdict(verdict)
-            entries.extend(f"{c} : {v}" for c in cidrs)
+            rows.extend((c, v, k) for c in cidrs)
+        entries = _unique_entries(rows, "vmap")
         return f"{fam} {key} vmap {render_literal(entries, BODY_INDENT)}"
 
     def _vmap_addr_tokens(self, key: str, value) -> tuple:
@@ -709,7 +733,7 @@ class RuleRenderer:
         # a `proto` column pins each row's protocol, so a port column takes that
         # proto's ports; without one, a port column is a proto . port pair
         proto_col = keys.index("proto") if "proto" in keys else None
-        fam, entries = None, []
+        fam, rows = None, []
         for entry in mapping:
             if not isinstance(entry, dict) or "match" not in entry:
                 raise BuildError(f"concat vmap entry needs `match: [...]`: {entry!r}")
@@ -737,11 +761,12 @@ class RuleRenderer:
                 else:
                     cols.append(self._concat_col_tokens(kt, value, row_proto))
             for combo in itertools.product(*cols):
-                entries.append(f"{' . '.join(combo)} : {v}")
+                rows.append((" . ".join(combo), v, match))
         if any(k in self._VMAP_ADDR for k in keys) and fam is None:
             raise BuildError(
                 f"concat vmap with an address key needs at least one entry: {spec!r}"
             )
+        entries = _unique_entries(rows, "vmap")
         keyexprs = [
             f"{fam} {k}"
             if k in self._VMAP_ADDR
@@ -927,7 +952,7 @@ class RuleRenderer:
         mapping = spec.get("map")
         if not mapping:
             raise BuildError(f"{kind} map needs `map:` entries: {spec!r}")
-        entries, families = [], set()
+        rows, families = [], set()
         for k, v in mapping.items():
             keytok = self._map_port_key(kind, k, proto)
             valtok = str(v)
@@ -945,7 +970,8 @@ class RuleRenderer:
                     f"address-only for now (port translation in a map is unsupported)"
                 )
             families.add(_nat_family(valtok))
-            entries.append(f"{keytok} : {valtok}")
+            rows.append((keytok, valtok, k))
+        entries = _unique_entries(rows, f"{kind} map")
         if len(families) > 1:
             raise BuildError(f"{kind} map mixes v4 and v6 targets: {sorted(families)}")
         fam = families.pop()

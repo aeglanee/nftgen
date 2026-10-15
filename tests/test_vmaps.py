@@ -431,3 +431,61 @@ def test_vmap_verdicts_pass_nft_check():
         Table(family="inet", name="filter", chains=[chain]).render()
     )
     assert result.ok, result.stderr
+
+
+# -- review N3: duplicate keys --------------------------------------------------- #
+_DUP = Definitions.from_mappings(
+    {
+        "services": {
+            "dns": ["53/tcp", "53/udp"],
+            "web": ["80/tcp"],
+            "http": ["80/tcp"],
+        },
+        "interfaces": {"lan": ["lan0"], "all": ["lan0", "wan0"]},
+        "networks": {"a": ["10.0.0.0/8"], "b": ["10.0.0.0/8", "192.168.0.0/16"]},
+    }
+)
+_DR = RuleRenderer(_DUP, {})
+
+
+def test_vmap_same_key_different_verdict_errors():
+    # nft refused this at load ("element exists") on the generated file
+    with pytest.raises(BuildError, match=r"vmap key 'udp . 53' comes from both 'dns'"):
+        _DR.render(
+            {"vmap": {"key": "dport", "map": {"dns": "accept", "53/udp": "drop"}}}
+        )
+    with pytest.raises(BuildError, match="comes from both 'lan'"):
+        _DR.render(
+            {"vmap": {"key": "iifname", "map": {"lan": "accept", "all": "drop"}}}
+        )
+    with pytest.raises(BuildError, match="comes from both 'a'"):
+        _DR.render({"vmap": {"key": "saddr", "map": {"a": "accept", "b": "drop"}}})
+    with pytest.raises(BuildError, match="comes from both"):
+        _DR.render(
+            {
+                "vmap": {
+                    "key": ["iifname", "dport"],
+                    "map": [
+                        {"match": ["lan", "web"], "action": "accept"},
+                        {"match": ["all", "http"], "action": "drop"},
+                    ],
+                }
+            }
+        )
+
+
+def test_vmap_same_key_same_verdict_is_folded():
+    assert _DR.render(
+        {"vmap": {"key": "iifname", "map": {"lan": "accept", "all": "accept"}}}
+    ) == ['iifname vmap { "lan0" : accept, "wan0" : accept }']
+
+
+def test_dnat_map_duplicate_port_errors():
+    rule = {
+        "proto": "tcp",
+        "action": {
+            "dnat": {"proto": "tcp", "map": {"web": "10.0.0.5", 80: "10.0.0.6"}}
+        },
+    }
+    with pytest.raises(BuildError, match=r"dnat map key '80' comes from both 'web'"):
+        _DR.render(rule)
