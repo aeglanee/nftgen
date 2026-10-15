@@ -712,6 +712,20 @@ class RuleRenderer:
             raise BuildError(f"vmap {key} value {value!r} mixes IP families")
         return fams.pop(), cidrs
 
+    def _check_concat_keys(self, spec: dict, keys: list) -> None:
+        for k in keys:
+            if k not in self._VMAP_KEYS and k not in self._VMAP_ADDR:
+                raise BuildError(
+                    f"vmap key {k!r} not supported (use {self._VMAP_HELP})"
+                )
+        if "proto" not in keys and {"sport", "dport"} <= set(keys):
+            # each port column would get its own l4proto slot and the product
+            # would pair udp with tcp — entries no packet can match
+            raise BuildError(
+                f"a vmap with both sport and dport needs a `proto` column — "
+                f"key: [proto, ...] with one row per protocol: {spec!r}"
+            )
+
     def _concat_vmap(self, spec: dict, keys: list) -> str:
         """Concatenated vmap, e.g. ``key: [iifname, oifname]`` -> ``iifname . oifname vmap``.
 
@@ -719,11 +733,7 @@ class RuleRenderer:
         match value resolves like a normal iifname/oifname (an interface group expands to
         its devices, cartesian-producting into elements), proto stays literal.
         """
-        for k in keys:
-            if k not in self._VMAP_KEYS and k not in self._VMAP_ADDR:
-                raise BuildError(
-                    f"vmap key {k!r} not supported (use {self._VMAP_HELP})"
-                )
+        self._check_concat_keys(spec, keys)
         mapping = spec.get("map")
         if not isinstance(mapping, list):
             raise BuildError(

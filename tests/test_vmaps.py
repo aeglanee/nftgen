@@ -489,3 +489,26 @@ def test_dnat_map_duplicate_port_errors():
     }
     with pytest.raises(BuildError, match=r"dnat map key '80' comes from both 'web'"):
         _DR.render(rule)
+
+
+def test_sport_and_dport_vmap_needs_a_proto_column():
+    # review N4: without one, each port column got its own l4proto slot and
+    # rows crossed protocols (`udp . 53 . tcp . 53`)
+    spec = {
+        "key": ["sport", "dport"],
+        "map": [{"match": ["dns", "dns"], "action": "accept"}],
+    }
+    with pytest.raises(BuildError, match="needs a `proto` column"):
+        _DR.render({"vmap": spec})
+    rule = {
+        "vmap": {
+            "key": ["proto", "sport", "dport"],
+            "map": [
+                {"match": ["udp", "dns", "dns"], "action": "accept"},
+                {"match": ["tcp", "dns", "dns"], "action": "accept"},
+            ],
+        }
+    }
+    assert _DR.render(rule) == [
+        "meta l4proto . th sport . th dport vmap { udp . 53 . 53 : accept, tcp . 53 . 53 : accept }"
+    ]
