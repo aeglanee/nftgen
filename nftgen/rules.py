@@ -346,7 +346,9 @@ class RuleRenderer:
             out.append(f"limit rate {rule['limit']}")
         if "quota" in rule:
             out.append(f"quota {rule['quota']}")
-        if rule.get("log"):  # `log: false` = no log, like `counter: false`
+        # only `log: false` means no log; `log: {}` is a plain log (an empty
+        # mapping is falsy, so test for False, not for truthiness)
+        if "log" in rule and rule["log"] is not False:
             out.append(self._log(rule["log"]))
         if "set-mark" in rule:
             out.append(f"meta mark set {rule['set-mark']}")

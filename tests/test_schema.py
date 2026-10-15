@@ -107,6 +107,14 @@ def test_log_false_means_no_log():
     assert R.render({"log": False, "action": "drop"}) == ["drop"]
 
 
+def test_log_empty_mapping_is_a_plain_log():
+    # review N1: `log: {}` was dropped (an empty mapping is falsy) — a drop
+    # rule meant to log went silent
+    assert R.render({"proto": "tcp", "dport": 23, "log": {}, "action": "drop"}) == [
+        "tcp dport 23 log drop"
+    ]
+
+
 def test_log_unknown_subkey_errors():
     # C8: `prefx` was silently ignored — a log line without its prefix
     bad({"log": {"prefx": "x "}, "action": "drop"}, r"unknown key\(s\) \['prefx'\]")
