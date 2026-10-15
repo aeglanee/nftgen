@@ -261,6 +261,10 @@ def build(root: str | pathlib.Path, host: str | None = None) -> dict[str, str]:
 
     # Host files are <name>.yaml / <name>.yml; the name is the file stem.
     if host is not None:
+        # a plain name: no path parts, so it can't leave policies/hosts/ and
+        # the host name == file name == output name contract holds
+        if not host or host.startswith(".") or any(sep in host for sep in ("/", "\\")):
+            raise BuildError(f"--host must be a plain host name, got {host!r}")
         # an exact name, not a pattern: `--host '*'` must not pick a host
         host_files = [
             f

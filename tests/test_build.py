@@ -81,6 +81,16 @@ def test_build_host_is_an_exact_name(tmp_path):
     assert list(build(root, host="fw2")) == ["fw2"]
 
 
+@pytest.mark.parametrize(
+    "name", ["../includes/x", "sub/fw1", "..", ".hidden", "a\\b", ""]
+)
+def test_build_host_must_be_a_plain_name(tmp_path, name):
+    # review N2: `--host ../includes/x` read a file outside policies/hosts/
+    root = _host_tree(tmp_path, "fw1.yaml")
+    with pytest.raises(BuildError, match="--host must be a plain host name"):
+        build(root, host=name)
+
+
 def test_build_ignores_non_yaml_files(tmp_path):
     root = _host_tree(tmp_path, "fw1.yaml", "notes.txt", "fw1.yaml.bak")
     assert list(build(root)) == ["fw1"]
