@@ -81,6 +81,38 @@ def test_bare_set_live_blocklist_has_no_elements():
     assert s.flags == ["interval", "timeout"]
 
 
+def test_bare_set_takes_one_value_plain():
+    # a bare string was read letter by letter: `flags i, n, t, …`
+    spec = [
+        {
+            "name": "one",
+            "type": "ipv4_addr",
+            "flags": "interval",
+            "elements": "10.0.0.0/8",
+        }
+    ]
+    s = build_sets(spec, DEFS)[0]
+    assert s.flags == ["interval"]
+    assert s.elements == ["10.0.0.0/8"]
+
+
+def test_bare_set_flags_are_nft_flags():
+    # nft refused these at load; `auto-merge` is a statement, not a flag
+    with pytest.raises(BuildError, match=r"unknown flag 'auto-merge'.*raw:"):
+        build_sets(
+            [{"name": "b", "type": "ipv4_addr", "flags": ["interval", "auto-merge"]}],
+            DEFS,
+        )
+    with pytest.raises(BuildError, match="unknown flag 'intervall'"):
+        build_sets([{"name": "b", "type": "ipv4_addr", "flags": "intervall"}], DEFS)
+
+
+def test_bare_set_values_must_be_scalars():
+    for key, value in (("elements", [{"a": 1}]), ("flags", [["interval"]])):
+        with pytest.raises(BuildError, match=f"`{key}:` takes a value"):
+            build_sets([{"name": "b", "type": "ipv4_addr", key: value}], DEFS)
+
+
 def test_undefined_set_errors():
     with pytest.raises(BuildError):
         build_sets(["nope"], DEFS)

@@ -39,6 +39,8 @@ build with a clear error:
 - `log:` with both `level` and `group` (nft refuses the pair).
 - Flowtable `devices:` takes one group plain (`devices: wan` was read letter
   by letter); a device shared by two groups is listed once.
+- Hand-written sets: `flags:` must be nft set flags (`auto-merge` isn't one);
+  `flags:`/`elements:` take one value plain instead of letter by letter.
 - `log: {}` logs; OS errors are clean errors; a closed stdout pipe exits
   quietly (141).
 

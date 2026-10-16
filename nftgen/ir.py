@@ -339,17 +339,49 @@ _BARE_SET_KEYS = frozenset({"name", "type", "elements", "flags", "comment"})
 _CONCAT_SET_KEYS = frozenset({"name", "concat", "proto", "tuples", "family", "comment"})
 
 
+# nft's set flags; `auto-merge` is a statement of its own, not a flag
+SET_FLAGS = ("constant", "interval", "dynamic", "timeout")
+
+
+def _set_values(entry: dict, key: str) -> list:
+    """A bare set's `elements:`/`flags:` — one value or a list. A bare string
+    must not be read letter by letter."""
+    value = entry.get(key, [])
+    if not isinstance(value, list):
+        value = [value]
+    for v in value:
+        if isinstance(v, bool) or not isinstance(v, (str, int)):
+            raise BuildError(
+                f"set {entry['name']!r}: `{key}:` takes a value or a list of "
+                f"values, got {entry[key]!r}"
+            )
+    return value
+
+
 def _bare_set(entry: dict) -> NamedSet:
     if "name" not in entry or "type" not in entry:
         raise BuildError(f"bare set must have 'name' and 'type': {entry!r}")
     unknown = set(entry) - _BARE_SET_KEYS
     if unknown:
         raise BuildError(f"unknown set key(s) {sorted(unknown)}: {entry!r}")
+    flags = _set_values(entry, "flags")
+    for f in flags:
+        if f not in SET_FLAGS:
+            hint = (
+                " (`auto-merge` is a line of its own in nft, not a flag — use "
+                "table-level `raw:`)"
+                if f == "auto-merge"
+                else ""
+            )
+            raise BuildError(
+                f"set {entry['name']!r}: unknown flag {f!r} "
+                f"(nft set flags: {', '.join(SET_FLAGS)}){hint}"
+            )
     return NamedSet(
         name=entry["name"],
         type=entry["type"],
-        elements=[str(e) for e in entry.get("elements", [])],
-        flags=list(entry.get("flags", [])),
+        elements=[str(e) for e in _set_values(entry, "elements")],
+        flags=list(dict.fromkeys(flags)),
     )
 
 

@@ -37,9 +37,6 @@ The current working list (review follow-ups, release order) is
       different verdicts) fail only at nft load — detect them at build if it
       ever matters. Table in
       [docs/sets-and-performance.md](docs/sets-and-performance.md) §5.
-- [ ] Hand-written sets: `flags:` values aren't checked (`auto-merge` renders
-      as a flag and fails at load); `auto-merge` itself has no key (it's a
-      line of its own in nft).
 - [ ] Definition values checked where they're defined (`22/tpc`,
       `99999/tcp`), not only where they're used.
 

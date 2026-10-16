@@ -122,7 +122,7 @@ table; the firewall behaves the same either way.
 | a network | `type ipv4_addr` or `ipv6_addr`, `flags interval` (one family only; split `_v4`/`_v6`) |
 | a service | `type inet_proto . inet_service`, elements `tcp . 22` — each port keeps its protocol; `flags interval` if any range |
 | an interface group | `type ifname`, elements `"wan0"` |
-| `{name, type, flags?, elements?}` | a hand-written set, e.g. an empty `timeout` blocklist filled with `nft add element` |
+| `{name, type, flags?, elements?}` | a hand-written set, e.g. an empty `timeout` blocklist filled with `nft add element`; `flags` from `constant`, `interval`, `dynamic`, `timeout`; each key one value or a list |
 | `{name, concat, proto?, tuples, family?}` | a concatenation set of exact pairs (see below) |
 
 Any entry may carry `comment:`. A set with `flags: [dynamic]` can back a
