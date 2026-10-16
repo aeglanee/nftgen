@@ -34,6 +34,29 @@ The current working list (review follow-ups, release order) is
       detect them at build if it ever matters.
 - [ ] Definition values checked where they're defined (`22/tpc`,
       `99999/tcp`), not only where they're used.
+- [ ] `log:` with both `level` and `group` passes the build; nft refuses it at
+      load ("level and group are mutually exclusive"). Reject it in the schema.
+- [ ] `flowtables:` `devices: wan` (one name, not a list) is split into
+      letters ("device 'w' is not a known interface group"). Take one value or
+      a list, like the rule keys.
+
+## Upstream nft
+
+- [ ] nft 1.1.7 parse bug: a rule with `limit rate … reject with tcp reset`
+      followed by a line starting `tcp flags` fails with "syntax error,
+      unexpected junk"; each line passes alone. nftgen's output is correct and
+      `nft -c` catches it. Retest on a newer nft, report upstream, and note it
+      in [docs/best-practices.md](docs/best-practices.md). Repro:
+
+      ```nft
+      table inet t {
+        chain c {
+          type filter hook forward priority 0;
+          limit rate 4/minute reject with tcp reset
+          tcp flags syn drop
+        }
+      }
+      ```
 
 ## Editor and lint support
 
