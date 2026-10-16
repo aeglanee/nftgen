@@ -127,6 +127,15 @@ def test_log_values_checked():
     bad({"log": {"prefix": 'say "hi"'}, "action": "drop"}, "log.prefix")
 
 
+def test_log_level_and_group_exclude_each_other():
+    # nft refuses `log level info group 2` at load ("mutually exclusive")
+    bad({"log": {"level": "info", "group": 2}, "action": "drop"}, "can't be combined")
+    assert R.render({"log": {"group": 2}, "action": "drop"}) == ["log group 2 drop"]
+    assert R.render({"log": {"level": "info"}, "action": "drop"}) == [
+        "log level info drop"
+    ]
+
+
 # -- other keys ------------------------------------------------------------------ #
 def test_icmp_type_with_ports_errors():
     # C8: dport was silently dropped — the rule matched more than written

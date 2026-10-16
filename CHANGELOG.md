@@ -36,6 +36,7 @@ build with a clear error:
 - Duplicate map keys; a `sport`+`dport` vmap without a `proto` column; a port
   on a protocol without ports; reject/masquerade inside a vmap.
 - `icmp`/`icmpv6` with dual-stack addresses render only their own family.
+- `log:` with both `level` and `group` (nft refuses the pair).
 - `log: {}` logs; OS errors are clean errors; a closed stdout pipe exits
   quietly (141).
 
