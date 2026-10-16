@@ -12,6 +12,11 @@ import re
 from dataclasses import dataclass, field
 
 from nftgen.definitions import Definitions
+from nftgen.protocols import (  # noqa: F401 - re-exported
+    PORT_PROTOS,
+    PROTO_NUMBERS,
+    proto_name,
+)
 
 _PORT_LITERAL = re.compile(r"^\d+(-\d+)?$")  # port or port-range
 _MARK_NUMBER = r"(?:0x[0-9a-fA-F]+|\d+)"
@@ -158,37 +163,6 @@ def render_literal(entries: list[str], base_indent: str) -> str:
         return "{ " + ", ".join(entries) + " }"
     body = ",\n".join(f"{base_indent}    {e}" for e in entries)
     return "{\n" + body + "\n" + base_indent + "}"
-
-
-# IANA numbers of the protocols nftgen checks by name; `proto: 17` is checked
-# (and, where nft needs a keyword, rendered) as `udp`
-PROTO_NUMBERS = {
-    1: "icmp",
-    2: "igmp",
-    6: "tcp",
-    17: "udp",
-    33: "dccp",
-    47: "gre",
-    50: "esp",
-    51: "ah",
-    58: "icmpv6",
-    112: "vrrp",
-    132: "sctp",
-    136: "udplite",
-}
-# protocols with ports: `<proto> dport …` needs one of these as its keyword
-PORT_PROTOS = ("tcp", "udp", "sctp", "dccp", "udplite")
-
-
-def proto_name(value) -> str | None:
-    """A rule's `proto` as a name: a known number becomes its name, anything
-    else stays as written. None when there is no proto."""
-    if value is None:
-        return None
-    text = str(value)
-    if text.isascii() and text.isdigit():
-        return PROTO_NUMBERS.get(int(text), text)
-    return text
 
 
 class BuildError(Exception):
