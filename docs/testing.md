@@ -50,7 +50,7 @@ Network namespaces, no VM, rootless (`unshare -rn`):
   missing.
 - iproute2 7.x needs `ip link add name X type veth …` (explicit `name`).
 
-### Primitives (B01–B27)
+### Primitives (B01–B28)
 
 One small fixture per concern under `tests/behavioral/fixtures/`.
 
@@ -83,6 +83,7 @@ One small fixture per concern under `tests/behavioral/fixtures/`.
 | B25 | log | renders only (kernel log capture isn't portable in a namespace) | n/a |
 | B26 | reapply | `nft -f` the same file twice | succeeds; ruleset identical |
 | B27 | named service set keeps proto | `app: [7000/tcp, 7001/udp]` named + `proto: tcp` | tcp/7000 connects; tcp/7001 times out — the pre-0.7.0 port-only set connected |
+| B28 | anti-spoofing, strict `fib` (best-practices §5) | lan client probes with a wan-subnet source; a `0.0.0.0` → broadcast DHCPDISCOVER frame | spoof dropped + `rpf_drops` rises (own address passes); DHCP arrives, nothing counted |
 
 ### Reference fleet (P01–P22)
 

@@ -270,7 +270,8 @@ Sources: `man nft` (FIB expressions);
 Linux `net/ipv4/netfilter/nft_fib_ipv4.c`, `net/ipv6/netfilter/nft_fib_ipv6.c`,
 `include/net/netfilter/nft_fib.h`; firewalld
 [`nftables.py`](https://github.com/firewalld/firewalld/blob/main/src/firewall/core/nftables.py).
-Checked with `nft -c`; spoof drops not yet covered by a behavioral test.
+Checked with `nft -c` and behavioral test B28 (a spoofed source is dropped,
+a DHCPDISCOVER passes); the IPv6 cases are checked in the kernel source only.
 
 ---
 

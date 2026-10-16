@@ -3,7 +3,7 @@
 An opinionated reference: **HQ + two branches**, each a site router running
 the same firewall. It shows the primitives *composed* into a system you
 would deploy; each primitive is proven on its own by the behavioral tests
-(B01–B27), and this fleet by its own matrix (P01–P22, see
+(B01–B28), and this fleet by its own matrix (P01–P22, see
 [docs/testing.md](../docs/testing.md)). The tiny schema tour is
 [example/](../example/).
 

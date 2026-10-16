@@ -1,0 +1,29 @@
+---
+# Anti-spoofing (docs/testing.md B28): the best-practices §5 recipe. A source
+# whose route back leaves another interface is dropped and counted in
+# prerouting; a DHCPDISCOVER (0.0.0.0 -> broadcast) must still arrive.
+tables:
+  - family: inet
+    name: filter
+    counters:
+      - rpf_drops
+      - dhcp_seen
+    chains:
+      - name: rpfilter
+        hook: prerouting
+        priority: -140
+        policy: accept
+        rules:
+          - raw: "fib saddr . mark . iif oif missing counter name rpf_drops drop"
+      - name: input
+        hook: input
+        rules:
+          - ct: [established, related]
+            action: accept
+          - proto: tcp
+            dport: svc
+            action: accept
+          - proto: udp
+            dport: dhcp_server
+            counter: dhcp_seen
+            action: accept

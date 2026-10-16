@@ -25,8 +25,8 @@ The current working list (review follow-ups, release order) is
       (`pkttype`, `skuid`, …).
 - [ ] Anti-spoofing (`fib saddr . mark . iif oif missing drop`) as a key,
       strict or loose; the recipe is in
-      [docs/best-practices.md](docs/best-practices.md) §5. Add a behavioral
-      test (a spoofed source from the wrong interface is dropped).
+      [docs/best-practices.md](docs/best-practices.md) §5, proven by
+      behavioral test B28.
 
 ## Checks
 

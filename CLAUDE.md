@@ -97,7 +97,7 @@ across them:
   - [example-fleet/README.md](example-fleet/README.md) — the realistic 3-site
     reference: one policy per site, the forward skeleton, the choices behind it.
   - [docs/testing.md](docs/testing.md) — test layers, how to run them (nft on
-    PATH), the behavioral (netns) matrix B01–B27 + P01–P22, env limits.
+    PATH), the behavioral (netns) matrix B01–B28 + P01–P22, env limits.
   - [docs/review-2026-10.md](docs/review-2026-10.md) — **the 2026-10
     review working list**: findings (C/D/E), agreed decisions, where we
     are, and the user's working preferences. Resume work here.

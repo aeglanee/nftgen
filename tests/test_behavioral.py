@@ -825,3 +825,77 @@ def test_b27_named_service_set_keeps_proto(fw_service_pairs):
     # a port-only set { 7000, 7001 } would have connected.
     assert fw_service_pairs.probe_tcp("za", SVC_ROUTER, 7000) == "connected"
     assert fw_service_pairs.probe_tcp("za", SVC_ROUTER, 7001) == "timeout"
+
+
+# --------------------------------------------------------------------------- #
+# B28 — anti-spoofing: strict reverse-path filter (fixture: rpfilter)
+# --------------------------------------------------------------------------- #
+
+RPF_ROUTER_LAN, RPF_CLIENT = "10.88.1.1", "10.88.1.2"
+RPF_WAN_SPOOF = "10.88.2.50"  # a wan-subnet address, sent from the lan side
+
+
+@pytest.fixture(scope="module")
+def fw_rpfilter():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": "lan",
+                    "router_if": "r-lan",
+                    "router_addr": f"{RPF_ROUTER_LAN}/24",
+                    "ns_addr": f"{RPF_CLIENT}/24",
+                    "gw": RPF_ROUTER_LAN,
+                },
+                {
+                    "name": "wan",
+                    "router_if": "r-wan",
+                    "router_addr": "10.88.2.1/24",
+                    "ns_addr": "10.88.2.2/24",
+                    "gw": "10.88.2.1",
+                },
+            ]
+        )
+        # the spoof: the lan client also holds a wan-subnet address, so a
+        # probe bound to it reaches the router on r-lan, while the route back
+        # to that address leaves r-wan
+        r = harness.run(
+            "lan", ["ip", "addr", "add", f"{RPF_WAN_SPOOF}/32", "dev", "eth0"]
+        )
+        assert r.returncode == 0, r.stderr
+        harness.nft_apply(build(FIXTURES / "rpfilter")["router"])
+        harness.listen(None, 7000)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b28_rpfilter_drops_a_spoofed_source(fw_rpfilter):
+    before = _counter_packets(fw_rpfilter, "rpf_drops")
+    # positive control: the client's own address passes, nothing counted…
+    assert fw_rpfilter.probe_tcp("lan", RPF_ROUTER_LAN, 7000) == "connected"
+    assert _counter_packets(fw_rpfilter, "rpf_drops") == before
+    # …so the wan-sourced probe arriving on lan is the rpfilter's drop
+    assert (
+        fw_rpfilter.probe_tcp("lan", RPF_ROUTER_LAN, 7000, src=RPF_WAN_SPOOF)
+        == "timeout"
+    )
+    assert _counter_packets(fw_rpfilter, "rpf_drops") > before
+
+
+@requires_netns
+def test_b28_rpfilter_passes_dhcp_discover(fw_rpfilter):
+    # 0.0.0.0 -> 255.255.255.255 has no route back; the kernel's fib lookup
+    # passes it (docs/best-practices.md §5), so no DHCP exception is needed
+    rpf_before = _counter_packets(fw_rpfilter, "rpf_drops")
+    seen_before = _counter_packets(fw_rpfilter, "dhcp_seen")
+    fw_rpfilter.send_udp_frame("lan", "0.0.0.0", "255.255.255.255", 68, 67)
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        if _counter_packets(fw_rpfilter, "dhcp_seen") > seen_before:
+            break
+        time.sleep(0.05)
+    assert _counter_packets(fw_rpfilter, "dhcp_seen") > seen_before
+    assert _counter_packets(fw_rpfilter, "rpf_drops") == rpf_before
