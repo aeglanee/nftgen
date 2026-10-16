@@ -160,6 +160,37 @@ def render_literal(entries: list[str], base_indent: str) -> str:
     return "{\n" + body + "\n" + base_indent + "}"
 
 
+# IANA numbers of the protocols nftgen checks by name; `proto: 17` is checked
+# (and, where nft needs a keyword, rendered) as `udp`
+PROTO_NUMBERS = {
+    1: "icmp",
+    2: "igmp",
+    6: "tcp",
+    17: "udp",
+    33: "dccp",
+    47: "gre",
+    50: "esp",
+    51: "ah",
+    58: "icmpv6",
+    112: "vrrp",
+    132: "sctp",
+    136: "udplite",
+}
+# protocols with ports: `<proto> dport …` needs one of these as its keyword
+PORT_PROTOS = ("tcp", "udp", "sctp", "dccp", "udplite")
+
+
+def proto_name(value) -> str | None:
+    """A rule's `proto` as a name: a known number becomes its name, anything
+    else stays as written. None when there is no proto."""
+    if value is None:
+        return None
+    text = str(value)
+    if text.isdigit():
+        return PROTO_NUMBERS.get(int(text), text)
+    return text
+
+
 class BuildError(Exception):
     """A policy/definition combination cannot be turned into valid IR."""
 
@@ -383,9 +414,16 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:  # noqa: PLR0912 - 
                 f"concat set {name!r}: unknown field {f!r}{hint} "
                 f"(use {sorted(_CONCAT_FIELD_TYPE)})"
             )
-    proto = entry.get("proto")
-    if any(f in ("sport", "dport") for f in fields) and not proto:
-        raise BuildError(f"concat set {name!r}: a port field needs `proto:`")
+    written = entry.get("proto")
+    proto = proto_name(written)  # `proto: 17` → udp, as in rules and vmaps
+    if any(f in ("sport", "dport") for f in fields):
+        if not proto:
+            raise BuildError(f"concat set {name!r}: a port field needs `proto:`")
+        if proto not in PORT_PROTOS:
+            raise BuildError(
+                f"concat set {name!r}: `proto: {written}` has no ports — a port "
+                f"field needs one of {', '.join(PORT_PROTOS)}"
+            )
 
     rows: list[str] = []
     interval = False

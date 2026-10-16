@@ -18,6 +18,7 @@ from nftgen.definitions import Definitions
 from nftgen.ir import (
     _PORT_LITERAL,
     BODY_INDENT,
+    PORT_PROTOS,
     SERVICE_PAIR_TYPE,
     BuildError,
     Chain,
@@ -25,6 +26,7 @@ from nftgen.ir import (
     NamedSet,
     check_comment,
     check_nft_name,
+    proto_name,
     render_literal,
 )
 from nftgen.schema import check_proto, check_rule
@@ -86,36 +88,6 @@ def _has_port(addr: str) -> bool:
 
 # protocols that exist in one IP family only
 _PROTO_FAMILY = {"icmp": "ip", "icmpv6": "ip6", "ipv6-icmp": "ip6"}
-
-# IANA numbers of the protocols nftgen checks by name; `proto: 17` is checked
-# (and, where nft needs a keyword, rendered) as `udp`
-PROTO_NUMBERS = {
-    1: "icmp",
-    2: "igmp",
-    6: "tcp",
-    17: "udp",
-    33: "dccp",
-    47: "gre",
-    50: "esp",
-    51: "ah",
-    58: "icmpv6",
-    112: "vrrp",
-    132: "sctp",
-    136: "udplite",
-}
-# protocols with ports: `<proto> dport …` needs one of these as its keyword
-PORT_PROTOS = ("tcp", "udp", "sctp", "dccp", "udplite")
-
-
-def proto_name(value) -> str | None:
-    """A rule's `proto` as a name: a known number becomes its name, anything
-    else stays as written. None when there is no proto."""
-    if value is None:
-        return None
-    text = str(value)
-    if text.isdigit():
-        return PROTO_NUMBERS.get(int(text), text)
-    return text
 
 
 _TCP_FLAGS = ("fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr")
