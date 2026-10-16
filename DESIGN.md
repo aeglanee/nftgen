@@ -18,7 +18,7 @@ it renders to, what nftgen derives for you, and what fails the build. The
 4. **Deterministic.** The same input gives byte-identical output, so a diff of
    the generated file is a real rule change.
 5. **`raw:` is the escape hatch** for anything without a key yet
-   ([RAW.md](RAW.md)).
+   ([docs/raw.md](docs/raw.md)).
 
 ## Project layout
 

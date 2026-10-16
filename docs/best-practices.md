@@ -349,7 +349,7 @@ unconditional and the counter accurate. For high-rate auditing, nft can
 log to userspace instead of the kernel ring (`log group N` → NFLOG,
 consumed by e.g. ulogd2) [2] — structured as `log: {group: N}`; only the
 batching knobs (`queue-threshold` etc.) still need `raw:`
-([RAW.md](../RAW.md)).
+([raw.md](raw.md)).
 
 ### 8c. Flowtables — what the fast path actually skips
 

@@ -74,7 +74,6 @@ findings/proposals. Each has one job — don't duplicate across them:
 - **[DECISIONS.md](DECISIONS.md)** — *why* it's built this way; rationale +
   rejected alternatives + environmental notes. Read before changing a
   design choice.
-- **[RAW.md](RAW.md)** — the `raw:` escape-hatch cookbook.
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** — the Ansible/GitOps target end-state
   (not built).
 - **[CHANGELOG.md](CHANGELOG.md)** — what shipped, per release.
@@ -83,6 +82,8 @@ findings/proposals. Each has one job — don't duplicate across them:
   - [docs/authoring.md](docs/authoring.md) — **the hub**: firewall structure,
     the add-a-rule workflow, and the pick-the-right-tool decision table
     (sets/vmap/concat/map/jump/meter/pipapo); links the deep-dives.
+  - [docs/raw.md](docs/raw.md) — the `raw:` cookbook: verified recipes for
+    features without a key yet.
   - [docs/best-practices.md](docs/best-practices.md) — the cookbook: base-chain
     hygiene + matching patterns (independent/cartesian vs
     paired/concatenation), YAML→nft.

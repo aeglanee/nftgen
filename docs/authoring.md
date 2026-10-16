@@ -69,7 +69,7 @@ tcp 8080.*
    `journalctl -k | grep fwd-users-services-drop` shows the flows that
    chain rejected (saddr, daddr, dport), so you know exactly which chain
    to open. For a live trace, arm `meta nftrace set 1` on the test source
-   and watch `nft monitor trace` (see [RAW.md](../RAW.md)). This is the
+   and watch `nft monitor trace` (see [raw.md](raw.md)). This is the
    payoff of the per-chain attributed logging: **the structure and the
    logs together turn "why is this blocked" into a grep.**
 
@@ -153,5 +153,5 @@ not reflexively. A readable ten-rule chain doesn't need optimizing.
 
 For the render reference (every key → its nft), see
 [DESIGN.md](../DESIGN.md); for the escape hatch when a feature
-isn't structured yet, [RAW.md](../RAW.md); for the design rationale behind
+isn't structured yet, [raw.md](raw.md); for the design rationale behind
 the model, [DECISIONS.md](../DECISIONS.md).

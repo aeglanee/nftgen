@@ -18,7 +18,7 @@ host policies → a native `.nft` ruleset you keep in git and apply with `nft -f
 > workflow, decision table) · [DESIGN.md](DESIGN.md) (spec) ·
 > [DECISIONS.md](DECISIONS.md) (why) ·
 > [DEPLOYMENT.md](DEPLOYMENT.md) (GitOps/Ansible vision) · [PLAN.md](PLAN.md)
-> (plan & status) · [RAW.md](RAW.md) (`raw:` cookbook) · [TODO.md](TODO.md)
+> (plan & status) · [docs/raw.md](docs/raw.md) (`raw:` cookbook) · [TODO.md](TODO.md)
 > (backlog) · [CLAUDE.md](CLAUDE.md) (working guardrails).
 
 ## Idea

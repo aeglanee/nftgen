@@ -39,7 +39,7 @@ primitive is a local change (a rule key, a table object).
 Any rule can be `raw: "<nft>"`; any table can carry `raw:` declarations.
 *Why:* it keeps the project small. The common part is modelled; everything
 else is never blocked — it goes through `raw:` until it earns a key, so a
-missing key is never a release blocker. ([RAW.md](RAW.md))
+missing key is never a release blocker. ([docs/raw.md](docs/raw.md))
 
 ### 1.5 Authored, not auto
 

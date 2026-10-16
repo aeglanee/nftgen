@@ -22,7 +22,7 @@ Three jobs, kept separate so none muddles the others:
 2. **Prove every primitive** — the isolated `tests/behavioral/` B01–B26
    fixtures. This *is* the capability-coverage artifact; rare features
    (hand-tuned concat tuples, etc.) live here and in
-   [DESIGN.md](../DESIGN.md)/[RAW.md](../RAW.md), not in the
+   [DESIGN.md](../DESIGN.md)/[raw.md](raw.md), not in the
    reference.
 3. **Show a realistic, opinionated, composed system** — this doc / the
    new `example-fleet/` project. Only the ~80% you'd actually deploy.
