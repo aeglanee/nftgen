@@ -40,6 +40,23 @@ The current working list (review follow-ups, release order) is
 - [ ] Definition values checked where they're defined (`22/tpc`,
       `99999/tcp`), not only where they're used.
 
+## Deployment (ansible-firewall)
+
+- [ ] **Drift detection** (discuss first). The role compares the render with
+      `/etc/nftables.conf`, never the live ruleset: after a hand-run
+      `nft flush ruleset` or `nft add rule … accept`, a re-run reports `ok`
+      and the router stays open until a reboot or the next rule change.
+      Sketch from 2026-10-16: `nftables_drift: off | warn | fix` (warn first);
+      load the render in a throwaway namespace on the host and compare
+      `nft -s -j list table …` against live — `-s` drops counter values;
+      compare only our own tables (other tools' tables are not ours);
+      ignore elements of sets declared without elements (runtime blocklists,
+      meters). `fix` re-applies through the rollback (runtime elements are
+      lost, as on any apply).
+- [ ] **Coexistence** (related): the file starts with `flush ruleset`, so
+      every apply also wipes Docker / netavark / libvirt / fail2ban tables.
+      Flushing only our own tables would let them coexist.
+
 ## Upstream nft
 
 - [ ] nft 1.1.7 parse bug: a rule with `limit rate … reject with tcp reset`
