@@ -108,7 +108,8 @@ def _proto(key, value):
             _fail(key, "a protocol name or a number 0-255", value)
         return value
     if isinstance(value, str) and (
-        _PROTO_NAME.match(value) or (value.isdigit() and int(value) <= 255)
+        _PROTO_NAME.match(value)
+        or (value.isascii() and value.isdigit() and int(value) <= 255)
     ):
         return value
     return _fail(
@@ -180,7 +181,7 @@ def _set_mss(key, value):
         return value
     # the TCP MSS option is 16 bits; 0 would stall every connection it touches
     number = value if isinstance(value, int) and not isinstance(value, bool) else None
-    if isinstance(value, str) and value.isdigit():
+    if isinstance(value, str) and value.isascii() and value.isdigit():
         number = int(value)
     if number is not None and 1 <= number <= 65535:
         return value

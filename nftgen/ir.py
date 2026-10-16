@@ -186,7 +186,7 @@ def proto_name(value) -> str | None:
     if value is None:
         return None
     text = str(value)
-    if text.isdigit():
+    if text.isascii() and text.isdigit():
         return PROTO_NUMBERS.get(int(text), text)
     return text
 
