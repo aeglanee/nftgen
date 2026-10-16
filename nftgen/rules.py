@@ -817,6 +817,12 @@ class RuleRenderer:
                 # the same check as a rule's `proto:` (rows skip the rule schema)
                 check_proto(match[proto_col], f"vmap row {match!r}")
                 row_proto = proto_name(match[proto_col])
+                if row_proto not in PORT_PROTOS and {"sport", "dport"} & set(keys):
+                    # as in a rule: the entry could never match a packet
+                    raise BuildError(
+                        f"vmap row {match!r}: `{match[proto_col]}` has no ports — "
+                        f"a port column needs one of {', '.join(PORT_PROTOS)}"
+                    )
             cols = []
             for kt, value in zip(keys, match, strict=True):
                 if kt in self._VMAP_ADDR:  # family-aware position
