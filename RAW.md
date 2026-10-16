@@ -31,7 +31,7 @@ rules:
 ```
 
 *Promotion queue:* a family-aware `set-dscp:` key (see
-[docs/capabilities.md](docs/capabilities.md) §9).
+[TODO.md](TODO.md)).
 
 ## Dynamic set ops (populate a set from a rule)
 
@@ -95,5 +95,4 @@ rules:
 | flowtables | table `flowtables:` + rule `flow-offload: <ft>` |
 | named counters | table `counters: [name]` + rule `counter: <name>` |
 
-Full render reference: [docs/capabilities.md](docs/capabilities.md); schema:
-[DESIGN.md](DESIGN.md).
+Full render reference: [DESIGN.md](DESIGN.md).

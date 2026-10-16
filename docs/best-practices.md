@@ -230,7 +230,7 @@ those."
 Everything in §1–§3, **including paired flows**, is structured and
 validated today — paired flows via `concat:`/`tuples:` sets and the `set:`
 rule key (family-aware, definition-composing). See
-[capabilities.md](capabilities.md) for the full render reference.
+[DESIGN.md](../DESIGN.md) for the full render reference.
 
 ---
 

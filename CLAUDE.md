@@ -69,7 +69,8 @@ deployer — Ansible (later) ships and applies the output.
 Root-level Markdown = the durable, reviewed record. `docs/` = focused
 findings/proposals. Each has one job — don't duplicate across them:
 
-- **[DESIGN.md](DESIGN.md)** — the spec: the YAML schema and what it renders to.
+- **[DESIGN.md](DESIGN.md)** — the reference: layout, every YAML key and what
+  it renders to, what nftgen derives, what fails the build, known limits.
 - **[DECISIONS.md](DECISIONS.md)** — *why* it's built this way; rationale +
   rejected alternatives + environmental notes. Read before changing a
   design choice.
@@ -82,9 +83,6 @@ findings/proposals. Each has one job — don't duplicate across them:
   - [docs/authoring.md](docs/authoring.md) — **the hub**: firewall structure,
     the add-a-rule workflow, and the pick-the-right-tool decision table
     (sets/vmap/concat/map/jump/meter/pipapo); links the deep-dives.
-  - [docs/capabilities.md](docs/capabilities.md) — the render reference: what
-    nftgen turns YAML into (structured / raw-only / can't-express /
-    promotion queue).
   - [docs/best-practices.md](docs/best-practices.md) — the cookbook: base-chain
     hygiene + matching patterns (independent/cartesian vs
     paired/concatenation), YAML→nft.
@@ -94,8 +92,6 @@ findings/proposals. Each has one job — don't duplicate across them:
   - [docs/maps.md](docs/maps.md) — nftables maps: verdict maps (dispatch) vs
     data maps (dnat targets), inline vs named, each as verified nft code
     blocks.
-  - [docs/automation/](docs/automation/) — what nftgen derives vs leaves to you,
-    each as define→generate + defaults + overrides (A–D + not-automated).
   - [docs/testing-plan.md](docs/testing-plan.md) — the behavioral (netns) test
     matrix: primitive semantics B01–B26 + the [example-fleet/](example-fleet/)
     reachability truth table P01–P22; harness design + execution order.

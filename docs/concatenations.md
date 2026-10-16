@@ -5,7 +5,7 @@
 > implemented with a *different* authoring surface than proposed below:
 > set-level `concat:`+`proto:`+`tuples:` plus a `set:` rule key — see
 > [concat-authoring.md](concat-authoring.md) (the decision) and
-> [DESIGN.md](../DESIGN.md)/[capabilities.md](capabilities.md) (the result).
+> [DESIGN.md](../DESIGN.md) (the result).
 > Kept as history for the *why*. The root cause below was **verified
 > accurate** against `rules.py` (`render()` appends matches as independent
 > space-joined parts; `_addr`/`_port` resolve independently; no `.`-join path).

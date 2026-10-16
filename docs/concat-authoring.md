@@ -158,7 +158,7 @@ biggest change.
 
 ## What nftgen derives / checks regardless of the option
 
-These are automated (the mechanics — see [automation/](automation/)); only the
+These are automated (the mechanics — see [DESIGN.md](../DESIGN.md)); only the
 tuples themselves are author-defined:
 
 - **Set `type`** from the field list (`saddr`→`ipv4_addr`, `{dport: tcp}`→`inet_service`).

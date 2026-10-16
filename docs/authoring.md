@@ -6,7 +6,7 @@ table for which primitive to reach for. It links the deep-dives rather
 than repeating them — [best-practices.md](best-practices.md) (the
 cookbook), [sets-and-performance.md](sets-and-performance.md) (set
 internals + the complexity math), [maps.md](maps.md) (vmaps/data maps),
-and [capabilities.md](capabilities.md) (the full YAML→nft render table).
+and [DESIGN.md](../DESIGN.md) (the full YAML→nft reference).
 The worked reference is [example-fleet/](../example-fleet/).
 
 ## 1. The shape of a router firewall
@@ -152,6 +152,6 @@ not reflexively. A readable ten-rule chain doesn't need optimizing.
 ---
 
 For the render reference (every key → its nft), see
-[capabilities.md](capabilities.md); for the escape hatch when a feature
+[DESIGN.md](../DESIGN.md); for the escape hatch when a feature
 isn't structured yet, [RAW.md](../RAW.md); for the design rationale behind
 the model, [DECISIONS.md](../DECISIONS.md).
