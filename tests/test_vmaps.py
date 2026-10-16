@@ -525,3 +525,51 @@ def test_vmap_proto_column_is_checked(bad_proto):
     }
     with pytest.raises(BuildError, match=r"vmap row .*: expected a protocol name"):
         _DR.render(rule)
+
+
+# -- review R3: a port column needs a protocol with ports ------------------------- #
+@pytest.mark.parametrize("proto", ["icmp", "vrrp", 112])
+def test_vmap_row_port_on_a_portless_protocol_errors(proto):
+    rule = {
+        "vmap": {
+            "key": ["proto", "dport"],
+            "map": [{"match": [proto, 53], "action": "accept"}],
+        }
+    }
+    with pytest.raises(BuildError, match="has no ports"):
+        _DR.render(rule)
+
+
+def test_proto_only_vmap_still_takes_portless_protocols():
+    assert _DR.render({"vmap": {"key": "proto", "map": {"icmp": "accept"}}}) == [
+        "meta l4proto vmap { icmp : accept }"
+    ]
+
+
+# -- review R4: a proto vmap's keys are checked, spellings compared by name ----- #
+def test_proto_vmap_keys_are_checked():
+    with pytest.raises(BuildError, match=r"vmap key 't cp'"):
+        _DR.render({"vmap": {"key": "proto", "map": {"t cp": "accept"}}})
+
+
+def test_proto_vmap_number_and_name_are_one_key():
+    with pytest.raises(BuildError, match=r"vmap key 'udp' comes from both 17"):
+        _DR.render({"vmap": {"key": "proto", "map": {17: "accept", "udp": "drop"}}})
+    # written as given, and an exact repeat folds
+    assert _DR.render(
+        {"vmap": {"key": "proto", "map": {17: "accept", "udp": "accept"}}}
+    ) == ["meta l4proto vmap { 17 : accept }"]
+
+
+def test_concat_vmap_proto_spellings_are_one_key():
+    rule = {
+        "vmap": {
+            "key": ["proto", "dport"],
+            "map": [
+                {"match": [17, 53], "action": "accept"},
+                {"match": ["udp", 53], "action": "drop"},
+            ],
+        }
+    }
+    with pytest.raises(BuildError, match="comes from both"):
+        _DR.render(rule)

@@ -315,3 +315,12 @@ def test_cli_broken_pipe_exits_quietly(monkeypatch, capsys):
     monkeypatch.setattr(cli, "generate", closed_pipe)
     assert cli.main(["policy.yaml"]) == 141
     assert capsys.readouterr().err == ""
+
+
+# -- review R6: only ASCII digits are numbers ------------------------------------- #
+@pytest.mark.parametrize("text", ["\u00b2", "\u0661\u0667", "\uff11\uff14\uff15\uff12"])
+def test_non_ascii_digits_are_not_numbers(text):
+    # str.isdigit() says yes to "²", Arabic-Indic and full-width digits:
+    # int("²") crashed, the others were rendered into the .nft as written
+    bad({"proto": "tcp", "set-mss": text}, "rule key 'set-mss'")
+    bad({"proto": text, "action": "accept"}, "rule key 'proto'")

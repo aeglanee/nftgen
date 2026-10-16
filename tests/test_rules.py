@@ -3,7 +3,7 @@
 import pytest
 
 from nftgen import validate
-from nftgen.definitions import Definitions
+from nftgen.definitions import DefinitionError, Definitions
 from nftgen.ir import BuildError, Table, build_sets
 from nftgen.rules import RuleRenderer, build_chain, resolve_priority
 
@@ -627,12 +627,33 @@ def test_with_proto_nothing_changes():
         ({"dport": 22}, "port 22 has no protocol"),
         ({"dport": ["dns", 8080]}, "port 8080 has no protocol"),
         ({"sport": "dhcpc", "dport": "dhcps"}, "both sport and dport needs `proto:`"),
-        ({"dport": "weird"}, "a protocol without ports"),
     ],
 )
 def test_ports_without_proto_errors(rule, match):
     with pytest.raises(BuildError, match=match):
         _SR.render({**rule, "action": "accept"})
+
+
+def test_service_with_a_portless_protocol_errors_at_the_definition():
+    # review R7: `1/icmp` used to pass with `proto:` and fail without it;
+    # it is now an error in the service definition itself, whatever the use
+    with pytest.raises(DefinitionError, match="'1/icmp' — icmp has no ports"):
+        _SR.render({"dport": "weird", "action": "accept"})
+    with pytest.raises(DefinitionError, match="icmp has no ports"):
+        _SR.render({"proto": "tcp", "dport": "weird", "action": "accept"})
+
+
+def test_service_protocol_numbers_are_names():
+    # review R7: `53/17` was kept as "17": `proto: udp` found no ports, and
+    # without proto it rendered `17 dport` (not nft)
+    d = Definitions.from_mappings({"services": {"dns": ["53/17", "53/6"]}})
+    r = RuleRenderer(d, {})
+    assert r.render({"proto": "udp", "dport": "dns", "action": "accept"}) == [
+        "udp dport 53 accept"
+    ]
+    assert r.render({"dport": "dns", "action": "accept"}) == [
+        "meta l4proto . th dport { udp . 53, tcp . 53 } accept"
+    ]
 
 
 def test_port_only_named_set_without_proto_errors():

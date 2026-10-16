@@ -315,3 +315,36 @@ def test_generated_concat_passes_nft_check():
     )
     result = validate.check(text)
     assert result.ok, result.stderr
+
+
+# -- review R2: numeric proto in a concat set ------------------------------------ #
+def test_concat_numeric_proto_is_its_name():
+    # `proto: 17` failed the service lookup and rendered `17 dport` (not nft)
+    r, sets = _r(
+        [
+            {
+                "name": "f",
+                "concat": ["saddr", "dport"],
+                "proto": 17,
+                "tuples": [["app", 53]],
+            }
+        ]
+    )
+    assert r.render({"set": "f", "action": "accept"}) == [
+        "ip saddr . udp dport @f accept"
+    ]
+
+
+def test_concat_port_field_needs_a_port_protocol():
+    with pytest.raises(BuildError, match="`proto: icmp` has no ports"):
+        build_sets(
+            [
+                {
+                    "name": "f",
+                    "concat": ["saddr", "dport"],
+                    "proto": "icmp",
+                    "tuples": [["app", 53]],
+                }
+            ],
+            DEFS,
+        )

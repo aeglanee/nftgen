@@ -17,6 +17,8 @@ from typing import Any
 
 import yaml
 
+from nftgen.protocols import PORT_PROTOS, proto_name
+
 CATEGORIES = ("networks", "services", "interfaces")
 
 
@@ -160,9 +162,17 @@ def _svc_leaf(item: str, group: str) -> list[tuple[str, str]]:
         raise DefinitionError(
             f"service {group!r}: {item!r} must be 'port/proto' or a known service"
         )
-    port, proto = item.rsplit("/", 1)
-    if not port or not proto:
+    port, written = item.rsplit("/", 1)
+    if not port or not written:
         raise DefinitionError(f"service {group!r}: malformed entry {item!r}")
+    # one spelling everywhere: `53/17` is stored as udp
+    proto = proto_name(written)
+    if proto not in PORT_PROTOS:
+        raise DefinitionError(
+            f"service {group!r}: {item!r} — {written} has no ports; services are "
+            f"port/protocol pairs ({', '.join(PORT_PROTOS)}). Match {written} "
+            f"with `proto: {written}` in a rule instead"
+        )
     return [(proto, port)]
 
 

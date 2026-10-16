@@ -1,6 +1,9 @@
 """Step 2 — build(<root>): fleet generation + flush-ruleset deploy artifact."""
 
+import os
 import pathlib
+import subprocess
+import sys
 
 import pytest
 
@@ -192,3 +195,32 @@ def test_cli_authoring_error_is_clean(tmp_path, capsys):
 def test_build_output_is_valid_nft(host):
     result = validate.check(build(EXAMPLE, host=host)[host])
     assert result.ok, result.stderr
+
+
+def test_stdout_to_a_closed_pipe_exits_quietly():
+    # review R1: the write is buffered, so a closed pipe used to fail only in
+    # the interpreter's exit flush — outside the CLI's guard — printing
+    # "Exception ignored … BrokenPipeError" and exiting 120
+    read_end, write_end = os.pipe()
+    os.close(read_end)  # the reader is gone before nftgen writes a byte
+    try:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "nftgen",
+                "build",
+                str(EXAMPLE),
+                "--host",
+                "router1",
+                "--stdout",
+            ],
+            stdout=write_end,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    finally:
+        os.close(write_end)
+    assert proc.returncode == 141
+    assert proc.stderr == ""

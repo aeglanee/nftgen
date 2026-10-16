@@ -12,6 +12,11 @@ import re
 from dataclasses import dataclass, field
 
 from nftgen.definitions import Definitions
+from nftgen.protocols import (  # noqa: F401 - re-exported
+    PORT_PROTOS,
+    PROTO_NUMBERS,
+    proto_name,
+)
 
 _PORT_LITERAL = re.compile(r"^\d+(-\d+)?$")  # port or port-range
 _MARK_NUMBER = r"(?:0x[0-9a-fA-F]+|\d+)"
@@ -383,9 +388,16 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:  # noqa: PLR0912 - 
                 f"concat set {name!r}: unknown field {f!r}{hint} "
                 f"(use {sorted(_CONCAT_FIELD_TYPE)})"
             )
-    proto = entry.get("proto")
-    if any(f in ("sport", "dport") for f in fields) and not proto:
-        raise BuildError(f"concat set {name!r}: a port field needs `proto:`")
+    written = entry.get("proto")
+    proto = proto_name(written)  # `proto: 17` → udp, as in rules and vmaps
+    if any(f in ("sport", "dport") for f in fields):
+        if not proto:
+            raise BuildError(f"concat set {name!r}: a port field needs `proto:`")
+        if proto not in PORT_PROTOS:
+            raise BuildError(
+                f"concat set {name!r}: `proto: {written}` has no ports — a port "
+                f"field needs one of {', '.join(PORT_PROTOS)}"
+            )
 
     rows: list[str] = []
     interval = False
