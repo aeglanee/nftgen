@@ -1,32 +1,45 @@
 # example-fleet — a realistic 3-site router firewall
 
-An opinionated reference deployment: **HQ + two branches**, each a site
-router (HA pair) enforcing the same firewall. It's the "does a real,
-composed policy stay manageable" showcase — the design rationale is in
-[docs/reference-fleet.md](../docs/reference-fleet.md). Every primitive is
-proven in isolation by the behavioral suite; this shows them *composed*.
+An opinionated reference: **HQ + two branches**, each a site router running
+the same firewall. It shows the primitives *composed* into a system you
+would deploy; each primitive is proven on its own by the behavioral tests
+(B01–B27), and this fleet by its own matrix (P01–P22, see
+[docs/testing.md](../docs/testing.md)). The tiny schema tour is
+[example/](../example/).
 
 ## The one idea
 
-All three site routers run **one identical policy**
-([policies/hosts/hq-r.yaml](policies/hosts/hq-r.yaml) and the two `*-r.yaml`
-copies differ only in `site:`). The site overlay
-([sites/hq.yaml](sites/hq.yaml)) resolves every `local_*` name to that
-site's own subnets, so the same YAML generates three different rulesets:
+All three routers run **one identical policy**:
+[policies/hosts/hq-r.yaml](policies/hosts/hq-r.yaml) and the two other
+`*-r.yaml` files differ only in `site:`. Each site file
+([sites/hq.yaml](sites/hq.yaml)) gives every `local_*` name that site's own
+subnets, so the same YAML renders three different rulesets:
 
 ```text
 users -> local services : web    hq-r.nft  -> ip saddr 192.168.1.0/24 ip daddr 10.0.1.0/24 …
                                   br1-r.nft -> ip saddr 192.168.2.0/24 ip daddr 10.0.2.0/24 …
 ```
 
-Write once, deploy to the fleet. Fleet-wide names (`all_users`,
-`hq_central`, `hq_monitor`) stay fixed across sites.
+Fleet-wide names (`all_users`, `hq_central`, `hq_monitor`) are the same at
+every site.
 
-## Topology & addressing
+## What nftgen sees
 
-Physical HA/MLAG/VRRP is the platform's job — nftgen sees each router's
-interfaces. Per site: `users`, `services`, `dmz`, `nwm` (net-mgmt),
-`transit` (inter-site), and a two-uplink `wan` group (multi-WAN).
+HA pairs, MLAG, bonds and VRRP are the platform's job (networkd,
+keepalived), not the firewall's. nftgen sees each router's interfaces and
+the rules between them, so an HA pair shares one policy file:
+
+```text
+             wan_a  wan_b   (two uplinks: the `wan` interface group)
+                \    /
+   users ----[ site router ]---- transit  (to the other sites)
+ services ------/ | | \--------- nwm       (network management)
+      dmz --------/ | \--------- lo
+```
+
+Zones aren't a fixed list: each is an interface with a subnet. Another zone
+means more `iifname . oifname` vmap entries and more per-pair chains — no
+new structure.
 
 | Zone | hq | br1 | br2 |
 | --- | --- | --- | --- |
@@ -36,56 +49,78 @@ interfaces. Per site: `users`, `services`, `dmz`, `nwm` (net-mgmt),
 | nwm | 10.90.1.0/24 | 10.90.2.0/24 | 10.90.3.0/24 |
 | transit | 172.16.0.0/24 (shared) | | |
 
-Real traffic is IPv4; the hygiene layer (icmp, bogon scrub, tcp-flags) is
-dual-stack because the filter table is `inet`.
+Traffic is IPv4, but the hygiene layer (icmp, bogon scrub, tcp flags) is
+dual-stack: the table is `inet`, and ICMPv6 neighbour discovery must work
+for a correct `inet` ruleset anyway.
 
-## The base-chain skeleton (every forward chain)
+## The forward chain skeleton
 
-The order *is* the policy — see
-[includes/common/](policies/includes/common/):
+The order *is* the policy
+([includes/common/](policies/includes/common/)):
 
-1. **fast path** — offload established flows to the flowtable, then accept
-   (two rules: `flow add` NFT_BREAKs mid-handshake, so the verdict can't
-   share the rule — see best-practices §8c).
-2. **scrub** — two concerns, scoped by their logic: `proto tcp jump
-   tcp_scrub` drops malformed flags **on every interface** (packet-validity
-   — a compromised internal host scans the same way), while `iifname wan
-   jump wan_scrub` drops bogon sources **wan-only** (rfc1918 is illegal
-   from the internet but is our own LANs). Both counted; each jump gates
-   its whole block in one test.
-3. **live blocklist** — a runtime-updatable drop set, any interface.
-4. **icmp** — RFC 4890 policy; NDP permitted only at hop-limit 255.
-5. **dispatch** — one `iifname . oifname` vmap jumps each interface pair
-   to its own zone chain.
-6. **catch-all** — unmatched pairs hit a metered, attributed drop-log.
+1. **Fast path** — offload established flows to the flowtable, then accept
+   them in a second rule (`flow add` and a verdict can't share a rule — see
+   [best-practices.md](../docs/best-practices.md) §8c).
+2. **Scrub** — `proto tcp jump tcp_scrub` drops malformed flags on **every**
+   interface (a compromised inside host scans the same way);
+   `iifname wan jump wan_scrub` drops bogon sources **from wan only**
+   (rfc1918 is our own LANs). Both counted; each jump gates its whole block.
+3. **Live blocklist** — a set updated at runtime, any interface.
+4. **icmp** — RFC 4890; neighbour discovery only at hop limit 255.
+5. **Dispatch** — one `iifname . oifname` vmap jumps each interface pair to
+   its zone chain.
+6. **Catch-all** — pairs not in the vmap hit a metered, logged drop.
 
 Every zone chain ends the same way: a **per-source metered log naming the
-chain** (the structured `meter:` key), then a counted drop. So when a flow
-is blocked, `journalctl -k | grep fwd-users-services-drop` tells you
-exactly which `iifname→oifname` chain to open — the drop is
-self-documenting. Multi-service allows collapse into one rule per proto
-via composed service groups (`user_svc_tcp` → an anon `{ 80, 443, 53,
-5432 }` port set).
+chain**, then a counted drop. When a flow is blocked,
+`journalctl -k | grep fwd-users-services-drop` names the chain to open.
+(This tail repeats in ~12 chains, since includes take no parameters; it is
+what made `meter:` a key instead of `raw:`.)
+
+The **input** chain is the same shape: conntrack, `lo` and icmp first, then
+`nwm` → router ssh/snmp, then a metered drop log.
+
+## Sets: named only where they pay off
+
+Named sets: the bogon lists (`bogons_v4`, `bogons_v6` — long, one family
+each), the live `blocklist` and the `dynamic` `log_meter`. Address groups
+and services are referenced once per rule, so they stay inline — the same
+firewall either way (guardrail 8). `users-services` uses one service bundle
+per protocol (`user_svc_tcp: [web, dns, postgres]`) for one inline port set
+per rule.
 
 ## Scenarios worth reading
 
-- **common** — users reach their own site's services (web/dns/ntp) and a
-  site-local app (postgres) that no other site can touch.
-- **central** — any site's users reach the HQ directory (`hq_central`,
-  ldaps) over transit — one fleet-wide service.
-- **metrics pull** — `hq_monitor` scrapes every site's exporters (:9100);
-  at HQ that's an `nwm→services` hop, at branches it arrives over transit.
-- **cross-site app** — `br1_app` → `hq_db` (:5432), a single specific
-  flow, and nothing else crosses.
-- **egress** — masquerade out the multi-WAN group; **inbound** :80/:443
-  dnat to the site's dmz web host.
+| Scenario | Rule shape |
+| --- | --- |
+| **common** — users → own-site services: web, dns, ntp | `daddr: local_services`, resolved per site |
+| **site-local app** — users → postgres | no cross-site rule, so unreachable from other sites |
+| **central** — every site's users → the HQ directory (ldaps) | `saddr: all_users` over transit |
+| **metrics pull** — `hq_monitor` → every site's exporters (:9100) | `nwm → services` at HQ, transit at branches |
+| **cross-site app** — `br1_app` → `hq_db` :5432 | one specific flow, nothing else crosses |
+| **egress / inbound** | masquerade out `wan`; :80/:443 dnat to the site's dmz web host |
 
-## Build & verify
+Metrics pull and cross-site only mean something composed: they run through
+transit dispatch, fleet groups and site files together.
+
+## Choices worth knowing
+
+- **`iifname`, not `iif`.** `iif` is faster, but resolves the name at load,
+  so `nft -c` fails without the real interfaces — and this fleet is
+  rendered and checked in CI without them. `iifname` checks anywhere and
+  survives interface flaps.
+- **Overlapping bogon entries fail at load.** `255.255.255.255/32` inside
+  `240.0.0.0/4` made nft reject the set ("conflicting intervals"); nftgen
+  passes sets through as written, so drop the covered entry.
+- **Check hygiene lists against the RFCs.** The first bogon list missed
+  `192.168.0.0/16`.
+
+## Build and check
 
 ```bash
-nftgen build example-fleet            # -> generated/<host>.nft per site
-nftgen build example-fleet --check    # generate + nft -c
+nftgen build example-fleet            # → generated/<host>.nft per site
+nftgen build example-fleet --check    # also nft -c each file
 ```
 
-The `generated/` artifacts are committed and drift-pinned by
-`tests/test_fleet.py`; edit the YAML, never the `.nft`.
+The `generated/` files are committed; `tests/test_fleet.py` and CI fail when
+they don't match a fresh render. Edit the YAML, never the `.nft`.
