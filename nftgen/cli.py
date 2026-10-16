@@ -132,6 +132,7 @@ def _build_cmd(argv: list[str]) -> int:
                 )
                 rc = 1
         sys.stdout.write(text)
+        sys.stdout.flush()  # a closed pipe fails here, inside the guard
         return rc
 
     out_dir = (
@@ -192,6 +193,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {out}", file=sys.stderr)
     else:
         sys.stdout.write(text)
+        sys.stdout.flush()
 
     if args.check:
         result = validate.check(text)
