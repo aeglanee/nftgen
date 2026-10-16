@@ -42,7 +42,8 @@ Two caveats that stop this being "always use hash":
 
 - **Plain set** → **hash table**, **O(1)**, **exact values only** (single IPs, single
   ports). What you want for large lists of *exact* things.
-- **Interval set** (`flags interval`) → **red-black tree** (newer kernels: "pipapo"),
+- **Interval set** (`flags interval`) → **red-black tree** (a concatenation
+  with ranges uses **pipapo**, which needs two or more fields),
   **O(log N)**, holds **ranges and CIDR prefixes** (`10.0.0.0/8`, `1024-65535`).
   Mandatory the moment an element isn't an exact value.
 

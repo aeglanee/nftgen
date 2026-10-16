@@ -23,8 +23,10 @@ The current working list (review follow-ups, release order) is
 - [ ] `set-dscp`, rendered per family (`ip dscp set` / `ip6 dscp set`).
 - [ ] `redirect` action; `ct mark` (match + set); more meta matches
       (`pkttype`, `skuid`, …).
-- [ ] Anti-spoofing (`fib saddr . iif oif missing drop`) as a key; the recipe
-      is in [docs/best-practices.md](docs/best-practices.md).
+- [ ] Anti-spoofing (`fib saddr . mark . iif oif missing drop`) as a key,
+      strict or loose; the recipe is in
+      [docs/best-practices.md](docs/best-practices.md) §5. Add a behavioral
+      test (a spoofed source from the wrong interface is dropped).
 
 ## Checks
 

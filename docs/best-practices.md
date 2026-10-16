@@ -197,14 +197,14 @@ lets you *compose* the tuples, never guess them. Why:
 
 ## 3. Pattern catalog (saddr/sport → daddr/dport)
 
-| Pattern | Semantics | nftgen today |
+| Pattern | Semantics | In nftgen |
 | --- | --- | --- |
-| host → host | one flow | ✅ inline literal |
-| set → host, dport | any source → host | ✅ independent |
-| CIDR → CIDR, dport | any-in-range → any-in-range | ✅ independent (§2a) |
-| set × set × dport | cartesian (any-to-any) | ✅ independent (§2a) |
-| `sport` + `dport` | source-port + dest-port match | ✅ (`proto:` + `sport:`/`dport:`, same as dport) |
-| **specific (saddr→daddr:dport) flows** | **paired tuples** | ✅ `concat:`/`tuples:` set + `set:` rule (§2b) |
+| host → host | one flow | inline literals |
+| set → host, dport | any source → host | independent matches |
+| CIDR → CIDR, dport | any-in-range → any-in-range | independent matches (§2a) |
+| set × set × dport | cartesian (any-to-any) | independent matches (§2a) |
+| `sport` + `dport` | source port + destination port | `proto:` + `sport:` + `dport:` |
+| **specific (saddr→daddr:dport) flows** | **paired tuples** | `concat:`/`tuples:` set + `set:` rule (§2b) |
 
 ---
 
@@ -225,12 +225,52 @@ those."
 
 ---
 
-## 5. What this means for nftgen
+## 5. Anti-spoofing (reverse-path filter)
 
-Everything in §1–§3, **including paired flows**, is structured and
-validated today — paired flows via `concat:`/`tuples:` sets and the `set:`
-rule key (family-aware, definition-composing). See
-[DESIGN.md](../DESIGN.md) for the full render reference.
+Drop a packet whose source address isn't routed back out the interface it
+arrived on — a spoofed source. One rule replaces per-interface bogon lists
+for your own subnets:
+
+```yaml
+- name: rpfilter
+  hook: prerouting
+  priority: -140          # mangle + 10: after marks set at mangle
+  policy: accept          # not the filter default — drop would drop everything
+  rules:
+    - raw: "fib saddr . mark . iif oif missing counter name rpf_drops drop"
+```
+
+```nft
+chain rpfilter {
+    type filter hook prerouting priority -140; policy accept;
+    fib saddr . mark . iif oif missing counter name rpf_drops drop
+}
+```
+
+- **`policy: accept` is required.** nftgen defaults a `filter` chain to
+  `drop`; this chain only removes spoofed packets, the filtering happens
+  later.
+- **`. mark`** makes the lookup use the packet's fwmark, so policy routing
+  by mark (`ip rule fwmark …`) is honoured; without such rules it changes
+  nothing.
+- **Strict vs loose.** `. iif` demands the route back uses the same
+  interface. With asymmetric routing or multi-WAN, where replies may leave
+  another uplink, use loose mode — "some route back exists":
+  `fib saddr . mark oif missing drop`.
+- **No exceptions needed** for DHCP or neighbour discovery on current
+  kernels (checked in the kernel source, 2026-10): a `0.0.0.0` source to
+  broadcast or link-local multicast (DHCPDISCOVER), an ICMPv6 packet from
+  `::` to link-local (duplicate address detection) and loopback all pass.
+  firewalld's `icmpv6 type { nd-router-advert, nd-neighbor-solicit } accept`
+  exemption worked around a 4.16–4.17 kernel bug.
+- The rule is `raw:` until it gets a key ([TODO.md](../TODO.md)).
+
+Sources: `man nft` (FIB expressions);
+[nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Matching_routing_information);
+Linux `net/ipv4/netfilter/nft_fib_ipv4.c`, `net/ipv6/netfilter/nft_fib_ipv6.c`,
+`include/net/netfilter/nft_fib.h`; firewalld
+[`nftables.py`](https://github.com/firewalld/firewalld/blob/main/src/firewall/core/nftables.py).
+Checked with `nft -c`; spoof drops not yet covered by a behavioral test.
 
 ---
 
@@ -263,8 +303,8 @@ concat set.
 - **One set per *shape*** (field combo) — a set's type is fixed. In practice
   that's usually just `saddr.daddr.dport`; source-port matching is rare. So
   1–2 sets, not many.
-- **tcp vs udp splits at the match** (`tcp dport` / `udp dport`) — separate
-  rules/sets.
+- **One protocol per concat set** — a concat set's `proto:` is fixed, so
+  tcp and udp flows go in separate sets.
 - **A few specific flows?** Plain separate rules are just as fine; a concat
   set earns its keep when there are **many**.
 - **Ranges/CIDRs in a concat are fine** — stored as ranges (interval/pipapo),
@@ -284,11 +324,12 @@ dns:   [53/tcp, 53/udp]     # ok — same port, both protos
 mixed: [53/udp, 80/tcp]     # avoid — unrelated ports under one name
 ```
 
-Why: a rule/concat states one `proto:`, which selects *that proto's* ports
-from the service. nftgen **errors** if the service has **zero** ports for
-the chosen proto, but it won't second-guess a *partial* match — so a
-grab-bag service silently gives you only the matching-proto subset. Keep
-services coherent and that never surprises you.
+Why: with `proto:` on the rule, nftgen takes only *that protocol's* ports
+from the service — an error if it has none, but a grab-bag silently gives
+you a subset (`proto: tcp` + `dport: mixed` → `tcp dport 80`). Without
+`proto:`, every port keeps its own protocol
+(`meta l4proto . th dport { udp . 53, tcp . 80 }`), which is exact. Either
+way a name that means one thing reads better in a rule.
 
 ---
 
