@@ -251,7 +251,7 @@ def build(root: str | pathlib.Path, host: str | None = None) -> dict[str, str]:
     Returns ``{host_name: text}`` where each text is a complete, applyable ruleset
     (with ``flush ruleset``). The host name is the policy filename stem — the
     ``inventory_hostname == policies/hosts/<name>.yaml == generated/<name>.nft``
-    contract (DEPLOYMENT §10.2).
+    naming contract (DESIGN.md, Project layout).
     """
     root = pathlib.Path(root)
     defs_dir = root / "definitions"
