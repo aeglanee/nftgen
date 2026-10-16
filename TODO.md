@@ -42,9 +42,6 @@ The current working list (review follow-ups, release order) is
       line of its own in nft).
 - [ ] Definition values checked where they're defined (`22/tpc`,
       `99999/tcp`), not only where they're used.
-- [ ] `flowtables:` `devices: wan` (one name, not a list) is split into
-      letters ("device 'w' is not a known interface group"). Take one value or
-      a list, like the rule keys.
 
 ## Upstream nft
 

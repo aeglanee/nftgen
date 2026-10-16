@@ -107,7 +107,7 @@ interfaces:
 | `sets` | named sets (below) |
 | `chains` | base and regular chains (below) |
 | `counters` | named counters: `counters: [bad_tcp]` → `counter bad_tcp { }` |
-| `flowtables` | `{name, devices, hook?, priority?}` — devices are interface groups; hook defaults to `ingress`, priority to `0` |
+| `flowtables` | `{name, devices, hook?, priority?}` — `devices` is one interface group or a list (a device in two groups is listed once); hook defaults to `ingress`, priority to `0` |
 | `raw` | object declarations copied into the table verbatim |
 | `comment` | nft `comment "…"` on the table |
 

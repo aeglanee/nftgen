@@ -37,6 +37,8 @@ build with a clear error:
   on a protocol without ports; reject/masquerade inside a vmap.
 - `icmp`/`icmpv6` with dual-stack addresses render only their own family.
 - `log:` with both `level` and `group` (nft refuses the pair).
+- Flowtable `devices:` takes one group plain (`devices: wan` was read letter
+  by letter); a device shared by two groups is listed once.
 - `log: {}` logs; OS errors are clean errors; a closed stdout pipe exits
   quietly (141).
 
