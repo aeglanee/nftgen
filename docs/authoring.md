@@ -6,7 +6,7 @@ table for which primitive to reach for. It links the deep-dives rather
 than repeating them — [best-practices.md](best-practices.md) (the
 cookbook), [sets-and-performance.md](sets-and-performance.md) (set
 internals + the complexity math), [maps.md](maps.md) (vmaps/data maps),
-and [capabilities.md](capabilities.md) (the full YAML→nft render table).
+and [DESIGN.md](../DESIGN.md) (the full YAML→nft reference).
 The worked reference is [example-fleet/](../example-fleet/).
 
 ## 1. The shape of a router firewall
@@ -69,7 +69,7 @@ tcp 8080.*
    `journalctl -k | grep fwd-users-services-drop` shows the flows that
    chain rejected (saddr, daddr, dport), so you know exactly which chain
    to open. For a live trace, arm `meta nftrace set 1` on the test source
-   and watch `nft monitor trace` (see [RAW.md](../RAW.md)). This is the
+   and watch `nft monitor trace` (see [raw.md](raw.md)). This is the
    payoff of the per-chain attributed logging: **the structure and the
    logs together turn "why is this blocked" into a grep.**
 
@@ -91,11 +91,11 @@ follow the link for the reasoning.
 | **one condition → one chain** | a **jump** (not a vmap) | `iifname: wan` + `action: {jump: wan_scrub}` | a vmap to a single target is pointless; the jump gates a whole block in one test |
 | **specific src↔dst↔port tuples** (no cross-product) | a **concat set** | `sets: [{concat: [saddr, daddr, dport], tuples: […]}]` + `set:` rule | independent matches would allow the cross-combinations; the tuple set matches only the exact rows ([best-practices.md](best-practices.md) §2) |
 | key → a **data value** (dnat target, mark) | a **data map** | `action: {dnat: {map: {80: web, …}}}` → `dnat to tcp dport map { … }` | one map instead of a dnat-per-port ([maps.md](maps.md)) |
-| big **CIDR / range** sets, longest-prefix | an **interval set** (automatic) | a network group with CIDRs → `flags interval` | nft picks the pipapo interval structure for you; see below |
+| big **CIDR / range** sets | an **interval set** (automatic) | a network group with CIDRs → `flags interval` | the kernel picks the backend for you; see below |
 | **rate-limit per source** (log sampling, throttle) | a **`meter:`** on a dynamic set | `meter: {set, key: saddr, rate}` → `update @set { ip saddr limit rate }` | each key gets its own bucket; one noisy host can't crowd the sample |
 | collapse **many services** on one flow | a **composed service group** | `svc: [web, dns]` then `dport: svc` → `dport { 80, 443, 53 }` | service groups compose; one rule per proto instead of per service |
 
-### On sets: anonymous vs named, and pipapo
+### On sets: anonymous vs named, and the backend
 
 There is **no per-lookup speed difference** between an anonymous set
 (`{ a, b, c }` inlined) and a named one (`@name`) — both are the same
@@ -106,10 +106,10 @@ set only when it's shared across rules or mutated at runtime** (the
 blocklist, the meter) — otherwise the anonymous form is equal and simpler.
 
 You never choose the *algorithm*. nftgen tags CIDR/range groups with
-`flags interval`, and nft implements interval sets with **pipapo** (a
-longest-prefix structure that stays fast at scale); exact-value groups use
-a hash. The data picks the structure. The complexity math and how to size
-sets for performance is in
+`flags interval`; the kernel stores a one-field interval set in a
+red-black tree (O(log N)), a concatenation with ranges in **pipapo**, and
+exact values in a hash. The data picks the structure. The complexity math
+and how to size sets for performance is in
 [sets-and-performance.md](sets-and-performance.md).
 
 ## 4. Efficiency — when it actually matters
@@ -124,8 +124,8 @@ sets for performance is in
   after connection setup off the slow path — your policy still governs the
   *first* packets of every connection ([best-practices.md](best-practices.md)
   §8c). Author `flow-offload:` in its own rule, never sharing the verdict.
-- **Interval sets scale.** A threat-intel feed of 100k CIDRs is one pipapo
-  lookup, not 100k rules — the interval set is the mechanism.
+- **Interval sets scale.** A threat-intel feed of 100k CIDRs is one tree
+  lookup (~17 steps), not 100k rules — the interval set is the mechanism.
 - **`iif` vs `iifname`.** The index form is a cheaper compare but fails to
   load if the interface is absent and needs a reload if recreated. Use it
   only for statically-named, always-present interfaces
@@ -152,6 +152,6 @@ not reflexively. A readable ten-rule chain doesn't need optimizing.
 ---
 
 For the render reference (every key → its nft), see
-[capabilities.md](capabilities.md); for the escape hatch when a feature
-isn't structured yet, [RAW.md](../RAW.md); for the design rationale behind
+[DESIGN.md](../DESIGN.md); for the escape hatch when a feature
+isn't structured yet, [raw.md](raw.md); for the design rationale behind
 the model, [DECISIONS.md](../DECISIONS.md).

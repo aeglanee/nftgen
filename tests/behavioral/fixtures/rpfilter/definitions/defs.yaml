@@ -1,0 +1,5 @@
+---
+# B28 fixture: strict reverse-path filter on a two-zone router.
+services:
+  svc: [7000/tcp]
+  dhcp_server: [67/udp]

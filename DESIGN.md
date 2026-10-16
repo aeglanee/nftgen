@@ -1,246 +1,300 @@
-# nftgen — design (the "ideal")
+# nftgen — reference
 
-A small, **nftables-only** firewall-as-code generator. YAML definitions +
-host policies → a native `.nft` ruleset you commit to git and apply with
-`nft -f`. The living spec — kept in lockstep with the code.
+nftgen turns YAML definitions and host policies into one native nftables
+ruleset per host. This is the reference: the layout, every YAML key and what
+it renders to, what nftgen derives for you, and what fails the build. The
+*why* is in [DECISIONS.md](DECISIONS.md); how to structure a firewall is in
+[docs/authoring.md](docs/authoring.md).
 
-## Philosophy
+## Principles
 
-1. **Mirror nftables, don't hide it.** The YAML's shape follows nft's real
-   object model (tables → chains → rules; sets; maps). You author your own
-   chains and rules — the tool doesn't invent structure for you. This is what
-   makes it both *learnable* (you're learning nft) and *fully customizable*.
-2. **High-level where it helps, raw where you need it.** Definitions are named
-   and composable; matches read in plain terms (`dport: ssh`); but a `raw:`
-   escape hatch means anything nft can express, you can write — today.
-3. **Explicit over magic.** No optimizer, no auto-generated chains, no
-   auto-injected rules. What you write is what you get. Best practices are
-   *easy defaults you choose*, not things forced on you.
-4. **An IR in the middle.** YAML → typed objects (Table/Chain/Rule/Set/Map) →
-   text. Robust output now; a JSON emitter later from the same IR.
-5. **Tested at every step.** Golden files (YAML → exact `.nft`) + `nft -c -f`.
+1. **Mirror nftables.** The YAML has nft's shape (tables → chains → rules;
+   sets; maps), and you write your own chains. You are learning nft.
+2. **What you write is what you get.** No optimizer, no generated chains, no
+   injected rules — conntrack, counters and `ct state` only where you write
+   them.
+3. **Strict.** A typo, an unknown name or a value of the wrong shape fails the
+   build; nftgen never renders a weaker or empty ruleset in its place.
+4. **Deterministic.** The same input gives byte-identical output, so a diff of
+   the generated file is a real rule change.
+5. **`raw:` is the escape hatch** for anything without a key yet
+   ([docs/raw.md](docs/raw.md)).
 
 ## Project layout
 
-A project is a directory (`<root>`) with a fixed convention. `nftgen build
-<root>` reads it and writes one complete `.nft` per host:
-
 ```text
 <root>/
-├── definitions/            # global named definitions (merged: every *.yaml)
-│   ├── networks.yaml        #   networks:   name -> [cidr | name ...]
-│   ├── services.yaml        #   services:   name -> [port/proto ...]
-│   └── interfaces.yaml      #   interfaces: name -> [ifname ...]
-├── sites/                   # per-site definition overlays
-│   ├── site1.yaml           #   a host's `site: site1` merges this over definitions/
-│   └── site2.yaml
-├── policies/                # the include base (`include:` paths resolve here)
-│   ├── includes/            #   reusable rule/set fragments
-│   │   ├── common-input.yaml
-│   │   ├── scrub.yaml
-│   │   └── ...
-│   └── hosts/               # one file per host — the entry points
-│       ├── gateway.yaml
-│       ├── router1.yaml
-│       └── router2.yaml
-└── generated/               # OUTPUT — nftgen writes <host>.nft here
-    ├── gateway.nft
-    └── ...
+├── definitions/          # networks, services, interfaces (every *.yaml merged)
+├── sites/<site>.yaml     # per-site definitions, picked by a host's `site:`
+├── policies/
+│   ├── includes/         # shared rule and set fragments (`- include:`)
+│   └── hosts/<host>.yaml # one file per host
+└── generated/<host>.nft  # the output: one complete ruleset per host
 ```
 
-- **`definitions/`** — global definitions. Every `*.y{,a}ml` is merged by category
-  (`networks` / `services` / `interfaces`); a duplicate name across files is an
-  error. Filenames are organizational only — the loader merges by the top-level
-  key inside.
-- **`sites/`** — per-site overlays. A host with `site: site1` gets
-  `sites/site1.yaml` merged *over* `definitions/`, so a shared name (e.g. `local_users`)
-  resolves to that site's value.
-- **`policies/includes/`** — fragments holding a `sets:` and/or `rules:` list,
-  pulled into a host via `- include: includes/<file>.yaml`. Paths resolve
-  relative to `policies/`; includes may nest. Where the `- include:` sits
-  picks the section (a table's `sets:` → the file's `sets:`, a chain's
-  `rules:` → its `rules:`); that section must exist and be a list
-  (`rules: []` for deliberately empty), and any other top-level key is an
-  error — so a typo'd or misplaced include fails the build instead of
-  silently contributing nothing.
-- **`policies/hosts/<name>.yaml`** — the per-host policy (tables → chains →
-  rules). One file = one host = one output.
-- **`generated/<name>.nft`** — the deploy artifact: a complete ruleset with
-  `flush ruleset`, shipped verbatim as `/etc/nftables.conf`. Committed for
-  review; **never hand-edited** (the YAML is the only source).
+- **`definitions/`**: every `*.yaml` / `*.yml` below it is merged by category;
+  file names are organisational only.
+- **`sites/`**: a host with `site: s1` also gets `sites/s1.yaml`. It adds
+  names; a name defined in both is an error.
+- **`policies/includes/`**: files with a `rules:` and/or `sets:` list, pulled
+  in with `- include: includes/<file>.yaml` (paths from `policies/`, may
+  nest). The include's position picks the section: under a chain's `rules:`
+  it reads the file's `rules:`, under a table's `sets:` its `sets:`. That
+  section must exist and be a list (`rules: []` for a deliberately empty
+  file); any other top-level key is an error.
+- **`generated/<host>.nft`**: `#!/usr/sbin/nft -f` + `flush ruleset` + the
+  host's tables — directly applyable, shipped as `/etc/nftables.conf`. A
+  render, never hand-edited.
 
-**The naming contract** (load-bearing for deployment — DEPLOYMENT §10.2):
+**Naming contract:** `inventory_hostname == policies/hosts/<name>.yaml ==
+generated/<name>.nft`.
 
-```text
-inventory_hostname  ==  policies/hosts/<name>.yaml  ==  generated/<name>.nft
+### CLI
+
+```bash
+nftgen build <root>                       # every host → <root>/generated/
+nftgen build <root> --host fw1            # one host
+nftgen build <root> --host fw1 --stdout   # print it, write nothing
+nftgen build <root> --check               # also run `nft -c` on each output
+nftgen <policy.yaml> --defs <dir> [--out f.nft] [--check]   # one file, no flush
 ```
 
-`nftgen build <root>` globs `policies/hosts/*.y{,a}ml`, generates each (with
-`flush ruleset`), and writes `generated/<stem>.nft` — override the output dir
-with `--out-dir`, build one host with `--host`, validate with `--check`.
-`--host <name> --stdout` renders that one host to stdout and writes **nothing**
-(for previews, pipes, or a deployer that renders on the fly without touching the
-committed `generated/` tree); `--stdout` requires `--host` — stdout is a single
-stream, so it maps to a single host. The worked example lives under
-[example/](example/).
+- `--host` is a plain host name (no path, no pattern); two files for one host
+  (`fw1.yaml` + `fw1.yml`) and a root with no host policies are errors.
+- `--check` fails (exit 2) when `nft -c` can't run here, instead of skipping.
+- Errors are one line (`nftgen: error: …`, exit 1); a closed stdout pipe exits
+  quietly (141); anything else is a bug (`internal error`, exit 70).
 
-## The nftables model (what the YAML mirrors)
+### As a library
 
-- **Table** — a container, tied to a **family**: `ip` (v4), `ip6` (v6),
-  `inet` (dual-stack). Holds chains, sets, maps. You can have several.
-- **Chain** — two kinds:
-  - **base chain**: hooked into the kernel — has `type` (filter/nat/route),
-    `hook` (prerouting/input/forward/output/postrouting), `priority`, `policy`
-    (accept/drop). Packets enter here.
-  - **regular chain**: not hooked; reached by `jump`/`goto`. **Free until
-    jumped** — used to organize. (Best practice: few base chains, branch into
-    regular chains.)
-- **Rule** — ordered list in a chain: **matches** (`ip saddr`, `tcp dport`,
-  `ct state`, `iifname`, …) + optional **statements** (counter, log) +
-  a terminal **verdict** (accept/drop/reject/jump/goto/return). First match wins.
-- **Set** — a *typed* named collection: `ipv4_addr` / `ipv6_addr` /
-  `inet_service` (ports) / `ifname`. Flags: `interval` (CIDR/ranges),
-  `timeout` (dynamic). Referenced as `@name`. Set names are unique per table.
-- **Map / vmap** — key → value. A **verdict map** dispatches by a key to a
-  verdict in one lookup: `iifname vmap { "wan0": jump wan_in }`.
-- **Flowtable** — offloads established flows off the slow path.
+The CLI's renderer is `render_tables(tables, defs, resolver, *, source,
+flush, annotate)`. With `PathResolver` it reads include files; with
+`DictResolver` includes are named fragments in a dict — the Ansible vars mode
+in [DEPLOYMENT.md](DEPLOYMENT.md) uses that. `Definitions.from_named_mappings`
+builds definitions from named layers and names both origins of a duplicate.
+`annotate` (optional) returns a note per rule, appended as a `# <note>` file
+comment on every line the rule renders to (dropped by nft on load).
 
-## Definitions (composable, merged across files)
+## Definitions
 
 ```yaml
-# definitions/networks.yaml
 networks:
-  lan:      [192.168.1.0/24]
-  mgmt:     [192.168.9.0/24]
+  mgmt:     [192.168.9.0/24, fd00:9::/64]
   webhosts: [192.0.2.10, 192.0.2.11]
-  trusted:  [lan, mgmt]            # composition: names expand, literals stay
-```
-
-```yaml
-# definitions/services.yaml   (port carries proto; the rule states its proto and
-#   nftgen keeps the pairing — inline ports per proto, or a (proto . port) named set)
+  trusted:  [mgmt, webhosts]        # composition: names expand, literals stay
 services:
   ssh: [22/tcp]
-  web: [80/tcp, 443/tcp]
   dns: [53/tcp, 53/udp]
-```
-
-```yaml
-# definitions/interfaces.yaml
+  web: [http, https]                # composition of other services
 interfaces:
-  wan:    [wan0, wwan0]
-  lan_if: [lan0]                   # named distinctly from network `lan`
+  wan: [wan0, wwan0]
+  lo:  [lo]                         # a one-device group for a single device
 ```
 
-## Host policy (tables → sets → chains → rules)
+- **networks**: IP addresses and CIDRs, v4 and v6 mixed if you like.
+- **services**: `port/protocol` pairs; the port may be a range (`8000-8100/tcp`),
+  the protocol a name or a number (stored as its name: `53/17` = `53/udp`).
+  Only protocols with ports: tcp, udp, sctp, dccp, udplite.
+- **interfaces**: device names. Rules refer to interface **groups**, never to
+  devices directly, so a typo can't become a device that never matches.
+- Composition is recursive, cycle-checked, and deduplicated (first-seen order).
+- A name is unique within a category; a duplicate is an error naming both
+  origins.
 
-A host policy is `tables` → each table has `sets` (which definitions to
-materialise as named sets) → `chains` (base chains have a `hook`; regular chains
-don't) → `rules`. Rules are block-style mappings (no flow braces). The full
-worked example lives in [`example/policies/hosts/router1.yaml`](example/policies/hosts/router1.yaml)
-— a filter table (input + forward) plus a separate nat table, a live-populated
-`blocklist` set, an include, and conntrack-early written explicitly. Shape:
+## Tables
 
-```yaml
-tables:
-  - family: inet
-    name: filter
-    sets:
-      - lan
-      - webhosts
-      - name: blocklist          # bare set, filled live via `nft add element`
-        type: ipv4_addr
-        flags: [interval, timeout]
-    chains:
-      - name: input
-        hook: input               # presence of `hook` => base chain
-        priority: filter          # name (filter=0, raw=-300, srcnat=100…) or number
-        policy: drop
-        rules:
-          - ct: [established, related]
-            action: accept
-          - saddr: mgmt
-            proto: tcp
-            dport: ssh
-            action: accept
-          - include: includes/common-input.yaml
-```
-
-## Rule syntax — structured, with a raw escape hatch
-
-A rule is a small mapping of **match keys** + an **action** (the recommended
-form), or a `raw:` string for full nft power.
-
-Match keys: `iifname` / `oifname` (interface name) or `iif` / `oif` (interface
-index — faster, load-order-sensitive), `saddr` / `daddr` (address), `proto` (a
-name such as `tcp`/`vrrp`, or a number 0–255), `sport` / `dport` (service or
-port; `proto:` may be left out when the ports come from services — each keeps
-its own protocol), `ct` (state), `counter` (bool or a declared name), `log`
-(bool, or `prefix`/`level`/`group`). `action`: `accept` / `drop` / `reject` /
-`return` / `continue` / `masquerade`, `reject with …` (e.g. `reject with tcp
-reset`), or a mapping with exactly one of `jump: chain` / `goto: chain` / `dnat:
-10.0.0.5` / `snat: 1.2.3.4` (written as an indented block under `action:`);
-anything else goes through `raw:`.
-
-**One value or a list:** every matching key (`saddr`/`daddr`, `sport`/`dport`,
-`iifname`/`oifname`/`iif`/`oif`, `ct`, `icmp-type`) takes one value plain or
-several as a list — `dport: 22` or `dport: [ssh, 8080]`, `ct: established` or
-`ct: [established, related]`. A list renders as an inline set; each element
-resolves as it would alone (strict: an unknown name errors); a named set can't
-sit inside a list. Every value is shape-checked before rendering
-(`nftgen/schema.py`), so a wrong shape is a clear error naming the key.
-`comment:` (text) renders nft's native `comment "…"` — last on every line the
-rule expands to; tables, chains, and set entries take one too. It is kept in
-the kernel, so `nft list ruleset` on the box shows it (a `#` file comment is
-gone once loaded). No `"` or line break; at most 128 bytes (nft's limit).
-
-```yaml
-- iifname: lan_if
-  saddr: trusted
-  proto: tcp
-  dport: web
-  counter: true
-  action: accept
-- proto: tcp
-  dport: 8443
-  action:
-    dnat: "192.168.1.50:443"
-- raw: "ip saddr . tcp dport @webmap accept"     # anything not yet modelled
-```
-
-A **verdict map** (a native primitive, authored — not inferred):
-
-```yaml
-- vmap:                        # key: iifname/oifname/proto/dport/sport/mark/state/saddr/daddr
-    key: iifname               # a list (key: [iifname, oifname]) concatenates the lookup
-    map:
-      wan0:
-        jump: wan_input
-      lan0:
-        jump: lan_input
-```
-
-## How nftables best practices map onto this YAML
-
-| Best practice | How you express it here |
+| Key | Meaning |
 | --- | --- |
-| conntrack early | you write a `ct: [established, related]` → `accept` rule first (explicit, not auto) |
-| sets over rule lists | list the group under `sets:` → emitted as a named set, referenced `@name` |
-| verdict maps | a `vmap:` rule |
-| few base chains, branch via regular | author base chains with `hook:`; put the rest in hookless chains and `jump` |
-| named priorities | `priority: raw \| mangle \| filter \| srcnat…` or a number |
-| flowtables | a table `flowtables:` block + a `flow-offload:` rule key (verdict goes in the *next* rule) |
-| live blocklists | a bare `sets:` entry with no elements + `flags: [timeout]`; push with `nft add element` |
-| counters selectively | `counter: true` only where you want it (never auto) |
+| `family`, `name` | `table inet filter { … }` — required |
+| `sets` | named sets (below) |
+| `chains` | base and regular chains (below) |
+| `counters` | named counters, one name or a list: `counters: [bad_tcp]` → `counter bad_tcp { }` |
+| `flowtables` | `{name, devices, hook?, priority?}` — `devices` is one interface group or a list (a device in two groups is listed once); hook defaults to `ingress`, priority to `0` |
+| `raw` | object declarations copied into the table verbatim, one line or a list |
+| `comment` | nft `comment "…"` on the table |
 
-## Non-goals
+## Sets
 
-- No optimizer / structure inference (you author it).
-- No multi-vendor abstraction (nftables only).
-- No auto-generated chains or auto-injected rules.
+A definition becomes a **named set** only when listed in a table's `sets:`;
+otherwise a rule writes its values inline (`{ … }`). The author chooses per
+table; the firewall behaves the same either way.
 
-## Formerly open decisions (all settled as proposed)
+| `sets:` entry | Renders |
+| --- | --- |
+| a network | `type ipv4_addr` or `ipv6_addr`, `flags interval` (one family only; split `_v4`/`_v6`) |
+| a service | `type inet_proto . inet_service`, elements `tcp . 22` — each port keeps its protocol; `flags interval` if any range |
+| an interface group | `type ifname`, elements `"wan0"` |
+| `{name, type, flags?, elements?}` | a hand-written set, e.g. an empty `timeout` blocklist filled with `nft add element`; `flags` from `constant`, `interval`, `dynamic`, `timeout`; each key one value or a list |
+| `{name, concat, proto?, tuples, family?}` | a concatenation set of exact pairs (see below) |
 
-Rule form (structured mapping + `raw:`), `sets:` entry shapes (flat names +
-dict form for bare sets), and per-site `local_*` overlays (`sites/`) all
-shipped as proposed. Rationale lives in [DECISIONS.md](DECISIONS.md).
+Any entry may carry `comment:`. A set with `flags: [dynamic]` can back a
+`meter:`.
+
+**Concatenation sets** hold exact combinations, matched in one lookup:
+
+```yaml
+sets:
+  - name: db_flows
+    concat: [saddr, daddr, dport]   # saddr, daddr, sport, dport, iifname, oifname, mark
+    proto: tcp                      # needed with a port field
+    tuples:
+      - [app_host, db_host, postgres]
+rules:
+  - set: db_flows                   # → ip saddr . ip daddr . tcp dport @db_flows
+    action: accept
+```
+
+Each tuple field takes one value (a single-value group or a literal). The
+family comes from the tuples; a set filled at runtime (no tuples) with an
+address field needs `family: ip` or `ip6`.
+
+## Chains
+
+| Key | Meaning |
+| --- | --- |
+| `name` | required; not a reserved nft keyword |
+| `hook` | makes it a base chain (`input`, `forward`, `output`, `prerouting`, `postrouting`, `ingress`) |
+| `type` | `filter` (default), `nat`, `route` — base chains only |
+| `priority` | a number or `raw`, `mangle`, `dstnat`, `filter` (0, default), `security`, `srcnat` — base chains only |
+| `policy` | defaults to `drop` for `filter`, `accept` otherwise — base chains only |
+| `rules` | the rules, in order (first match wins) |
+| `comment` | nft `comment "…"` on the chain |
+
+A chain without `hook` is a regular chain, reached by `jump`/`goto`;
+`type`/`priority`/`policy` on it are an error.
+
+## Rules
+
+A rule is a mapping of match keys, statements and one action — or one of the
+forms below. Rule order is kept exactly.
+
+### Matches
+
+| Key | Example | Renders |
+| --- | --- | --- |
+| `iifname` / `oifname` | `iifname: wan` | `iifname { "wan0", "wwan0" }` (name match) |
+| `iif` / `oif` | `iif: lan` | `iif "lan0"` (index match: faster, but the ruleset fails to load if the interface is missing; not with a named set) |
+| `saddr` / `daddr` | `saddr: mgmt` | `ip saddr 192.168.9.0/24` + `ip6 saddr fd00:9::/64` — one line per family the addresses share |
+| `proto` | `proto: icmp` | `meta l4proto icmp` (a name, or a number 0–255) |
+| `sport` / `dport` | `proto: tcp` + `dport: ssh` | `tcp dport 22` |
+| `ct` | `ct: [established, related]` | `ct state established,related` |
+| `mark` | `mark: 0x1` | `meta mark 0x1` (a number, `0x…`, or a range) |
+| `icmp-type` | `proto: icmpv6` + `icmp-type: [nd-neighbor-solicit]` | `icmpv6 type nd-neighbor-solicit` (needs `proto: icmp`/`icmpv6`, no ports) |
+| `flags` | `flags: {match: [syn], mask: [syn, ack]}` | `tcp flags & (syn\|ack) == syn` (a list makes one line each) |
+
+**One value or a list:** `saddr`/`daddr`, `sport`/`dport`, the interface keys,
+`ct` and `icmp-type` take one value or a list (`dport: [ssh, 8080]` →
+`tcp dport { 22, 8080 }`). Each element resolves as it would alone; a named
+set can't go inside a list.
+
+**Named or inline:** a value that is a set listed under `sets:` renders
+`@name`; a definition renders its values inline; a literal renders itself.
+
+**Ports and protocols:**
+
+- With `proto:`, a service contributes its ports for that protocol only (an
+  error if it has none). A number is checked as its name: `proto: 17` +
+  `dport: dns` → `udp dport 53`.
+- Without `proto:`, ports from services keep their own protocol: one protocol
+  renders `tcp dport 22`; several render
+  `meta l4proto . th dport { tcp . 53, udp . 53 }` (named: `@dns`). A bare
+  port number, a hand-written port-only set, or `sport` + `dport` together
+  still need `proto:`.
+- `icmp` renders only IPv4 lines and `icmpv6` only IPv6 lines.
+
+### Statements
+
+| Key | Example | Renders |
+| --- | --- | --- |
+| `counter` | `true` / `bad_tcp` | `counter` / `counter name bad_tcp` (named: declared in the table) |
+| `log` | `true` / `{prefix: "ssh ", level: info}` | `log prefix "ssh " level info`; `group: 2` logs to NFLOG instead (not with `level`); `false` = none |
+| `limit` | `4/minute` | `limit rate 4/minute` |
+| `meter` | `{set: m, key: saddr, rate: 4/minute, timeout: 1m}` | `update @m { ip saddr timeout 1m limit rate 4/minute }` (a `dynamic` set; keys saddr/daddr/iifname/oifname) |
+| `quota` | `over 10 mbytes` | `quota over 10 mbytes` |
+| `set-mark` | `0x1` | `meta mark set 0x1` |
+| `set-mss` | `pmtu` / `1452` | `tcp flags syn tcp option maxseg size set rt mtu` / `… 1452` (1–65535) |
+| `flow-offload` | `ft` | `flow add @ft` (a declared flowtable; a separate rule from the verdict) |
+| `comment` | `"admins → router ssh"` | `comment "…"`, last on every line of the rule; kept by the kernel; no `"`, ≤ 128 bytes |
+
+A rule may have statements and no action (e.g. an MSS clamp).
+
+### Actions
+
+| `action:` | Renders |
+| --- | --- |
+| `accept`, `drop`, `reject`, `return`, `continue`, `masquerade` | the word |
+| `reject with tcp reset` (any `reject with …`) | the text |
+| `{jump: chain}` / `{goto: chain}` | `jump chain` / `goto chain` |
+| `{dnat: 192.168.10.5:443}` / `{snat: wan_ip}` | `dnat ip to 192.168.10.5:443` — family from the address; a single-address network group resolves |
+| `{dnat: {proto: tcp, map: {80: web, 443: db}}}` | `dnat ip to tcp dport map { 80 : …, 443 : … }` (address-only targets) |
+
+Anything else (`queue`, `notrack`, …) is a `raw:` rule.
+
+### Other rule forms
+
+- **`raw: "<nft rule>"`**: copied verbatim; the rule's only key.
+- **`include: <file>`**: replaced by the file's rules.
+- **`set: <concat set>`**: the concatenation lookup (above); may carry
+  statements and an action, not other matches.
+- **`vmap:`**: a verdict map, the rule's only key (plus `comment`):
+
+  ```yaml
+  - vmap:
+      key: iifname                  # iifname, oifname, iif, oif, proto, dport, sport, mark, state, saddr, daddr
+      map:
+        wan:
+          jump: wan_in
+        lo: accept
+  - vmap:
+      key: [iifname, oifname]       # concatenated keys: groups expand to every pair
+      map:
+        - match: [lan, wan]
+          jump: lan_to_wan
+        - match: [wan, lan]
+          action: drop
+  ```
+
+  Values are verdicts only: `accept`, `drop`, `return`, `continue`, `jump`,
+  `goto` (nft refuses reject or NAT in a vmap). `dport`/`sport` keys are
+  protocol+port lookups (`ssh` → `tcp . 22`; a bare number needs `/tcp`); with
+  a `proto` column the port column takes that row's protocol, and
+  `sport` + `dport` need one. Address keys are single-family. The same key
+  twice with different verdicts is an error.
+
+## What nftgen derives, and what it leaves to you
+
+Derived (mechanical, always the same answer, `nft -c` would reject a wrong
+one):
+
+- **Set types and flags** from the members (table above).
+- **Family split:** one line per family the addresses share; no shared family
+  is an error, never a silently widened rule.
+- **Syntax:** family prefixes, `meta l4proto`, protocol-qualified ports.
+- **Dedup and order:** duplicate elements dropped (first-seen order kept),
+  `ip` lines before `ip6`, files merged by name. Rule order is never changed.
+
+Left to you, because it is intent: which flows are allowed, the chain
+structure, default policies, named vs inline sets, conntrack and counters,
+rule order. An empty chain stays empty.
+
+## What fails the build
+
+- Unknown keys at any level; a policy without `tables:`.
+- Values of the wrong shape (`ct: bogus`, `log: {prefx: …}`, a two-key
+  `action`, `set-mss: 0`) — checked against one schema before rendering.
+- Undefined names; a group that resolves to nothing; definition and include
+  cycles; an include with a missing or misnamed section.
+- A named set mixing v4 and v6; a rule whose addresses share no family.
+- Object names that are reserved nft keywords (`counter`, `fwd`, `map`, …).
+- `flow-offload:` and an action in one rule (the verdict would never run).
+- Duplicate map keys; reject/NAT inside a vmap; a port on a protocol without
+  ports.
+
+**Not caught at build** (nft refuses them at load or `nft -c`, loudly):
+overlapping prefixes in a named set or a vmap (`10.0.0.0/8` and
+`10.1.0.0/16`), a port inside a range in a vmap. Merge or drop the covered
+entry.
+
+**Not modelled** (use `raw:` at table level): `netdev` per-device chains, set
+tuning (`size`, `gc-interval`), named maps, named stateful objects other than
+counters.

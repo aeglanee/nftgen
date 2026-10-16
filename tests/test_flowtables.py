@@ -43,6 +43,28 @@ def test_flowtable_unknown_device_errors():
         build_flowtables([{"name": "ft", "devices": ["eth0", "wan"]}], DEFS)
 
 
+def test_flowtable_takes_one_group_plain():
+    # a bare string was read letter by letter ("device 'w' is not a known…")
+    ft = build_flowtables([{"name": "ft", "devices": "wan"}], DEFS)[0]
+    assert ft.devices == ['"wan0"', '"wwan0"']
+
+
+def test_flowtable_devices_must_be_group_names():
+    # a mapping item crashed with TypeError (unhashable) instead of a BuildError
+    for bad in ([{"a": "b"}], {"wan": None}, 5):
+        with pytest.raises(BuildError, match="takes an interface group"):
+            build_flowtables([{"name": "ft", "devices": bad}], DEFS)
+
+
+def test_flowtable_device_shared_by_two_groups_listed_once():
+    # nft refuses a device listed twice ("File exists")
+    defs = Definitions.from_mappings(
+        {"interfaces": {"wan": ["wan0", "wwan0"], "uplinks": ["wan0"]}}
+    )
+    ft = build_flowtables([{"name": "ft", "devices": ["wan", "uplinks"]}], defs)[0]
+    assert ft.devices == ['"wan0"', '"wwan0"']
+
+
 def test_flowtable_needs_devices():
     with pytest.raises(BuildError, match="resolves to no devices"):
         build_flowtables([{"name": "ft"}], DEFS)

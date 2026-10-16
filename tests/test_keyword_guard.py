@@ -58,3 +58,10 @@ def test_chain_name_keyword_rejected():
 def test_flowtable_name_keyword_rejected():
     with pytest.raises(BuildError, match="flowtable name 'flow' is a reserved"):
         build_flowtables([{"name": "flow", "devices": ["wan"]}], DEFS)
+
+
+@pytest.mark.parametrize("name", [["a"], {"x": 1}, "", None, 5])
+def test_check_rejects_non_text_names(name):
+    # a list or mapping crashed the keyword lookup with TypeError (unhashable)
+    with pytest.raises(BuildError, match="name must be text"):
+        check_nft_name(name, "counter")

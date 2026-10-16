@@ -53,10 +53,9 @@ deployer — Ansible (later) ships and applies the output.
   activate it). `make lint-trunk` is an optional breadth sweep
   (shellcheck/shfmt/taplo/trufflehog/checkov via the trunk CLI) — not
   part of the gate.
-- **Maintain the progress tracker.** [`docs/progress.md`](docs/progress.md) is
-  the durable picture of where the project is. Update on milestones (decision
-  accepted, feature landed, phase complete) — not on every turn. Conversation
-  log holds nuance; the tracker holds orientation.
+- **Keep the status docs current.** [`CHANGELOG.md`](CHANGELOG.md) records
+  each release (and the unreleased `main`); [`TODO.md`](TODO.md) is the one
+  backlog. Update them when a change lands, not on every turn.
 - **Best practices are a deliverable.** nftables best practices discovered
   during work are captured in [docs/best-practices.md](docs/best-practices.md),
   [docs/sets-and-performance.md](docs/sets-and-performance.md), or
@@ -67,27 +66,25 @@ deployer — Ansible (later) ships and applies the output.
 
 ## Docs map (how the docs are structured)
 
-Root-level Markdown = the durable, reviewed record. `docs/` = focused
-findings/proposals. Each has one job — don't duplicate across them:
+Root-level Markdown = the durable, reviewed record. `docs/` = guides,
+cookbooks and the current review list. Each has one job — don't duplicate
+across them:
 
-- **[DESIGN.md](DESIGN.md)** — the spec: the YAML schema and what it renders to.
+- **[DESIGN.md](DESIGN.md)** — the reference: layout, every YAML key and what
+  it renders to, what nftgen derives, what fails the build, known limits.
 - **[DECISIONS.md](DECISIONS.md)** — *why* it's built this way; rationale +
   rejected alternatives + environmental notes. Read before changing a
   design choice.
-- **[RAW.md](RAW.md)** — the `raw:` escape-hatch cookbook.
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** — the Ansible/GitOps target end-state
   (not built).
-- **[PLAN.md](PLAN.md)** — the ordered plan + current status.
-  **[TODO.md](TODO.md)** — à-la-carte backlog.
-- **[docs/](docs/)** — findings & proposals, one topic per file:
-  - [docs/progress.md](docs/progress.md) — **the orientation tracker** (status,
-    decided, open agenda). Read this first to see where we are.
+- **[CHANGELOG.md](CHANGELOG.md)** — what shipped, per release.
+  **[TODO.md](TODO.md)** — the one backlog (open items only).
+- **[docs/](docs/)** — one topic per file:
   - [docs/authoring.md](docs/authoring.md) — **the hub**: firewall structure,
     the add-a-rule workflow, and the pick-the-right-tool decision table
     (sets/vmap/concat/map/jump/meter/pipapo); links the deep-dives.
-  - [docs/capabilities.md](docs/capabilities.md) — the render reference: what
-    nftgen turns YAML into (structured / raw-only / can't-express /
-    promotion queue).
+  - [docs/raw.md](docs/raw.md) — the `raw:` cookbook: verified recipes for
+    features without a key yet.
   - [docs/best-practices.md](docs/best-practices.md) — the cookbook: base-chain
     hygiene + matching patterns (independent/cartesian vs
     paired/concatenation), YAML→nft.
@@ -97,23 +94,13 @@ findings/proposals. Each has one job — don't duplicate across them:
   - [docs/maps.md](docs/maps.md) — nftables maps: verdict maps (dispatch) vs
     data maps (dnat targets), inline vs named, each as verified nft code
     blocks.
-  - [docs/automation/](docs/automation/) — what nftgen derives vs leaves to you,
-    each as define→generate + defaults + overrides (A–D + not-automated).
-  - [docs/testing-plan.md](docs/testing-plan.md) — the behavioral (netns) test
-    matrix: primitive semantics B01–B26 + the [example-fleet/](example-fleet/)
-    reachability truth table P01–P22; harness design + execution order.
+  - [example-fleet/README.md](example-fleet/README.md) — the realistic 3-site
+    reference: one policy per site, the forward skeleton, the choices behind it.
+  - [docs/testing.md](docs/testing.md) — test layers, how to run them (nft on
+    PATH), the behavioral (netns) matrix B01–B28 + P01–P22, env limits.
   - [docs/review-2026-10.md](docs/review-2026-10.md) — **the 2026-10
     review working list**: findings (C/D/E), agreed decisions, where we
     are, and the user's working preferences. Resume work here.
-  - [docs/step1-review.md](docs/step1-review.md) — coverage map, test audit,
-    the `nft -c` recipe, and the bugs it found.
-  - [docs/concatenations.md](docs/concatenations.md) — the concatenation-set
-    design proposal (why).
-  - [docs/concat-authoring.md](docs/concat-authoring.md) — concatenation
-    tuple-authoring options (decided + built: Option 1, `concat:`/`tuples:`).
-  - [docs/reference-fleet.md](docs/reference-fleet.md) — design record for
-    [example-fleet/](example-fleet/), the realistic 3-site reference
-    (opinionated skeleton, sets/vmap composition, dual-stack hygiene).
 
 When you produce a substantial review/finding, add a `docs/<topic>.md` and link
 it here so the structure stays discoverable.
@@ -122,7 +109,10 @@ it here so the structure stays discoverable.
 
 `nft` is in `/nix/store/*-nftables-*/bin/nft`; plain `nft -c` fails here
 (`NoNewPrivs` blocks netlink), but `unshare -rn <nft> -c -f <file>` validates
-correctly. See [docs/step1-review.md](docs/step1-review.md) §Deliverable 3.
+correctly (`validate.py` does this automatically). Put `nft` and `ip` on
+`PATH` before `make verify`, or the `nft -c` and behavioral tests skip and
+the run still looks green — the command is in
+[docs/testing.md](docs/testing.md).
 
 ## Later (from sessrumnir)
 

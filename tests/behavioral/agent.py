@@ -30,6 +30,11 @@ Ops:
       "flags": [...], "sport"?, "timeout"?}
                                        raw crafted TCP segment (arbitrary
                                        flags) -> replied | silent
+  {"op": "send_udp_frame", "ns": name, "src", "dst", "sport", "dport"}
+                                       one UDP datagram as a raw Ethernet
+                                       broadcast frame on the zone's eth0 —
+                                       any source, incl. 0.0.0.0 (a raw IP
+                                       socket would fill a zero source in)
   {"op": "nflog_capture", "group": N, "ns": name|null, "dst", "port",
       "timeout"?}                      bind NFLOG group N, trigger a probe to
                                        dst:port (expected to be dropped+logged),
@@ -407,6 +412,42 @@ def op_send_tcp(req: dict) -> dict:
     return {"ok": True, "result": "replied" if got == b"replied" else "silent"}
 
 
+def op_send_udp_frame(req: dict) -> dict:
+    """Send one UDP datagram as a broadcast Ethernet frame from a zone's eth0.
+    Fire and forget: the caller reads the router's counters."""
+    src, dst = req["src"], req["dst"]
+    sport, dport = int(req["sport"]), int(req["dport"])
+    payload = b"nftgen-probe"
+    udp = struct.pack("!HHHH", sport, dport, 8 + len(payload), 0) + payload  # csum 0
+    ip = struct.pack(
+        "!BBHHHBBH4s4s",
+        0x45,  # v4, ihl 5
+        0,
+        20 + len(udp),
+        0,
+        0,
+        64,  # ttl
+        socket.IPPROTO_UDP,
+        0,
+        socket.inet_aton(src),
+        socket.inet_aton(dst),
+    )
+    ip = ip[:10] + struct.pack("!H", _icmp_csum(ip)) + ip[12:]
+    eth = b"\xff" * 6 + bytes.fromhex("020000000001") + struct.pack("!H", 0x0800)
+    pid = os.fork()
+    if pid == 0:
+        try:
+            _setns_net(NAMESPACES[req["ns"]])
+            with socket.socket(socket.AF_PACKET, socket.SOCK_RAW) as s:
+                s.bind(("eth0", 0))
+                s.send(eth + ip + udp)
+            os._exit(0)
+        except OSError:
+            os._exit(3)
+    _, status = os.waitpid(pid, 0)
+    return {"ok": os.waitstatus_to_exitcode(status) == 0, "err": "send failed"}
+
+
 # NFLOG (nfnetlink_log) — subsystem 4, used by `log group N`.
 _NFNL_SUBSYS_ULOG = 4
 _NFULNL_MSG_PACKET = 0
@@ -497,6 +538,7 @@ def main() -> int:
         "probe": op_probe,
         "ping": op_ping,
         "send_tcp": op_send_tcp,
+        "send_udp_frame": op_send_udp_frame,
         "nflog_capture": op_nflog_capture,
         "run": op_run,
     }

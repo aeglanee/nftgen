@@ -1,5 +1,5 @@
 ---
-# Pair dispatch (testing-plan B07): forward branches on the concatenated
+# Pair dispatch (docs/testing.md B07): forward branches on the concatenated
 # `[iifname, oifname]` key. Only the za->zb direction is in the map; the
 # reversed pair must be a vmap no-match and die against the policy.
 tables:

@@ -1,120 +1,95 @@
-# nftgen — TODO / roadmap
+# TODO
 
-Phases 0–6 are done (skeleton → defs → named sets → rules/chains → host→.nft →
-nft -c validation → primitives A–E). What's left, à la carte:
+The one backlog: open items only. Shipped work is in
+[CHANGELOG.md](CHANGELOG.md); settled design is in [DECISIONS.md](DECISIONS.md).
+The current working list (review follow-ups, release order) is
+[docs/review-2026-10.md](docs/review-2026-10.md).
 
-## Safety / validation
+## Next
 
-- [x] **Strict rule-key validation** (done 2026-06-27). `RuleRenderer.render()`
-      now rejects unknown rule keys (`unknown = set(rule) - _KNOWN_RULE_KEYS` →
-      `BuildError`), so a typo like `dprot:` fails loudly instead of silently
-      rendering a broader rule. `raw:`/`vmap:` must be a rule's only key. Tests:
-      `test_unknown_key_errors`, `test_raw_must_be_alone`, `test_vmap_must_be_alone`.
+- [ ] **Release** the unreleased `main` (see CHANGELOG) — 0.8.0, or 1.0.0
+      together with a simpler install (PyPI and/or Ansible Galaxy).
+- [ ] **Blame notes** (spike on `feat/blame-notes` in nftgen, ansible-firewall,
+      sessrumnir): release the `annotate` hook, repin, open the PRs. Design
+      record: ansible-firewall `docs/blame-notes.md`.
 
-- [x] **Strict authoring surface everywhere** (done 2026-07-05, v0.2.0). The
-      rule-level strictness extended to every level after a review found silent
-      failure modes that `nft -c` does NOT catch:
-      - unknown keys error at policy/table/chain/set/vmap/flowtable level (a
-        typo'd `tables:`/`chains:` used to generate a valid **empty** ruleset —
-        with the deploy flush prefix, a firewall wipe);
-      - a policy with no `tables:` refuses to generate;
-      - `iifname`/`oifname`/flowtable devices must be defined interface
-        groups (a typo'd
-        name used to render a literal `iifname "lan_ifacse"` that deploys and
-        never matches — `nft -c` passes it); one-device groups (`eth0: [eth0]`)
-        are the literal escape hatch (a self-named item reads as a literal);
-      - non-numeric ports must be defined services; named-set refs are
-        type-checked (`iifname: <addr set>` used to pass `nft -c`!);
-      - groups that resolve to no elements error at use (`iifname { }` passes
-        `nft -c` as a dead rule);
-      - definition cycles and include cycles error with the chain path
-        (previously: silent empty expansion / RecursionError);
-      - missing defs dir / site file / include file are clean errors;
-      - base-chain `policy:` default is type-aware (`filter` → drop, `nat`/
-        `route` → accept — drop on a nat chain drops unmatched new flows);
-      - `nftgen build --check` exits 2 loudly when `nft -c` isn't usable
-        (used to silently skip validation);
-      - CLI prints `nftgen: error: <msg>` (rc 1) for authoring mistakes instead
-        of a traceback.
+## Structured keys (today via `raw:`)
 
-- [x] **reject nft-keyword names** — done 2026-07-11. A set/chain/counter/
-      flowtable named after a reserved nft keyword (`fwd`, `meta`, `counter`,
-      `map`, …) rendered to a ruleset nft can't parse — now a `BuildError` at
-      build (`check_nft_name`, keyword list empirically confirmed vs `nft -c`).
-      (`last`/`nat`/`input` etc. are contextual and stay valid names.)
+- [ ] `port/proto` literals in rule port keys: `dport: [dns, 8080/tcp]`
+      (vmaps already take them).
+- [ ] Named / reusable maps: a table-level `maps:` (verdict maps, dnat
+      targets) referenced from a `vmap:` rule or a dnat map.
+- [ ] `set-dscp`, rendered per family (`ip dscp set` / `ip6 dscp set`).
+- [ ] `redirect` action; `ct mark` (match + set); more meta matches
+      (`pkttype`, `skuid`, …).
+- [ ] Anti-spoofing (`fib saddr . mark . iif oif missing drop`) as a key,
+      strict or loose; the recipe is in
+      [docs/best-practices.md](docs/best-practices.md) §5, proven by
+      behavioral test B28.
 
-## Promote remaining `raw:` recipes to structured keys
+## Checks
 
-- [ ] **set-dscp** — deferred from Phase 6A because DSCP is family-specific
-      (`ip dscp set` vs `ip6 dscp set`). Needs to render per-family (like
-      addresses do) or require a family-scoped rule. `raw:` works meanwhile.
-- [x] **concatenations** (done 2026-06-27) — structured `concat:`/`proto:`/`tuples:`
-      set + `set:` rule; derives type, resolves names, auto-interval, single-family,
-      one-element-per-field validation. See [docs/concat-authoring.md](docs/concat-authoring.md),
-      `tests/test_concat.py`. Follow-ons: `proto: [tcp,udp]` list, per-row `proto`
-      field, family auto-split (`_v4`/`_v6`).
-- [ ] **named / reusable maps** — declare a table-level `maps:` (verdict maps,
-      or key→value maps for dnat targets); reference from a `vmap:` rule or a
-      dnat map. (Phase 6D did inline vmaps only.)
-- [ ] more meta matches (pkttype, skuid, …), `redirect` action, ct mark. (mark
-      match + the expanded **vmap keys** — `dport`/`sport`/`mark`/`state`/`saddr`/
-      `daddr` + concat `key: [iifname, oifname]` — are done; see docs/maps.md.)
+- [ ] `--host` as an allowlist (`[A-Za-z0-9][A-Za-z0-9._-]*`) instead of the
+      path-separator check.
+- [ ] Overlapping keys in a vmap or named set (a prefix inside another, a
+      port inside a range; in a vmap also `10.0.0.1` vs `10.0.0.1/32` with
+      different verdicts) fail only at nft load — detect them at build if it
+      ever matters. Table in
+      [docs/sets-and-performance.md](docs/sets-and-performance.md) §5.
+- [ ] Definition values checked where they're defined (`22/tpc`,
+      `99999/tcp`), not only where they're used.
 
-## Output
+## Deployment (ansible-firewall)
 
-- [ ] **JSON emitter** (experimented, shelved on branch `json-emitter` — see
-      [docs/progress.md](docs/progress.md)) — a second emitter on the same IR
-      (libnftables JSON), for
-      `nft -j` apply + round-tripping + live `add element`. The IR was built so
-      this is additive (Table/Set/Chain/Rule already model the objects).
+- [ ] **Drift detection** (discuss first). The role compares the render with
+      `/etc/nftables.conf`, never the live ruleset: after a hand-run
+      `nft flush ruleset` or `nft add rule … accept`, a re-run reports `ok`
+      and the router stays open until a reboot or the next rule change.
+      Sketch from 2026-10-16: `nftables_drift: off | warn | fix` (warn first);
+      load the render in a throwaway namespace on the host and compare
+      `nft -s -j list table …` against live — `-s` drops counter values;
+      compare only our own tables (other tools' tables are not ours);
+      ignore elements of sets declared without elements (runtime blocklists,
+      meters). `fix` re-applies through the rollback (runtime elements are
+      lost, as on any apply).
+- [ ] **Coexistence** (related): the file starts with `flush ruleset`, so
+      every apply also wipes Docker / netavark / libvirt / fail2ban tables.
+      Flushing only our own tables would let them coexist.
 
-## Testing & infra
+## Upstream nft
 
-- [x] **Behavioral harness** — done rootless via netns (`tests/behavioral/`,
-      B01–B03 green; no VM needed). Matrix breadth (B04+, P01–P20) tracked in
-      [PLAN.md](PLAN.md) §R1 / [docs/testing-plan.md](docs/testing-plan.md).
-- [x] **own venv** — `make install-dev` (2026-07-09), plus the lint suite +
-      pre-commit (`make verify`).
-- [x] **dynamic-set meters** — done 2026-07-10. `meter: {set, key, rate,
-      timeout}` renders `update @set { <key> [timeout T] limit rate R }` on a
-      `flags: [dynamic]` set (keys: saddr/daddr/iifname/oifname). Per-source
-      log sampling (best-practices §8d) is now structured, not raw.
-      Fail2ban-style throttling uses the same primitive.
-- [x] **opt-in `iif`/`oif` index matching** — done 2026-07-10. `iif:`/`oif:`
-      rule keys + vmap keys render the index form (`iif "wan0"`); name form
-      stays the default. Tradeoff (load-order, recreate) in best-practices §8a.
-      Not a concat field (that stays iifname — different set type).
-- [ ] **CI** — GitHub Actions: `pytest` + `nft -c` + `nftgen build example
-      --check` + golden drift + `make lint` (PLAN §R2).
+- [ ] nft 1.1.7 parse bug: a rule with `limit rate … reject with tcp reset`
+      followed by a line starting `tcp flags` fails with "syntax error,
+      unexpected junk"; each line passes alone. nftgen's output is correct and
+      `nft -c` catches it. Retest on a newer nft, report upstream, and note it
+      in [docs/best-practices.md](docs/best-practices.md). Repro:
 
-## DX / polish
+      ```nft
+      table inet t {
+        chain c {
+          type filter hook forward priority 0;
+          limit rate 4/minute reject with tcp reset
+          tcp flags syn drop
+        }
+      }
+      ```
 
-- [ ] **bare-set ergonomics (low priority, YAGNI for now).** Idea: let a bare set
-      *infer* its `type` from the elements and control the backend with
-      `interval: false` (defaults true) instead of restating `type: ipv4_addr`.
-      Snags: empty/live sets (no elements) can't infer a type so `type:` stays
-      required there; `interval: false` needs a guard (CIDR/range elements still
-      force interval). Only buys hash-vs-interval, which is unmeasurable at our
-      scale — the explicit `type:` bare set already covers it. Revisit if it
-      becomes common.
-- [ ] **nftgen JSON schema** for def + policy files. Right now the editor
-      mis-applies *Aerleon's* schema (the bogus "Missing property terms" /
-      "Network Definition" errors all over the example). A schema fixes that and
-      gives autocompletion.
-- [ ] update **DESIGN.md / RAW.md** to mark which `raw:` recipes are now
-      structured (A–E), and document statements / counters / flowtables /
-      vmaps / flags / per-table `raw:` in the spec.
-- [ ] **multi-site / `local`** is built in the defs loader (Phase 1) and wired
-      via `site:` (Phase 4). Possible later: layered scopes (`site:` as a list →
-      global → region → site), and an inline per-host `local:` override.
+## Editor and lint support
 
-## Notes / decisions already made (don't re-litigate)
+- [ ] Export the rule value schema (`nftgen/schema.py`) as a JSON Schema: editor
+      validation + completion for the file tree and for Ansible vars
+      (`nftgen_tables`, `nftgen_fragments__*`; templated values pass).
+- [ ] A pre-commit check over raw YAML using the same schema (could ride in
+      sessrumnir's duplicate-var scan).
 
-- Mirror nftables structure; author your own chains; no optimizer.
-- A definition becomes a **named set** only when listed under a table's `sets:`;
-  else it inlines. Named set = single family (mixed → error, split `_v4`/`_v6`).
-- Services carry proto (`22/tcp`) and nftgen never drops it: inline renders
-  the rule's proto's ports, a named service set is a `(proto . port)` pair set
-  (DECISIONS §2.2).
-- `raw:` (per-rule and per-table) is the escape hatch — nothing is ever blocked.
-- ct state is authored, never auto-injected; counters only where you ask.
+## Testing and dev setup
+
+- [ ] A Nix dev shell (python + nftables + iproute2): today `make verify`
+      silently skips the `nft -c` and netns tests when `nft` isn't on `PATH`.
+- [ ] A two-router behavioral harness (true cross-site end to end).
+
+## Ideas (low priority)
+
+- [ ] Layered sites: `site:` as a list (global → region → site), and an inline
+      per-host `local:` override.
+- [ ] Bare sets that infer `type:` from their elements.

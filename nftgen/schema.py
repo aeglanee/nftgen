@@ -167,6 +167,13 @@ def _log(key, value):
         isinstance(group, bool) or not isinstance(group, int) or not 0 <= group <= 65535
     ):
         _fail("log.group", "a number 0-65535", group)
+    if level is not None and group is not None:
+        # nft refuses both at load: `group` sends to NFLOG (userspace), which
+        # has no syslog level
+        raise BuildError(
+            f"rule key {key!r}: `level` and `group` can't be combined — "
+            f"`group` logs to NFLOG (userspace), `level` to the kernel log"
+        )
     return value
 
 

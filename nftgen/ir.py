@@ -1,8 +1,7 @@
 """Intermediate representation: typed nftables objects that render themselves.
 
 YAML -> IR (Table / NamedSet / Chain) -> text. Keeping the model in the middle
-(rather than building strings ad hoc) is what makes the output robust and lets a
-JSON emitter drop in later from the same objects.
+(rather than building strings ad hoc) keeps parsing, checking and output apart.
 """
 
 from __future__ import annotations
@@ -116,6 +115,9 @@ def check_nft_name(name, kind: str) -> None:
     """Reject a reserved nftables keyword used as an object name (§strict
     authoring surface: fail early with a clear message instead of leaking a
     cryptic nft parse error at deploy time)."""
+    if not isinstance(name, str) or not name:
+        # a list or mapping here crashed the keyword lookup (unhashable)
+        raise BuildError(f"{kind} name must be text, got {name!r}")
     if name in _NFT_KEYWORDS:
         raise BuildError(
             f"{kind} name {name!r} is a reserved nftables keyword — rename it "
@@ -340,17 +342,49 @@ _BARE_SET_KEYS = frozenset({"name", "type", "elements", "flags", "comment"})
 _CONCAT_SET_KEYS = frozenset({"name", "concat", "proto", "tuples", "family", "comment"})
 
 
+# nft's set flags; `auto-merge` is a statement of its own, not a flag
+SET_FLAGS = ("constant", "interval", "dynamic", "timeout")
+
+
+def _set_values(entry: dict, key: str) -> list:
+    """A bare set's `elements:`/`flags:` — one value or a list. A bare string
+    must not be read letter by letter."""
+    value = entry.get(key, [])
+    if not isinstance(value, list):
+        value = [value]
+    for v in value:
+        if isinstance(v, bool) or not isinstance(v, (str, int)):
+            raise BuildError(
+                f"set {entry['name']!r}: `{key}:` takes a value or a list of "
+                f"values, got {entry[key]!r}"
+            )
+    return value
+
+
 def _bare_set(entry: dict) -> NamedSet:
     if "name" not in entry or "type" not in entry:
         raise BuildError(f"bare set must have 'name' and 'type': {entry!r}")
     unknown = set(entry) - _BARE_SET_KEYS
     if unknown:
         raise BuildError(f"unknown set key(s) {sorted(unknown)}: {entry!r}")
+    flags = _set_values(entry, "flags")
+    for f in flags:
+        if f not in SET_FLAGS:
+            hint = (
+                " (`auto-merge` is a line of its own in nft, not a flag — use "
+                "table-level `raw:`)"
+                if f == "auto-merge"
+                else ""
+            )
+            raise BuildError(
+                f"set {entry['name']!r}: unknown flag {f!r} "
+                f"(nft set flags: {', '.join(SET_FLAGS)}){hint}"
+            )
     return NamedSet(
         name=entry["name"],
         type=entry["type"],
-        elements=[str(e) for e in entry.get("elements", [])],
-        flags=list(entry.get("flags", [])),
+        elements=[str(e) for e in _set_values(entry, "elements")],
+        flags=list(dict.fromkeys(flags)),
     )
 
 
@@ -372,6 +406,12 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:  # noqa: PLR0912 - 
     fields = entry.get("concat")
     if not name or not fields:
         raise BuildError(f"concat set needs 'name' and 'concat': {entry!r}")
+    if not isinstance(fields, list):
+        # a bare string was read letter by letter ("unknown field 's'")
+        raise BuildError(
+            f"concat set {name!r}: `concat:` takes a list of fields, "
+            f"e.g. [saddr, daddr, dport], got {fields!r}"
+        )
     unknown = set(entry) - _CONCAT_SET_KEYS
     if unknown:
         raise BuildError(f"unknown concat set key(s) {sorted(unknown)}: {entry!r}")
@@ -402,6 +442,11 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:  # noqa: PLR0912 - 
     rows: list[str] = []
     interval = False
     families: set[str] = set()
+    if not isinstance(entry.get("tuples", []), list):
+        raise BuildError(
+            f"concat set {name!r}: `tuples:` takes a list of rows, "
+            f"got {entry['tuples']!r}"
+        )
     for tup in entry.get("tuples", []):
         if not isinstance(tup, list) or len(tup) != len(fields):
             raise BuildError(

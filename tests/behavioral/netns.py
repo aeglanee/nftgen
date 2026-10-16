@@ -1,4 +1,4 @@
-"""Client for the netns behavioral harness (docs/testing-plan.md).
+"""Client for the netns behavioral harness (docs/testing.md).
 
 ``Harness`` launches tests/behavioral/agent.py under ``unshare -r -n`` (root
 in a user namespace that owns a fresh net namespace — the router) and drives
@@ -152,6 +152,15 @@ class Harness:
             flags=flags,
             timeout=timeout,
         )["result"]
+
+    def send_udp_frame(  # noqa: PLR0913 - a crafted datagram needs its fields
+        self, ns: str, src: str, dst: str, sport: int, dport: int
+    ) -> None:
+        """One UDP datagram as a broadcast Ethernet frame from a zone's eth0
+        (any source, incl. 0.0.0.0) — the result is read from counters."""
+        self._rpc(
+            op="send_udp_frame", ns=ns, src=src, dst=dst, sport=sport, dport=dport
+        )
 
     def nflog_capture(
         self, group: int, ns: str | None, dst: str, port: int, timeout: float = 3.0

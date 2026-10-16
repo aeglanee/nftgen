@@ -1099,14 +1099,26 @@ def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:
         if "name" not in spec:
             raise BuildError(f"flowtable needs a `name:`: {spec!r}")
         check_nft_name(spec["name"], "flowtable")
+        # one group or a list, like the rule keys; a bare string must not be
+        # read letter by letter
+        groups = spec.get("devices", [])
+        if isinstance(groups, str):
+            groups = [groups]
+        if not isinstance(groups, list) or not all(isinstance(g, str) for g in groups):
+            raise BuildError(
+                f"flowtable {spec['name']!r}: `devices:` takes an interface group "
+                f"or a list of them, got {groups!r}"
+            )
         devices: list[str] = []
-        for dev in spec.get("devices", []):
+        for dev in groups:
             if dev not in defs.interfaces:
                 raise BuildError(
                     f"flowtable {spec['name']!r}: device {dev!r} is not a known "
                     f"interface group (define it under `interfaces:`)"
                 )
             devices.extend(f'"{d}"' for d in defs.interface(dev))
+        # groups may share a device; nft refuses one listed twice ("File exists")
+        devices = list(dict.fromkeys(devices))
         if not devices:
             raise BuildError(f"flowtable {spec['name']!r} resolves to no devices")
         out.append(

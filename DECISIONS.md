@@ -1,322 +1,271 @@
-# Decisions & rationale
+# Decisions
 
-Why nftgen is the way it is. Each entry is a decision we made, the reasoning,
-and (where relevant) the alternative we rejected. This is the "don't lose
-context" record — read it before changing a design choice, and add to it when
-you make a new one.
+Why nftgen is built the way it is: each entry is a decision, the reason, and
+the alternative we rejected. Read the entry before changing a design choice;
+add one when you make a new choice. What nftgen does is in
+[DESIGN.md](DESIGN.md).
 
-Format: **Decision** → *Why* → *Rejected alternative* (if any).
+## 1. Core
 
----
+### 1.1 Mirror nftables
 
-## 1. Core philosophy
-
-### 1.1 Mirror nftables; don't hide it
-
-**Author the real nft structure** in YAML: tables → chains → rules, named sets,
-maps. You write your own base chains (hook/priority/policy) and your own regular
-chains (jump/goto targets).
-*Why:* nft's model is good and learnable. Hiding it behind an abstraction means
-re-learning a second, lossier model and fighting it at the edges. Mirroring it
-means the YAML *is* documentation for the ruleset, and anyone who knows nft can
-read it.
-*Rejected:* a high-level "intent" DSL that generates chains for you — that's an
-abstraction we'd forever be patching, and it hides the thing operators must
-understand to debug a firewall.
+The YAML has nft's structure: tables → chains → rules, named sets, maps. You
+write your own base chains (hook, priority, policy) and regular chains.
+*Why:* nft's model is good and learnable. An abstraction over it is a second,
+lossier model to learn and fight at the edges; the mirror lets anyone who
+knows nft read the YAML, and the YAML documents the ruleset.
+*Rejected:* a high-level intent language that generates chains — forever
+patched, and it hides what an operator must understand to debug a firewall.
 
 ### 1.2 No optimizer
 
-We do **not** build an optimizing compiler (no auto set-vs-linear decisions, no
-rule reordering, no auto-merging). The author decides structure.
-*Why:* at homelab/small-fleet scale the optimizer earns nothing — sets only beat
-linear matching in the low hundreds of entries, and east-west volume is owned by
-the network fabric, not this. An optimizer is a large, bug-prone surface that
-buys nothing here and removes the operator's control. Premature.
-*Rejected:* an aerleon/capirca-style optimizing backend. Explicitly out of scope.
+No set-vs-linear decisions, no reordering, no merging of rules: the author
+decides the structure.
+*Why:* at homelab and small-fleet scale an optimizer buys nothing (sets beat
+linear matching only in the hundreds of entries) and is a large, bug-prone
+surface that takes control away from the operator.
+*Rejected:* an Aerleon/Capirca-style optimizing backend.
 
-### 1.3 IR in the middle
+### 1.3 Typed objects in the middle
 
-YAML → **typed Python objects** (`Definitions`, `NamedSet`, `Chain`, `Table`,
-`Flowtable`, rules via `RuleRenderer`) → text. Objects render themselves.
-*Why:* keeps parsing, validation, and emission separable and testable; and it
-makes a **second emitter** (JSON, §4) purely additive — the objects already
-model the nft entities, so a JSON backend is "render differently," not "re-parse."
-*Rejected:* templating YAML straight to text — untestable, and locks us to one
-output format forever.
+YAML → typed objects (`Definitions`, `NamedSet`, `Chain`, `Table`,
+`Flowtable`, rules via `RuleRenderer`) → text; the objects render themselves.
+*Why:* parsing, checking and output stay separate and testable, and a new
+primitive is a local change (a rule key, a table object).
+*Rejected:* templating YAML straight to text.
 
 ### 1.4 `raw:` is the escape hatch
 
-Any rule can be `raw: "<verbatim nft>"`, and any table can carry a `raw:` block.
-*Why:* this is what makes the project **tractable**. We ship the structured 80%
-that's worth modelling; everything else is never *blocked* — it drops to `raw:`
-until (if ever) it earns a structured key. We're never stuck, and we never have
-to model the long tail to be useful.
-*This is load-bearing.* Without it, every obscure nft feature becomes a release
-blocker. With it, promotion to a key is an optimization, not a gate.
+Any rule can be `raw: "<nft>"`; any table can carry `raw:` declarations.
+*Why:* it keeps the project small. The common part is modelled; everything
+else is never blocked — it goes through `raw:` until it earns a key, so a
+missing key is never a release blocker. ([docs/raw.md](docs/raw.md))
 
-### 1.5 Explicit over magic / authored not auto
+### 1.5 Authored, not auto
 
-`ct state`, counters, conntrack, chains — only where the author writes them.
-Nothing is injected behind their back.
-*Why:* a firewall you can't fully predict from its source is a firewall you can't
-trust. Surprises in generated rules are how you get lockouts and silent holes.
+`ct state`, counters, conntrack, chains: only where the author writes them.
+*Why:* a firewall you can't predict from its source can't be trusted;
+surprises in generated rules are how lockouts and silent holes happen.
 
----
+### 1.6 Strict: fail the build, never render a weaker ruleset
 
-## 2. Schema decisions
+Unknown keys, undefined names, empty groups, cycles, wrong value shapes —
+all fail the build (since 0.2.0). Where nft would refuse the output at load
+and nftgen can tell cheaply (duplicate map keys, reject in a vmap), it fails
+at build too.
+*Why:* a silently ignored key is a rule wider or narrower than written; an
+empty include under `policy: drop` is a lockout. A loud error at build is
+the cheapest place to find either.
 
-### 2.1 Rule "form A" — structured mapping
+## 2. Schema
 
-A rule is a mapping of match keys + statement keys + a verdict
-(`saddr`/`daddr`, `iifname`/`oifname`, `proto`/`dport`, `ct`, `counter`,
-`action`, …).
-*Why:* readable, diffable, validatable; maps 1:1 to how you'd describe the rule
-out loud. The `raw:` form coexists for the tail.
+### 2.1 A rule is a structured mapping
 
-### 2.2 Services carry proto, and nftgen never drops it
+Match keys + statement keys + one action (`saddr`, `iifname`, `proto`,
+`dport`, `ct`, `counter`, `action`, …), with `raw:` alongside.
+*Why:* readable, diffable, checkable, and close to how you'd say the rule
+out loud.
 
-A service is `80/tcp` etc. — protocol **and** port. The rule still states the
-proto (`proto: tcp`), and every translation keeps the pairing:
+### 2.2 Services carry their protocol, and nftgen never drops it
 
-- **inline** → the service's ports *for that proto* (`tcp dport { 80, 443 }`);
-- **named set** (`sets: [web]`) → a `(proto . port)` pair set
-  (`type inet_proto . inet_service`, `elements = { tcp . 80, tcp . 443 }`),
-  matched as `meta l4proto tcp meta l4proto . th dport @web`;
-- **`dport`/`sport` vmap** → a pair lookup
-  (`meta l4proto . th dport vmap { tcp . 22 : … }`), since a vmap rule can't
-  carry a `proto:`; a bare port number has no proto and errors (write
-  `8080/tcp`); a `[proto, dport]` concat takes each row's proto's ports.
+A service is protocol **and** port (`80/tcp`); every render keeps the pair:
 
-*Why:* a port-only set (`{ 80, 443 }`, the pre-0.7.0 form) loses which proto
-each port belongs to — with `web: [80/tcp, 443/tcp, 443/udp]`, `proto: udp,
-dport: @web` also opened **udp/80**, while the inline form correctly opened
-only udp/443. Listing a definition under `sets:` must never change what the
-firewall lets through (§2.3); the pair set mirrors the definition exactly.
-The pre-0.7.0 port vmap (`th dport vmap { 22 : … }`) matched *any*
-protocol — udp/22 for `ssh: [22/tcp]`. Behaviorally proven (testing-plan
-B27, B22).
-**`proto:` is optional when the ports come from services:** each port then
-keeps its own protocol — one protocol renders the classic `tcp dport 22`,
-several render `meta l4proto . th dport { tcp . 53, udp . 53 }` (inline) or
-`meta l4proto . th dport @dns` (named), the same packets either way. A bare
-port number, a port-only set, or `sport` + `dport` together still need
-`proto:`.
+- inline → that protocol's ports (`tcp dport { 80, 443 }`);
+- named set → a pair set (`type inet_proto . inet_service`,
+  `tcp . 80`), matched as `meta l4proto . th dport @web`;
+- `dport`/`sport` vmap → a pair lookup (`meta l4proto . th dport vmap`); a
+  bare port number there needs `/tcp`.
+
+`proto:` is optional when the ports come from services: each port keeps its
+own protocol (`tcp dport 22`, or `meta l4proto . th dport { tcp . 53,
+udp . 53 }`). A bare port number, a port-only set, or `sport` + `dport`
+together still need `proto:`.
+*Why:* a port-only set loses which protocol a port belongs to. With
+`web: [80/tcp, 443/tcp, 443/udp]`, the pre-0.7.0 set `{ 80, 443 }` under
+`proto: udp` also opened udp/80, and the old port vmap matched any protocol
+(udp/22 for `ssh: [22/tcp]`) — both proven on the wire (behavioral tests
+B22, B27). Listing a definition under `sets:` must never change what the
+firewall lets through (§2.3).
 *Rejected:* erroring on the leaky combinations (forces `web_tcp`/`web_udp`
-splits for something nft can express exactly); port-only services
-(`web: [80]` — "any protocol" is the leak again; a hand-written `type:
-inet_service` bare set still exists for the rare port-only need).
+splits nft can express exactly); port-only services (the leak again; a
+hand-written `type: inet_service` set covers the rare real need).
 
 ### 2.3 A definition becomes a named set only via a table's `sets:`
 
-List a definition under a table's `sets:` and it's emitted as a **named set** and
-referenced by `@name`; don't list it and the same reference **inlines** as an
-anonymous `{ … }`. Per table, the author's call.
-*Why:* named sets are worth it when reused or live-updated; inlining is clearer
-for one-offs. The author chooses per table without changing the definition. (See
-`test_per_table_set_named_vs_inline`: `wan` is named in `filter`, inline in `nat`.)
+Listed under `sets:` → a named set, referenced `@name`; not listed → inline
+`{ … }`. Per table, the author's choice.
+*Why:* named sets pay off when reused or updated live; inline is clearer for
+one-offs. The definition doesn't change either way.
 
 ### 2.4 Named sets are single-family; rules are family-aware
 
-A named set is one family; **mixed v4/v6 in one set is a `BuildError`** ("split
-into `_v4`/`_v6`"). A rule renders **once per IP family** common to its address
-matches; an inline mixed group expands to v4 + v6 lines; incompatible families
+A named set mixing v4 and v6 is an error (split `_v4`/`_v6`). A rule renders
+once per family its addresses share; no shared family is an error.
+*Why:* it designs out Aerleon's silent widening, where a restriction quietly
+disappeared when families mixed. You get correct per-family rules or an
 error.
-*Why:* this **designs out Aerleon's "E2" silent-widen footgun**, where a
-restriction could quietly disappear when families mixed. Here a restriction never
-vanishes — you either get correct per-family rules or a loud error.
 
 ### 2.5 Deterministic output
 
-Sorted emission, order-preserving dedupe (`list(dict.fromkeys(...))`).
-*Why:* same input → byte-identical output. This is the **foundation of
-git-diff-based change detection** in deployment (§ DEPLOYMENT.md): a `.nft` diff
-means a *real* rule change, not reordering noise. Treat determinism as a
-correctness property, not a nicety.
+Sorted output, first-seen-order dedupe.
+*Why:* the same input gives byte-identical output, so a diff of the rendered
+ruleset is always a real rule change. Deployment change detection relies on
+it; treat it as correctness, not polish.
 
-### 2.6 Values are schema-checked, and one value or a list works everywhere
+### 2.6 Values are schema-checked; one value or a list everywhere
 
 Every rule value is checked against one table (`nftgen/schema.py`) before
-rendering; an error names the key, what it got, and what it takes. Matching
-keys take one value or a list (an inline set), the same for all of them.
-*Why:* keys were strict but values were read in ~30 places, each assuming a
-shape — `ct: established` rendered `ct state e,s,t,…`, `log: {prefx: …}`
-silently dropped the prefix, `icmp-type` silently dropped `dport` (a wider
-rule than written), lists and `log: false` crashed. One table closes the
-class, and can later be exported as a JSON Schema (editor + lint checks).
-Verdict words are a fixed list plus `reject with …`; everything else (`queue`,
-`notrack`) goes through `raw:`. `proto` stays open (a name or 0–255: `vrrp`,
-`112` are in use). *Rejected:* a `jsonschema` dependency (worse messages, no
-normalising `ct: established` → a list).
+rendering; the error names the key, what it got, and what it takes. Every
+matching key takes one value or a list.
+*Why:* values used to be read in ~30 places, each assuming a shape —
+`ct: established` rendered `ct state e,s,t,…`, `log: {prefx: …}` dropped the
+prefix, `icmp-type` silently dropped `dport` (a wider rule than written).
+One table closes the class and can later be exported as a JSON Schema.
+Actions are a fixed list plus `reject with …`; others go through `raw:`.
+Protocols are a name or 0–255 (`vrrp`, `112`), checked as the name.
+*Rejected:* a `jsonschema` dependency (worse messages, no normalising).
 
----
+### 2.7 Concatenation sets list their tuples
 
-## 3. Composition (definitions, sites, includes)
+A concat set states each tuple (`concat:` fields + `tuples:` rows); the rule
+references it with `set:`.
+*Why:* the tuples are the intent — which source may reach which destination
+on which port. Building them from groups needs a pairing rule: `zip` drifts
+when a list changes, `product` silently allows every combination.
+*Later, if reuse appears:* a fleet-wide `flows:` definition category; the
+`tuples:` shape lifts into it unchanged.
 
-### 3.1 nftgen owns composition — not Ansible vars
+### 2.8 Interfaces only through groups
 
-Composition is **nftgen's** job, done in its own files:
+Rules name interface groups from `interfaces:`, never devices.
+*Why:* a typo'd device name would render a rule that never matches; an
+undefined group fails the build. A single device gets a one-device group.
 
-- **definitions** (`definitions/networks|services|interfaces`) — shared,
-  defined once;
-- **site overlay** (`sites/<site>.yaml`) — a host selects it with `site:`;
-- **includes** (`policies/includes/*`) — shared rule/set fragments a host
-  pulls in.
-*Why:* nftgen's composition is **richer than Ansible's var layering** and avoids
-Ansible's "lists get replaced, not merged" pain. Forcing the firewall config into
-group_vars/host_vars would scatter one coherent ruleset and lose includes/site.
-The systemd_networkd filter-plugin pattern works *there* because that config
-is a flat per-interface dict; nftgen is not flat.
-*Consequence:* nftgen integrates as a **generator that emits files**, not as a
-vars-in Ansible filter. (See DEPLOYMENT.md.)
+## 3. Composition and integration
 
-### 3.2 Site overlay = additive merge, collision is an error
+### 3.1 Two front ends, one renderer
 
-`definitions/` is common; `sites/<site>.yaml` overlays it; a host picks one
-with `site:`. Merge is additive; a key defined in both that *collides* is an
-error.
-*Why:* per-site values (e.g. `local_users`) differ per location but the policy is
-shared. Additive-with-collision-error keeps it predictable — no silent override.
+- **File tree** (`nftgen build <root>`): `definitions/`, `sites/`,
+  `policies/includes/`, `policies/hosts/` → `generated/<host>.nft`.
+- **Embedded** (`render_tables()` + a resolver): sessrumnir authors the
+  firewall as Ansible inventory variables (`nftgen_definitions__*`,
+  `nftgen_fragments__*`, `nftgen_tables`), rendered on the controller by the
+  ansible-firewall `nftgen_render` plugin, which imports nftgen.
 
-### 3.3 Recursive definitions, cycle-guarded, deduped
+*Why vars mode for sessrumnir:* everything else there is inventory variables
+and roles; the firewall can reuse values the inventory already has
+(`wan: "{{ router_wan_ifaces }}"`) instead of retyping interfaces and
+subnets, and layers through Ansible groups like the rest. nftgen stays
+Ansible-agnostic: the resolver interface and
+`Definitions.from_named_mappings` are all the plugin uses.
+*Rejected (first plan, superseded at 0.6.0):* nftgen owning composition in
+its own tree, called as a CLI from a two-play playbook — it kept a second
+source of truth beside the inventory.
 
-Definitions can reference other definitions; expansion recurses with a `seen`
-cycle guard and order-preserving dedupe.
-*Why:* composable networks/services without infinite loops or duplicate elements.
+### 3.2 Layers add; a collision is an error
 
-### 3.4 Integration = two-play playbook, nftgen invoked as a CLI (not a plugin)
+`definitions/` + the host's `sites/<site>.yaml` (file tree), or the chunk
+variables a host resolves (vars mode): names add up, and one name defined
+twice is an error naming both origins.
+*Why:* per-site values differ while the policy is shared; no silent
+override.
 
-nftgen integrates with the sessrumnir collection as a **two-play playbook**: play
-one runs `nftgen build <root>` on the controller (localhost) → `generated/
-<host>.nft`; play two ships/validates/applies per host. nftgen is called as a
-**CLI / standalone lib (shell out)**, not an in-process Ansible filter or lookup
-plugin.
-*Why:* one tested entry point shared by CLI, CI, and the role (§5.2); preserves
-manual-path parity (DEPLOYMENT §7) and committed-render change detection
-(DEPLOYMENT §4); avoids coupling nftgen into the collection's plugin path.
-*Rejected:* the **filter-plugin-over-vars** pattern the `systemd_networkd` role
-uses (`vars | compile_networkd`). That fits flat per-interface vars; nftgen reads
-a **directory tree** with its own composition, so a `| filter` is the wrong mold
-(§3.1 already rules out vars-in). A lookup plugin *could* read the directory
-in-process, but it re-adds coupling for no gain over shelling out.
+### 3.3 Recursive definitions, cycle-checked, deduplicated
 
----
+A definition can list other definitions; expansion recurses with a cycle
+check and first-seen dedupe.
 
-## 4. Output & primitives (Phase 6 forms)
+### 3.4 No policy layer (considered, not adopted)
 
-These exist as structured keys; each was a small, independent add (the model
-works — a new primitive is a local change).
+A typed policy compiler (zones, zone-pair policies, generated dispatch and
+NAT, Aerleon-style) was specified in 2026 and never built (the spec is in git
+history: `docs/policy-design.md`, removed 2026-10).
+*Why:* vars mode with shared fragments covered the real need, and a
+generative layer breaks §1.2 and §1.5. Revisit only if writing chains by
+hand becomes the bottleneck across many sites.
 
-- **Statements** are rule keys: `limit`, `quota`, `log`, `set-mark`, `set-mss`,
-  `flow-offload`. They can be statement-only (no verdict), e.g. an MSS clamp.
-- **Counters** — named, declared at table level (`counters: [..]`) and referenced
-  by `counter: <name>`; or anonymous via `counter: true`.
-  *Why named:* readable `nft list counter` output and stable identity across reloads.
-- **Flowtables** — declared at table level (`flowtables:`), devices resolved from
-  interface groups; rules opt in with `flow-offload: <ft>`.
-- **vmaps** — inline verdict maps dispatching on `iifname`/`oifname`/`proto`
-  (`_VMAP_KEYS`). *Inline only for now;* named/reusable maps are a TODO (§ below).
-- **tcp-flags** — `flags:` is a list of `{match, mask}` clauses; expands and
-  multiplies across the family loop. Default mask handling lives in the renderer.
+## 4. Output
 
-### 4.1 JSON emitter (deferred, designed-for)
+### 4.1 Statements are rule keys
 
-A second emitter on the same IR (libnftables JSON) is a TODO, not built. The IR
-(§1.3) was shaped so it's additive. *Why deferred:* text output + `nft -c` covers
-current needs; JSON earns its place when we want `nft -j` apply, round-tripping,
-or live `add element`.
+`limit`, `quota`, `log`, `set-mark`, `set-mss`, `meter`, `flow-offload` are
+keys; a rule may have statements and no action (an MSS clamp).
+**Named counters** are declared on the table and referenced by name.
+*Why named:* readable `nft list counters` and a stable identity across
+reloads; the ansible-firewall metrics export only named counters.
 
-### 4.2 set-dscp deferred to `raw:`
+### 4.2 Verdict maps are inline for now
 
-DSCP is family-specific (`ip dscp set` vs `ip6 dscp set`), so it needs per-family
-rendering like addresses. Until promoted, it lives in `raw:` (see gateway example,
-`udp dport 5060 ip dscp set ef`). *Why:* don't ship a primitive that can silently
-do the wrong thing across families — `raw:` is honest meanwhile.
+`vmap:` builds an inline map; table-level named maps are on the backlog.
+*Why:* inline covers dispatch; named maps earn their place with live
+updates or reuse across chains.
 
-### 4.3 Comments are native nft comments, authored per object
+### 4.3 `set-dscp` stays in `raw:`
 
-A `comment:` key (rule, chain, set entry, table) renders nft's native
-`comment "…"`. *Why:* it lives in the kernel with the object, so whoever runs
-`nft list ruleset` on the router sees why a rule exists; a `#` line in the
-`.nft` file is discarded on load. Authored, never generated (§1.5).
-*Rejected:* copying YAML `#` comments into the output (YAML parsers drop
-them, and prose written for the source isn't written for the box).
+DSCP is family-specific (`ip dscp set` vs `ip6 dscp set`) and needs
+per-family rendering like addresses.
+*Why:* don't ship a key that can silently do the wrong thing on one family;
+`raw:` is honest meanwhile.
 
-### 4.4 Per-rule file notes are a front-end hook, not an nftgen feature
+### 4.4 Comments are native nft comments
+
+`comment:` on a rule, chain, set entry or table renders nft's
+`comment "…"`.
+*Why:* it lives in the kernel with the object, so `nft list ruleset` on the
+router shows why a rule exists; a `#` line in the file is dropped on load.
+*Rejected:* copying YAML `#` comments (YAML parsers drop them, and source
+prose isn't written for the box).
+
+### 4.5 Per-rule file notes are a hook, not a feature
 
 `render_tables(…, annotate=fn)` calls `fn(rule)` for each authored rule and
-appends a returned note as a trailing `# <note>` on every line the rule
-renders to. The Ansible front-end uses it for opt-in git-blame notes
-(`# nftgen-blame: <author> · <sha> · <date>`) from the source file:line Ansible
-tags each value with. *Why a hook:* nftgen stays git- and Ansible-agnostic;
-`#` comments vanish on load, so the kernel ruleset is identical with or
-without notes, and stripping them gives back the plain render byte for byte.
+appends the returned note as `# <note>` to every line the rule renders to.
+The Ansible front end uses it for opt-in git-blame notes
+(`# nftgen-blame: <author> · <sha> · <date>`).
+*Why a hook:* nftgen stays git- and Ansible-agnostic; `#` comments vanish on
+load, so the kernel ruleset is the same with or without notes, and removing
+them gives back the plain render byte for byte.
 *Why `#`, not `comment:`:* git metadata isn't the author's words, and the
-native comment's 128 bytes stay the author's.
+native comment's 128 bytes stay the author's (§4.4).
 
----
+## 5. Packaging
 
-## 5. Packaging & invocation
+### 5.1 Point at a directory, no config file
 
-### 5.1 Point at a directory (convention), no config file yet
+`nftgen build <root>` works from a fixed layout; flags override paths.
+*Why:* there's nothing to configure beyond paths, and they follow from the
+root. An optional `nftgen.yml` comes only when there's a real setting.
 
-`nftgen build <root>` works by convention from a fixed layout
-(`definitions/`, `sites/`, `policies/includes/`, `policies/hosts/`, output `generated/`).
-CLI flags override individual paths.
-*Why:* nftgen has ~nothing to configure beyond paths, and the paths are derivable
-from the root. A config file whose only job is to repeat the layout is overhead.
-*Rejected (for now):* an `aerleon.yml`-style config. Aerleon's was *optional* with
-flag equivalents — we'll add an optional `nftgen.yml` **only when** there's
-something to configure beyond paths (varying layout, or real settings like default
-family / output format). YAGNI until then; `build()` takes resolved paths so a
-config loader slots in front later with no refactor.
+### 5.2 One package, thin CLI
 
-### 5.2 Importable package + CLI (single entry, `build()`)
+`build(root)` → `{host: text}` and `render_tables()` are the entry points;
+the CLI wraps them. CLI, CI and the Ansible plugin share one tested path.
 
-nftgen stays an importable package (`from nftgen ... import generate` today;
-`build(root) -> {host: text}` next). The CLI is a thin wrapper. The same `build()`
-serves manual use, future CI, and the Ansible role.
-*Why:* one tested entry point, three consumers. A bundled single-file /
-`module_utils` form for Ansible is a *separate, optional* packaging step, not the
-primary shape.
+### 5.3 The output is the deploy artifact
 
-### 5.3 `build()` output is the deploy artifact (complete config, `flush ruleset`)
+`nftgen build` renders every host; each file is complete: shebang +
+`flush ruleset` + the host's tables, shipped verbatim as
+`/etc/nftables.conf`.
+*Why build-all:* rendering is cheap and deterministic, and change detection
+needs every host. *Why `flush ruleset`:* the file is one replaceable,
+atomic unit, safe to reapply. It isn't a hidden rule (§1.5): it's visible
+at the top and belongs to the deploy artifact, not the policy. The
+single-file mode and `generate()` stay flush-free for embedding.
+*Rejected:* a wrapper `nftables.conf` that flushes and includes a flush-free
+file — one more indirection, and the reviewed file is no longer the one on
+the box.
 
-`nftgen build <root>` regenerates **all** hosts → `generated/<host>.nft`; a
-`--host <name>` flag builds just one. Each file is a **complete, directly-
-applyable config**: shebang + `flush ruleset` + the host's tables. It ships
-verbatim as the target's `/etc/nftables.conf` (DEPLOYMENT §10, "Shape A").
-*Why build-all:* generation is cheap + deterministic, and change-detection needs
-every host regenerated to diff (DEPLOYMENT §4); `--host` is a manual-speed convenience.
-*Why `flush ruleset`:* makes the file a complete replaceable unit — directly
-`nft -f`-applyable, atomic, reapply-safe (the §5 reconcile). It does **not**
-violate §1.5 "explicit over magic": it's the *deploy command's* artifact
-(that's `build()`'s job), the flush is visible at the top of the output, and
-it injects no firewall *rule* behind the author's back. The lower-level
-`generate()` (one
-policy → text) stays flush-free for composition/embedding.
-*Rejected:* a wrapper `nftables.conf` that `flush`+`include`s a flush-free file
-(Shape B) — keeps output "purer" but breaks committed==on-box and adds
-indirection for no gain.
+## 6. Environment notes
 
----
+- Plain `nft -c` fails in a `NoNewPrivs` sandbox (netlink); `unshare -rn
+  nft -c -f <file>` works, and `validate.py` falls back to it.
+- Editor warnings like "Missing property terms" on nftgen YAML are VS Code
+  applying **Aerleon's** JSON schema; an nftgen schema export is on the
+  backlog.
 
-## 6. Environmental notes (not decisions, but don't re-discover)
+## Relationship to the Aerleon fork
 
-- `nft -c` **cannot run in this dev sandbox** (`netlink: cache initialization
-  failed: Operation not permitted` — no_new_privs blocks the unprivileged check
-  too). The 3 validation tests skip cleanly here; they light up on a real box.
-  The failure is *environmental, not our syntax* (confirmed via nix-shell).
-- The editor's "Missing property terms" / "Network Definition" warnings on
-  nftgen YAML are VSCode mis-applying **Aerleon's** JSON schema. False positives;
-  an nftgen schema (TODO) fixes them.
-
----
-
-## Relationship to the earlier Aerleon fork
-
-nftgen is a **clean-room, nftables-only** rebuild, not the fork. The Aerleon
-nftables fork (`~/repo/aerleon`, tag `v1.16.0-nft.6`) was the exploration that
-taught us what we wanted; nftgen keeps the good ideas (definitions model — hence
-the README acknowledgment) and drops the rest (multi-platform ACL model, optimizer,
-silent family widening). Decisions here intentionally diverge from Aerleon where
-its behavior was a footgun (§2.2, §2.4).
+nftgen is a clean-room, nftables-only rebuild. The earlier Aerleon nftables
+fork showed what we wanted; nftgen keeps its definitions model (credited in
+the README) and drops the multi-platform model, the optimizer and the silent
+family widening (§2.2, §2.4).

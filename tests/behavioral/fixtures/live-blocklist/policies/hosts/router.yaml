@@ -1,5 +1,5 @@
 ---
-# Live blocklist (testing-plan B12): a bare set declared empty in the deploy
+# Live blocklist (docs/testing.md B12): a bare set declared empty in the deploy
 # artifact; the drop rule references it with the explicit `@` form. The
 # operational contract — add at runtime, entry expires — is what's under test.
 tables:

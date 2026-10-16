@@ -1,5 +1,5 @@
 ---
-# Statements & primitives (testing-plan B18-B23, B26).
+# Statements & primitives (docs/testing.md B18-B23, B26).
 #   B18: icmp echo answered on v4 and v6 (icmpv6 ND kept working)
 #   B19: `limited` accepts at most 2 new conns/minute, then falls through
 #   B20: `quota_svc` accepts until 1 mbyte has passed, then falls through

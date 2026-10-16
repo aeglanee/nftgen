@@ -1,5 +1,5 @@
 ---
-# Group expansion (testing-plan B08): the single `ab_group` map entry expands
+# Group expansion (docs/testing.md B08): the single `ab_group` map entry expands
 # to one element per member device — traffic from either member device hits
 # the same verdict chain; a non-member zone falls to policy.
 tables:
