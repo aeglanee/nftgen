@@ -2,76 +2,102 @@
 
 [![ci](https://github.com/aeglanee/nftgen/actions/workflows/ci.yml/badge.svg)](https://github.com/aeglanee/nftgen/actions/workflows/ci.yml)
 
-A small, **nftables-only** firewall-as-code generator. YAML definitions +
-host policies → a native `.nft` ruleset you keep in git and apply with `nft -f`.
+A small, **nftables-only** firewall-as-code generator: YAML definitions +
+host policies → one native `.nft` ruleset per host, applied with `nft -f`.
 
-> Status: **working standalone generator** (Phases 0–6: definitions, named sets,
-> rules/chains, host→`.nft` with includes + per-site overlay, `nft -c` validation,
-> primitives — statements, counters, flowtables, vmaps, concatenations,
-> tcp-flags; strict
-> authoring surface — unknown keys/names and empty groups fail the build).
-> Latest release **v0.4.0**; 240 tests. Ansible integration: the sessrumnir
-> `nftables` role consumes
-> `nftgen build` (Step 3a done; 3b/4 remain — see [PLAN.md](PLAN.md)).
->
-> **Docs:** [docs/authoring.md](docs/authoring.md) (**start here** — structure,
-> workflow, decision table) · [DESIGN.md](DESIGN.md) (spec) ·
-> [DECISIONS.md](DECISIONS.md) (why) ·
-> [DEPLOYMENT.md](DEPLOYMENT.md) (GitOps/Ansible vision) · [PLAN.md](PLAN.md)
-> (plan & status) · [docs/raw.md](docs/raw.md) (`raw:` cookbook) · [TODO.md](TODO.md)
-> (backlog) · [CLAUDE.md](CLAUDE.md) (working guardrails).
+- **It mirrors nftables.** Tables → chains → rules, sets, maps: you write
+  your own chains, and the YAML reads like the ruleset it becomes.
+- **Definitions** (`networks`, `services`, `interfaces`) compose by name,
+  per site; nftgen derives set types, splits rules per address family and
+  keeps each port with its protocol.
+- **Strict.** Unknown keys, undefined names and values of the wrong shape
+  fail the build; nothing is guessed, optimized or injected.
+- **Deterministic.** The same input gives the same bytes, so a diff of the
+  output is a real rule change.
+- **`raw:`** reaches anything nft can do that has no key yet.
 
-## Idea
+Latest release **v0.7.0**; `main` has unreleased changes (see
+[CHANGELOG.md](CHANGELOG.md)).
 
-- **Definitions** (`networks` / `services` / `interfaces`) — composable, merged.
-- **Host policies** mirror nftables: `tables → sets → chains → rules`. You author
-  your own chains; the tool adds named definitions, named-set emission,
-  composition, includes, per-site `local` definitions, and validation.
-- **You author the structure** — no optimizer. Best practices are easy defaults
-  you choose (conntrack-early, named sets, vmaps), not magic.
-- A `raw:` escape hatch (per rule and per table) means anything nft can express
-  is reachable today.
+## Example
 
-## Layout
-
-```text
-definitions/                 definitions (common to every host)
-sites/<site>.yaml    per-site definitions (selected by a host's `site:`)
-policies/
-  includes/          shared rule fragments (- include:)
-  hosts/<host>.yaml  one host -> one generated .nft
+```yaml
+# definitions/networks.yaml
+networks:
+  mgmt: [192.168.9.0/24, fd00:9::/64]
+# definitions/services.yaml
+services:
+  ssh: [22/tcp]
+# policies/hosts/gw1.yaml
+tables:
+  - family: inet
+    name: filter
+    chains:
+      - name: input
+        hook: input
+        rules:
+          - ct: [established, related]
+            action: accept
+          - saddr: mgmt
+            proto: tcp
+            dport: ssh
+            action: accept
 ```
 
-See [example/](example/) for a worked multi-host example.
+`nftgen build .` → `generated/gw1.nft`:
 
-## Usage
+```nft
+table inet filter {
+    chain input {
+        type filter hook input priority 0; policy drop;
+        ct state established,related accept
+        ip saddr 192.168.9.0/24 tcp dport 22 accept
+        ip6 saddr fd00:9::/64 tcp dport 22 accept
+    }
+}
+```
+
+## Use
 
 ```bash
-# one host (composition primitive, no flush)
-nftgen policies/hosts/router1.yaml --defs definitions --out generated/router1.nft
+pip install "nftgen @ git+https://github.com/aeglanee/nftgen@v0.7.0"
 
-# whole fleet from a directory (convention layout) — the deploy artifacts
-nftgen build <root>                 # → generated/<host>.nft for every policies/hosts/*.yaml
-nftgen build <root> --host router1  # just one host
-nftgen build <root> --host router1 --stdout  # render one host to stdout, write nothing
+nftgen build <root>                       # every host → <root>/generated/
+nftgen build <root> --host gw1 --stdout   # one host to stdout, write nothing
+nftgen build <root> --check               # also validate each file with nft -c
 ```
 
-`--stdout` prints the host's ruleset instead of writing `generated/` — for
-previewing a change (`… --stdout | git diff --no-index generated/router1.nft -`),
-piping, or a deployer that renders on the fly without mutating the committed
-tree. It requires `--host` (stdout is a single stream = a single host).
+Each output is a complete file (`flush ruleset` + the host's tables) that
+ships as `/etc/nftables.conf`. With Ansible, the
+[ansible-firewall](https://github.com/sessrumnir/ansible-firewall)
+collection renders from inventory variables instead and applies behind a
+rollback timer ([DEPLOYMENT.md](DEPLOYMENT.md)).
 
-`build` output is a complete, applyable ruleset (`#!/usr/sbin/nft -f` +
-`flush ruleset` + tables) that ships verbatim as `/etc/nftables.conf`.
+## Docs
+
+- [docs/authoring.md](docs/authoring.md) — **start here**: firewall
+  structure, adding a rule, which tool to use.
+- [DESIGN.md](DESIGN.md) — the reference: every key and what it renders to.
+- [DECISIONS.md](DECISIONS.md) — why it's built this way.
+- [docs/best-practices.md](docs/best-practices.md),
+  [docs/sets-and-performance.md](docs/sets-and-performance.md),
+  [docs/maps.md](docs/maps.md), [docs/raw.md](docs/raw.md) — nftables
+  cookbooks, every example checked with `nft -c`.
+- [example-fleet/](example-fleet/) — a realistic 3-site reference;
+  [example/](example/) — a small one.
+- [CHANGELOG.md](CHANGELOG.md) · [TODO.md](TODO.md) ·
+  [docs/testing.md](docs/testing.md).
 
 ## Develop
 
 ```bash
-python -m pytest
+make install-dev   # .venv with nftgen (editable), linters, pre-commit hook
+make verify        # lint + tests — put nft and ip on PATH, see docs/testing.md
 ```
 
 ## License
 
-MIT (see [LICENSE](LICENSE)). The YAML definitions model reimplements concepts
-from [Aerleon](https://github.com/aerleon/aerleon) (Apache-2.0) clean-room — no
-Aerleon code is used; the acknowledgment is courtesy, not a license obligation.
+MIT (see [LICENSE](LICENSE)). The definitions model reimplements concepts
+from [Aerleon](https://github.com/aerleon/aerleon) (Apache-2.0) clean-room —
+no Aerleon code is used; the acknowledgment is courtesy, not a license
+obligation.
