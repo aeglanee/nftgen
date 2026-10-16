@@ -41,6 +41,10 @@ build with a clear error:
   by letter); a device shared by two groups is listed once.
 - Hand-written sets: `flags:` must be nft set flags (`auto-merge` isn't one);
   `flags:`/`elements:` take one value plain instead of letter by letter.
+- Table `counters:`/`raw:` take one value plain (`counters: bad` rendered
+  counters `b`, `a`, `d`); a blank `chains:` is empty instead of a crash;
+  wrong shapes (`chains:` as a mapping, a non-text name, `concat:` as a
+  string) are clean errors.
 - `log: {}` logs; OS errors are clean errors; a closed stdout pipe exits
   quietly (141).
 

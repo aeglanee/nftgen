@@ -124,6 +124,40 @@ def _resolve_list(items: list, key: str, resolver, stack: tuple = ()) -> list:
     return out
 
 
+def _check_table(tspec, where: str) -> None:
+    """A table's shape: a mapping of known keys with `family:` and `name:`;
+    the list-of-mapping keys are lists."""
+    if not isinstance(tspec, dict):
+        raise BuildError(f"{where}a table must be a mapping, got {tspec!r}")
+    unknown = set(tspec) - _TABLE_KEYS
+    if unknown:
+        raise BuildError(
+            f"{where}unknown table key(s) {sorted(unknown)}: "
+            f"{tspec.get('name', tspec)!r}"
+        )
+    if "family" not in tspec or "name" not in tspec:
+        raise BuildError(f"{where}a table needs `family:` and `name:`: {tspec!r}")
+    for key in ("sets", "chains", "flowtables"):
+        if tspec.get(key) is not None and not isinstance(tspec[key], list):
+            # a single mapping was iterated by its keys (confusing errors)
+            raise BuildError(
+                f"{where}table {tspec['name']!r}: `{key}:` must be a list, "
+                f"got {tspec[key]!r}"
+            )
+
+
+def _one_or_list(value, key: str, where: str) -> list:
+    """A table key that takes one value or a list; a bare string must not be
+    read letter by letter (`counters: bad` rendered counters b, a, d)."""
+    if value is None:  # a blank key (`counters:`) is empty
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        return [value]
+    raise BuildError(f"{where}table `{key}:` takes a value or a list, got {value!r}")
+
+
 def render_tables(
     tables: list,
     defs: Definitions,
@@ -147,21 +181,16 @@ def render_tables(
         raise BuildError(f"{where}`tables:` must be a list of tables, got {tables!r}")
     out_tables = []
     for tspec in tables:
-        if not isinstance(tspec, dict):
-            raise BuildError(f"{where}a table must be a mapping, got {tspec!r}")
-        unknown = set(tspec) - _TABLE_KEYS
-        if unknown:
-            raise BuildError(
-                f"{where}unknown table key(s) {sorted(unknown)}: "
-                f"{tspec.get('name', tspec)!r}"
-            )
-        if "family" not in tspec or "name" not in tspec:
-            raise BuildError(f"{where}a table needs `family:` and `name:`: {tspec!r}")
+        _check_table(tspec, where)
         sets = build_sets(_resolve_list(tspec.get("sets", []), "sets", resolver), defs)
-        counters = list(tspec.get("counters", []))
+        counters = _one_or_list(tspec.get("counters", []), "counters", where)
         for c in counters:
             check_nft_name(c, "counter")
-        flowtables = build_flowtables(tspec.get("flowtables", []), defs)
+        raw = _one_or_list(tspec.get("raw", []), "raw", where)
+        for line in raw:
+            if not isinstance(line, str):
+                raise BuildError(f"{where}table `raw:` takes nft text, got {line!r}")
+        flowtables = build_flowtables(tspec.get("flowtables") or [], defs)
         renderer = RuleRenderer(
             defs,
             {s.name: s for s in sets},
@@ -169,7 +198,7 @@ def render_tables(
             flowtables={ft.name for ft in flowtables},
         )
         chains = []
-        for spec in tspec.get("chains", []):
+        for spec in tspec.get("chains") or []:  # a blank `chains:` is empty
             if not isinstance(spec, dict):
                 raise BuildError(f"{where}a chain must be a mapping, got {spec!r}")
             if not isinstance(spec.get("rules", []), list):
@@ -185,7 +214,7 @@ def render_tables(
                 name=tspec["name"],
                 sets=sets,
                 chains=chains,
-                raw=list(tspec.get("raw", [])),
+                raw=raw,
                 counters=counters,
                 flowtables=flowtables,
                 comment=(

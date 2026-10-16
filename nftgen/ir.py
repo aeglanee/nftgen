@@ -115,6 +115,9 @@ def check_nft_name(name, kind: str) -> None:
     """Reject a reserved nftables keyword used as an object name (§strict
     authoring surface: fail early with a clear message instead of leaking a
     cryptic nft parse error at deploy time)."""
+    if not isinstance(name, str) or not name:
+        # a list or mapping here crashed the keyword lookup (unhashable)
+        raise BuildError(f"{kind} name must be text, got {name!r}")
     if name in _NFT_KEYWORDS:
         raise BuildError(
             f"{kind} name {name!r} is a reserved nftables keyword — rename it "
@@ -403,6 +406,12 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:  # noqa: PLR0912 - 
     fields = entry.get("concat")
     if not name or not fields:
         raise BuildError(f"concat set needs 'name' and 'concat': {entry!r}")
+    if not isinstance(fields, list):
+        # a bare string was read letter by letter ("unknown field 's'")
+        raise BuildError(
+            f"concat set {name!r}: `concat:` takes a list of fields, "
+            f"e.g. [saddr, daddr, dport], got {fields!r}"
+        )
     unknown = set(entry) - _CONCAT_SET_KEYS
     if unknown:
         raise BuildError(f"unknown concat set key(s) {sorted(unknown)}: {entry!r}")
@@ -433,6 +442,11 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:  # noqa: PLR0912 - 
     rows: list[str] = []
     interval = False
     families: set[str] = set()
+    if not isinstance(entry.get("tuples", []), list):
+        raise BuildError(
+            f"concat set {name!r}: `tuples:` takes a list of rows, "
+            f"got {entry['tuples']!r}"
+        )
     for tup in entry.get("tuples", []):
         if not isinstance(tup, list) or len(tup) != len(fields):
             raise BuildError(
