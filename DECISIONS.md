@@ -178,7 +178,8 @@ check and first-seen dedupe.
 ### 3.4 No policy layer (considered, not adopted)
 
 A typed policy compiler (zones, zone-pair policies, generated dispatch and
-NAT, Aerleon-style) was specified in 2026 and never built.
+NAT, Aerleon-style) was specified in 2026 and never built (the spec is in git
+history: `docs/policy-design.md`, removed 2026-10).
 *Why:* vars mode with shared fragments covered the real need, and a
 generative layer breaks §1.2 and §1.5. Revisit only if writing chains by
 hand becomes the bottleneck across many sites.

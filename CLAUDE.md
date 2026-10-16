@@ -66,8 +66,9 @@ deployer — Ansible (later) ships and applies the output.
 
 ## Docs map (how the docs are structured)
 
-Root-level Markdown = the durable, reviewed record. `docs/` = focused
-findings/proposals. Each has one job — don't duplicate across them:
+Root-level Markdown = the durable, reviewed record. `docs/` = guides,
+cookbooks and the current review list. Each has one job — don't duplicate
+across them:
 
 - **[DESIGN.md](DESIGN.md)** — the reference: layout, every YAML key and what
   it renders to, what nftgen derives, what fails the build, known limits.
@@ -78,7 +79,7 @@ findings/proposals. Each has one job — don't duplicate across them:
   (not built).
 - **[CHANGELOG.md](CHANGELOG.md)** — what shipped, per release.
   **[TODO.md](TODO.md)** — the one backlog (open items only).
-- **[docs/](docs/)** — findings & proposals, one topic per file:
+- **[docs/](docs/)** — one topic per file:
   - [docs/authoring.md](docs/authoring.md) — **the hub**: firewall structure,
     the add-a-rule workflow, and the pick-the-right-tool decision table
     (sets/vmap/concat/map/jump/meter/pipapo); links the deep-dives.
@@ -98,10 +99,6 @@ findings/proposals. Each has one job — don't duplicate across them:
   - [docs/review-2026-10.md](docs/review-2026-10.md) — **the 2026-10
     review working list**: findings (C/D/E), agreed decisions, where we
     are, and the user's working preferences. Resume work here.
-  - [docs/concatenations.md](docs/concatenations.md) — the concatenation-set
-    design proposal (why).
-  - [docs/concat-authoring.md](docs/concat-authoring.md) — concatenation
-    tuple-authoring options (decided + built: Option 1, `concat:`/`tuples:`).
   - [docs/reference-fleet.md](docs/reference-fleet.md) — design record for
     [example-fleet/](example-fleet/), the realistic 3-site reference
     (opinionated skeleton, sets/vmap composition, dual-stack hygiene).

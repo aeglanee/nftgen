@@ -190,8 +190,8 @@ rules:
 
 The pairing stays **author-defined** — the tool can't infer which source
 pairs with which destination (that's policy, not derivable); the concat set
-lets you *compose* the tuples, never guess them. Decision + options:
-[concat-authoring.md](concat-authoring.md).
+lets you *compose* the tuples, never guess them. Why:
+[DECISIONS.md](../DECISIONS.md) §2.7.
 
 ---
 
