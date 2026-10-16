@@ -1,4 +1,4 @@
-"""Layer 4 — behavioral: packets obey the generated ruleset (testing-plan §1).
+"""Layer 4 — behavioral: packets obey the generated ruleset (docs/testing.md).
 
 B01–B03 on the `basic` fixture, applied as the real deploy artifact (build()
 output, flush form) inside a router namespace. Every negative assertion has a

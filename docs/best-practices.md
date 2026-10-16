@@ -372,7 +372,7 @@ so an `accept` written after `flow-offload:` **never executes**. In a
 `policy: drop` forward chain the reply packet of every handshake is then
 dropped and *no connection ever establishes* — while `nft -c` reports the
 ruleset perfectly valid. Only traffic reveals it (this cost us a real bug;
-see B23 in [testing-plan.md](testing-plan.md)).
+see B23 in [testing.md](testing.md)).
 
 nftgen therefore **rejects the combined form at build time**. Author it as
 two rules — which is also what the wiki's own example does, deciding the

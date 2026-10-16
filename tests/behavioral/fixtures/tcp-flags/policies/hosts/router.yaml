@@ -1,5 +1,5 @@
 ---
-# tcp-flags scrub + log (testing-plan B24, B25).
+# tcp-flags scrub + log (docs/testing.md B24, B25).
 #   B24: crafted fin+syn and null-scan segments are dropped by the masked
 #        compares and attributed to the shared bad_tcp counter; a normal SYN
 #        to the same port still connects (the scrub isn't a blanket drop).

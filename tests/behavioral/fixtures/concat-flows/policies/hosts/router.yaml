@@ -1,5 +1,5 @@
 ---
-# Concat paired flows (testing-plan B11): forward allows exactly
+# Concat paired flows (docs/testing.md B11): forward allows exactly
 # A->server:9000 and B->server:9001 as tuples. A->9001 / B->9000 are the
 # cartesian cross-combinations and must time out.
 tables:

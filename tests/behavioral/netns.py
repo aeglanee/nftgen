@@ -1,4 +1,4 @@
-"""Client for the netns behavioral harness (docs/testing-plan.md).
+"""Client for the netns behavioral harness (docs/testing.md).
 
 ``Harness`` launches tests/behavioral/agent.py under ``unshare -r -n`` (root
 in a user namespace that owns a fresh net namespace — the router) and drives

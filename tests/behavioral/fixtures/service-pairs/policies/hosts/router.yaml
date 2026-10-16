@@ -1,5 +1,5 @@
 ---
-# Named service set keeps proto (testing-plan B27): `app` is listed under
+# Named service set keeps proto (docs/testing.md B27): `app` is listed under
 # `sets:`, so it renders a (proto . port) pair set and the rule matches
 # `meta l4proto . th dport @app`. A port-only set { 7000, 7001 } with
 # `tcp dport @app` would also accept tcp/7001.

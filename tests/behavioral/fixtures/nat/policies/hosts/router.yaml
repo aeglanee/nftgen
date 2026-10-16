@@ -1,5 +1,5 @@
 ---
-# NAT cluster (testing-plan B13-B17).
+# NAT cluster (docs/testing.md B13-B17).
 #   B13: single-target dnat with port rewrite (:8080 -> web:7000)
 #   B14: inline dnat data map (:80 -> web, :2222 -> jump; ports preserved)
 #   B15: unmapped port passes prerouting un-rewritten and dies at the filter

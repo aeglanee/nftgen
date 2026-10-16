@@ -1,5 +1,5 @@
 ---
-# Input dispatch (testing-plan B05/B06): one `iifname` vmap lookup branches to
+# Input dispatch (docs/testing.md B05/B06): one `iifname` vmap lookup branches to
 # per-zone chains. za may reach svc_a only, zb svc_b only; the unlisted zc
 # falls to the base-chain policy.
 tables:

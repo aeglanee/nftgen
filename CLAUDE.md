@@ -93,9 +93,8 @@ findings/proposals. Each has one job — don't duplicate across them:
   - [docs/maps.md](docs/maps.md) — nftables maps: verdict maps (dispatch) vs
     data maps (dnat targets), inline vs named, each as verified nft code
     blocks.
-  - [docs/testing-plan.md](docs/testing-plan.md) — the behavioral (netns) test
-    matrix: primitive semantics B01–B26 + the [example-fleet/](example-fleet/)
-    reachability truth table P01–P22; harness design + execution order.
+  - [docs/testing.md](docs/testing.md) — test layers, how to run them (nft on
+    PATH), the behavioral (netns) matrix B01–B27 + P01–P22, env limits.
   - [docs/review-2026-10.md](docs/review-2026-10.md) — **the 2026-10
     review working list**: findings (C/D/E), agreed decisions, where we
     are, and the user's working preferences. Resume work here.
@@ -114,7 +113,10 @@ it here so the structure stays discoverable.
 
 `nft` is in `/nix/store/*-nftables-*/bin/nft`; plain `nft -c` fails here
 (`NoNewPrivs` blocks netlink), but `unshare -rn <nft> -c -f <file>` validates
-correctly (`validate.py` does this automatically).
+correctly (`validate.py` does this automatically). Put `nft` and `ip` on
+`PATH` before `make verify`, or the `nft -c` and behavioral tests skip and
+the run still looks green — the command is in
+[docs/testing.md](docs/testing.md).
 
 ## Later (from sessrumnir)
 
