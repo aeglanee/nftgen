@@ -53,10 +53,9 @@ deployer — Ansible (later) ships and applies the output.
   activate it). `make lint-trunk` is an optional breadth sweep
   (shellcheck/shfmt/taplo/trufflehog/checkov via the trunk CLI) — not
   part of the gate.
-- **Maintain the progress tracker.** [`docs/progress.md`](docs/progress.md) is
-  the durable picture of where the project is. Update on milestones (decision
-  accepted, feature landed, phase complete) — not on every turn. Conversation
-  log holds nuance; the tracker holds orientation.
+- **Keep the status docs current.** [`CHANGELOG.md`](CHANGELOG.md) records
+  each release (and the unreleased `main`); [`TODO.md`](TODO.md) is the one
+  backlog. Update them when a change lands, not on every turn.
 - **Best practices are a deliverable.** nftables best practices discovered
   during work are captured in [docs/best-practices.md](docs/best-practices.md),
   [docs/sets-and-performance.md](docs/sets-and-performance.md), or
@@ -77,11 +76,9 @@ findings/proposals. Each has one job — don't duplicate across them:
 - **[RAW.md](RAW.md)** — the `raw:` escape-hatch cookbook.
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** — the Ansible/GitOps target end-state
   (not built).
-- **[PLAN.md](PLAN.md)** — the ordered plan + current status.
-  **[TODO.md](TODO.md)** — à-la-carte backlog.
+- **[CHANGELOG.md](CHANGELOG.md)** — what shipped, per release.
+  **[TODO.md](TODO.md)** — the one backlog (open items only).
 - **[docs/](docs/)** — findings & proposals, one topic per file:
-  - [docs/progress.md](docs/progress.md) — **the orientation tracker** (status,
-    decided, open agenda). Read this first to see where we are.
   - [docs/authoring.md](docs/authoring.md) — **the hub**: firewall structure,
     the add-a-rule workflow, and the pick-the-right-tool decision table
     (sets/vmap/concat/map/jump/meter/pipapo); links the deep-dives.
@@ -105,8 +102,6 @@ findings/proposals. Each has one job — don't duplicate across them:
   - [docs/review-2026-10.md](docs/review-2026-10.md) — **the 2026-10
     review working list**: findings (C/D/E), agreed decisions, where we
     are, and the user's working preferences. Resume work here.
-  - [docs/step1-review.md](docs/step1-review.md) — coverage map, test audit,
-    the `nft -c` recipe, and the bugs it found.
   - [docs/concatenations.md](docs/concatenations.md) — the concatenation-set
     design proposal (why).
   - [docs/concat-authoring.md](docs/concat-authoring.md) — concatenation
@@ -122,7 +117,7 @@ it here so the structure stays discoverable.
 
 `nft` is in `/nix/store/*-nftables-*/bin/nft`; plain `nft -c` fails here
 (`NoNewPrivs` blocks netlink), but `unshare -rn <nft> -c -f <file>` validates
-correctly. See [docs/step1-review.md](docs/step1-review.md) §Deliverable 3.
+correctly (`validate.py` does this automatically).
 
 ## Later (from sessrumnir)
 
