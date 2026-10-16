@@ -211,15 +211,18 @@ def _reject_offload_with_verdict(rule: dict) -> None:
 
 
 def _unique_entries(rows, what: str) -> list[str]:
-    """Map rows (key, value, written-as) -> `key : value` entries, first seen
-    first. The same key twice with the same value is folded; with a different
-    value it is an error — nft refuses a map with a duplicate key, and only on
-    the generated file."""
-    seen: dict[str, tuple[str, object]] = {}
+    """Map rows (key, value, written-as[, identity]) -> `key : value` entries,
+    first seen first. The same key twice with the same value is folded; with
+    a different value it is an error — nft refuses a map with a duplicate key,
+    and only on the generated file. `identity` (default: the key as rendered)
+    compares spellings of one key alike, e.g. protocol `17` and `udp`."""
+    seen: dict[object, tuple[object, object]] = {}
     out: list[str] = []
-    for key, value, source in rows:
-        if key in seen:
-            first_value, first_source = seen[key]
+    for row in rows:
+        key, value, source = row[:3]
+        ident = row[3] if len(row) > 3 else key
+        if ident in seen:
+            first_value, first_source = seen[ident]
             if first_value != value:
                 raise BuildError(
                     f"{what} key {key!r} comes from both {first_source!r} "
@@ -227,7 +230,7 @@ def _unique_entries(rows, what: str) -> list[str]:
                     f"one value only"
                 )
             continue
-        seen[key] = (value, source)
+        seen[ident] = (value, source)
         out.append(f"{key} : {value}")
     return out
 
@@ -714,6 +717,11 @@ class RuleRenderer:
         rows = []
         for k, verdict in mapping.items():
             v = self._vmap_verdict(verdict)
+            if key == "proto":
+                # the same check as a rule's `proto:`; 17 and udp are one key
+                check_proto(k, f"vmap key {k!r}")
+                rows.append((str(k), v, k, proto_name(k)))
+                continue
             toks = (
                 [f"{p} . {port}" for p, port in self._vmap_port_pairs(key, k)]
                 if ports
@@ -777,6 +785,22 @@ class RuleRenderer:
                 f"key: [proto, ...] with one row per protocol: {spec!r}"
             )
 
+    @staticmethod
+    def _row_proto(match: list, proto_col, keys: list):
+        """A concat vmap row's protocol (its name), checked like a rule's
+        `proto:` — rows skip the rule schema. None without a proto column."""
+        if proto_col is None:
+            return None
+        check_proto(match[proto_col], f"vmap row {match!r}")
+        row_proto = proto_name(match[proto_col])
+        if row_proto not in PORT_PROTOS and {"sport", "dport"} & set(keys):
+            # as in a rule: the entry could never match a packet
+            raise BuildError(
+                f"vmap row {match!r}: `{match[proto_col]}` has no ports — "
+                f"a port column needs one of {', '.join(PORT_PROTOS)}"
+            )
+        return row_proto
+
     def _concat_vmap(self, spec: dict, keys: list) -> str:
         """Concatenated vmap, e.g. ``key: [iifname, oifname]`` -> ``iifname . oifname vmap``.
 
@@ -812,17 +836,7 @@ class RuleRenderer:
                 )
             # `action: <verdict>` like a rule's, or the `jump:`/`goto:` shorthand
             v = self._vmap_verdict(rest.get("action", rest))
-            row_proto = None
-            if proto_col is not None:
-                # the same check as a rule's `proto:` (rows skip the rule schema)
-                check_proto(match[proto_col], f"vmap row {match!r}")
-                row_proto = proto_name(match[proto_col])
-                if row_proto not in PORT_PROTOS and {"sport", "dport"} & set(keys):
-                    # as in a rule: the entry could never match a packet
-                    raise BuildError(
-                        f"vmap row {match!r}: `{match[proto_col]}` has no ports — "
-                        f"a port column needs one of {', '.join(PORT_PROTOS)}"
-                    )
+            row_proto = self._row_proto(match, proto_col, keys)
             cols = []
             for kt, value in zip(keys, match, strict=True):
                 if kt in self._VMAP_ADDR:  # family-aware position
@@ -832,7 +846,10 @@ class RuleRenderer:
                 else:
                     cols.append(self._concat_col_tokens(kt, value, row_proto))
             for combo in itertools.product(*cols):
-                rows.append((" . ".join(combo), v, match))
+                ident = combo
+                if proto_col is not None:  # `17 . 53` and `udp . 53` are one key
+                    ident = (*combo[:proto_col], row_proto, *combo[proto_col + 1 :])
+                rows.append((" . ".join(combo), v, match, ident))
         if any(k in self._VMAP_ADDR for k in keys) and fam is None:
             raise BuildError(
                 f"concat vmap with an address key needs at least one entry: {spec!r}"
