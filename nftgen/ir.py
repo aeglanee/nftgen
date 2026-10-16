@@ -1,8 +1,7 @@
 """Intermediate representation: typed nftables objects that render themselves.
 
 YAML -> IR (Table / NamedSet / Chain) -> text. Keeping the model in the middle
-(rather than building strings ad hoc) is what makes the output robust and lets a
-JSON emitter drop in later from the same objects.
+(rather than building strings ad hoc) keeps parsing, checking and output apart.
 """
 
 from __future__ import annotations
