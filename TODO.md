@@ -30,9 +30,14 @@ The current working list (review follow-ups, release order) is
 
 - [ ] `--host` as an allowlist (`[A-Za-z0-9][A-Za-z0-9._-]*`) instead of the
       path-separator check.
-- [ ] Overlapping keys in a vmap or named set (`10.0.0.1` vs `10.0.0.1/32`, a
-      prefix inside another, a port inside a range) fail only at nft load —
-      detect them at build if it ever matters.
+- [ ] Overlapping keys in a vmap or named set (a prefix inside another, a
+      port inside a range; in a vmap also `10.0.0.1` vs `10.0.0.1/32` with
+      different verdicts) fail only at nft load — detect them at build if it
+      ever matters. Table in
+      [docs/sets-and-performance.md](docs/sets-and-performance.md) §5.
+- [ ] Hand-written sets: `flags:` values aren't checked (`auto-merge` renders
+      as a flag and fails at load); `auto-merge` itself has no key (it's a
+      line of its own in nft).
 - [ ] Definition values checked where they're defined (`22/tpc`,
       `99999/tcp`), not only where they're used.
 - [ ] `log:` with both `level` and `group` passes the build; nft refuses it at

@@ -12,9 +12,9 @@ see DECISIONS §1.2 ("no optimizer").
 
 | Approach | Per-packet cost | Can hold CIDRs/ranges? |
 | --- | --- | --- |
-| **hash set** (plain) | **O(1)** — constant, size-independent | ❌ exact values only |
-| **interval set** (`flags interval`) | **O(log N)** — tree search | ✅ yes |
-| **N separate rules** | **O(N)** — linear scan | ✅ (a rule can be anything) |
+| **hash set** (plain) | **O(1)** — constant, size-independent | no — exact values only |
+| **interval set** (`flags interval`) | **O(log N)** — tree search | yes |
+| **N separate rules** | **O(N)** — linear scan | yes (a rule can be anything) |
 
 Worst-case comparisons per packet:
 
@@ -95,9 +95,9 @@ appears.
 | Your data | Best structure | nftgen today |
 | --- | --- | --- |
 | many **exact** IPs/ports, large N | **hash set** (no interval) → O(1) | networks always get `interval` (tree); services w/o ranges already hash |
-| **CIDRs / ranges** | **interval set** (no choice) | ✅ correct |
-| **multi-field, specific flows** (saddr+daddr+dport tuples) | **concatenated set** → *one* combined lookup | ✅ `concat:`/`tuples:` set + `set:` rule |
-| a handful of things | doesn't matter — inline or a few rules | ✅ author's choice |
+| **CIDRs / ranges** | **interval set** (no choice) | correct |
+| **multi-field, specific flows** (saddr+daddr+dport tuples) | **concatenated set** → *one* combined lookup | `concat:`/`tuples:` set + `set:` rule |
+| a handful of things | doesn't matter — inline or a few rules | author's choice |
 
 On the concatenated set: a `saddr . daddr . dport` lookup is **one**
 O(1)/O(log N) hit over the combined key. The alternative for *specific*
@@ -109,7 +109,33 @@ it was promoted to a structured key (`concat:`).
 
 ---
 
-## 5. Bottom line for our scale
+## 5. Overlapping elements
+
+An element inside another (a /16 inside a /8, a port inside a range) is
+fine in one place and a load error in others. nft 1.1.7, `nft -c`:
+
+| Where | Overlap | Same element twice |
+| --- | --- | --- |
+| inline set `{ … }` | merged silently, loads | loads |
+| named set (`flags interval`) | "conflicting intervals specified" | loads (`10.0.0.1` + `10.0.0.1/32` too) |
+| named set + `auto-merge` | merged, loads | loads |
+| verdict map | "conflicting intervals specified", even with the same verdict | same verdict loads; different verdicts "File exists" |
+
+```nft
+set bogons_v4 {
+    type ipv4_addr
+    flags interval
+    auto-merge                     # a line of its own, not a flag
+    elements = { 240.0.0.0/4, 255.255.255.255/32 }
+}
+```
+
+nftgen passes elements through as written, so an overlap in a named set or
+a vmap fails at `nft -c` / load, never silently. Drop the covered entry (the
+better fix: the list then says what it does). nftgen has no `auto-merge` key
+yet; a table-level `raw:` set can carry it.
+
+## 6. Bottom line for our scale
 
 At homelab/small-fleet N (tens, low hundreds), all three structures are within noise
 of each other — so **define sets for readability and reuse, not speed.** The hash-vs-

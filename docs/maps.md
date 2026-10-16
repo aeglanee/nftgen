@@ -4,13 +4,9 @@ A **map** is a key → value lookup: nft takes a field, looks it up, and uses th
 matched value in **one** operation instead of a ladder of rules. There are two
 flavours, by *what the value is*. Every nft block below is `nft -c`-verified.
 
-> nftgen status: **inline verdict maps are done** (Phase 6D), keyed on
-> `iifname`/`oifname` (or the index form `iif`/`oif`) /
-> `proto`/`dport`/`sport`/`mark`/`state`/`saddr`/`daddr`, plus
-> **concatenated** keys (`key: [iifname, oifname]`). **Inline dnat data
-> maps** are done
-> too; **named/reusable** maps (verdict + data) are the open
-> "named/reusable maps" backlog item.
+> In nftgen: inline verdict maps (`vmap:`, one key or concatenated keys)
+> and the inline dnat map; every key is in [DESIGN.md](../DESIGN.md).
+> Named maps aren't modelled yet — declare one with table-level `raw:`.
 
 ---
 
@@ -123,33 +119,18 @@ groups expand** and cartesian-product into elements:
 
 ---
 
-## nftgen plan
+## nftgen notes
 
-- ✅ **Inline vmaps** — `vmap:` rule → verdict. Keys: `iifname`/`oifname`
-  (or index `iif`/`oif`; interface
-  groups expand; strict — unknown names error), `proto`, `dport`/`sport`
-  (a **`meta l4proto . th dport` pair lookup** — a service keeps each port's
-  own proto, `ssh` → `tcp . 22`; a literal is `8080/tcp`; a bare number has no
-  proto and errors — DECISIONS §2.2), `mark`,
-  `state` (`ct state`), and `saddr`/`daddr` (network groups, single-family). (done.)
-- ✅ **Concat verdict maps** — `vmap: {key: [iifname, oifname], map: [{match, verdict}]}`
-  → `iifname . oifname vmap { … }`; groups/services expand, and `saddr`/`daddr`
-  positions are allowed (family inferred, single-family enforced). A
-  `dport`/`sport` position takes the row's `proto` column's ports
-  (`[proto, dport]`, `match: [udp, web]` → only web's udp ports), or renders as
-  a `meta l4proto . th dport` pair when there is no `proto` column. A row's
-  verdict is `action:` (as in a rule) or the `jump:`/`goto:` shorthand. (done.)
-- **Vmap verdicts** — a vmap can only route: `accept`, `drop`, `return`,
-  `continue`, `jump`, `goto`. `reject`, `masquerade` and NAT are statements,
-  not verdicts, and nft refuses them in a vmap (syntax error) — nftgen errors
-  at build; `jump` to a chain that rejects instead.
-- ✅ **Inline dnat data map** —
-  `action: {dnat: {proto: tcp, map: {80: web, 443: db}}}`
-  → `dnat ip to tcp dport map { … }` (multi-port-forward; address-only
-  targets for now).
-- ☐ **Named verdict maps** — a table-level `maps:` declaration referenced from rules
-  (DRY + live-update). Low value at our scale.
-- ☐ **Named data maps + port-translation** in a map (concat value `addr . port`).
+- **Vmap values are verdicts only:** `accept`, `drop`, `return`,
+  `continue`, `jump`, `goto`. `reject`, `masquerade` and NAT are statements;
+  nft refuses them in a vmap, so nftgen errors at build — `jump` to a chain
+  that rejects instead.
+- **Port keys are protocol + port:** a `dport`/`sport` vmap renders
+  `meta l4proto . th dport`, so `ssh` maps `tcp . 22` only; a bare number
+  needs `/tcp` (DECISIONS §2.2).
+- **Overlapping keys** (a /16 inside a /8, a port inside a range) fail at
+  load, even with the same verdict — see
+  [sets-and-performance.md](sets-and-performance.md) §5.
 
 ## Gotcha (found while verifying)
 
