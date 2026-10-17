@@ -1,10 +1,7 @@
 # Working guidance for nftgen
 
-Read this first. Behavior — communication, agent delegation, design and
-implementation workflow, git and docs discipline — is defined in
-[.claude/CLAUDE.md](.claude/CLAUDE.md); this file adds the nftgen specifics.
-The *why* behind design choices is in [DECISIONS.md](DECISIONS.md); the spec
-is [DESIGN.md](DESIGN.md).
+The nftgen specifics. The *why* behind design choices is in
+[DECISIONS.md](DECISIONS.md); the spec is [DESIGN.md](DESIGN.md).
 
 ## What nftgen is
 
@@ -16,7 +13,7 @@ deployer — Ansible (later) ships and applies the output.
 
 1. **Mirror nftables; don't hide it.** The YAML's shape follows nft's real model
    (tables → chains → rules; sets; maps). You author your own chains.
-2. **No optimizer. Explicit over magic.** What you write is what you get. No
+2. **No optimizer.** What you write is what you get. No
    auto-generated chains, no inferred structure, no auto-injected rules.
 3. **IR in the middle.** YAML → typed objects (`Table`/`Set`/`Chain`/`Rule`/…)
    → text. Never build output strings ad-hoc.
@@ -113,9 +110,3 @@ correctly (`validate.py` does this automatically). Put `nft` and `ip` on
 `PATH` before `make verify`, or the `nft -c` and behavioral tests skip and
 the run still looks green — the command is in
 [docs/testing.md](docs/testing.md).
-
-## Later (from sessrumnir)
-
-Adopt sessrumnir's `AGENTS.md` conventions and CI wiring when we wire nftgen
-toward the collection. (Pre-commit hooks + the lint suite are already
-adopted, mirroring sessrumnir main.)
