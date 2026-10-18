@@ -1,12 +1,33 @@
 [project]
 name = "nftgen"
 version = "0.7.0"
-description = "A small, nftables-only firewall-as-code generator (YAML -> .nft)."
+description = "nftables firewall generator: YAML definitions and host policies → a native nftables ruleset"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "aeglanee" }]
+keywords = ["nftables", "nft", "firewall", "firewall-as-code", "netfilter", "linux", "ansible"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: System :: Networking :: Firewalls",
+]
 dependencies = ["PyYAML>=6.0"]
+
+[project.urls]
+Source = "https://github.com/aeglanee/nftgen"
+Documentation = "https://github.com/aeglanee/nftgen/blob/main/docs/authoring.md"
+Changelog = "https://github.com/aeglanee/nftgen/blob/main/CHANGELOG.md"
+Issues = "https://github.com/aeglanee/nftgen/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=8.0"]
@@ -21,11 +42,17 @@ dev = [
 nftgen = "nftgen.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]  # license-files (PEP 639)
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["nftgen"]
+core-metadata-version = "2.4"  # what PyPI and twine read; 2.5 is rejected
+
+[tool.hatch.build.targets.sdist]
+# source + tests and their fixtures; never local tool state (.trunk, .venv)
+include = ["/nftgen", "/tests", "/example", "/example-fleet", "/CHANGELOG.md"]
+core-metadata-version = "2.4"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

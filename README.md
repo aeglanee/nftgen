@@ -17,7 +17,7 @@ host policies → one native `.nft` ruleset per host, applied with `nft -f`.
 - **`raw:`** reaches anything nft can do that has no key yet.
 
 Latest release **v0.7.0**; `main` has unreleased changes (see
-[CHANGELOG.md](CHANGELOG.md)).
+[CHANGELOG.md][changelog]).
 
 ## Example
 
@@ -71,22 +71,22 @@ Each output is a complete file (`flush ruleset` + the host's tables) that
 ships as `/etc/nftables.conf`. With Ansible, the
 [ansible-firewall](https://github.com/sessrumnir/ansible-firewall)
 collection renders from inventory variables instead and applies behind a
-rollback timer ([DEPLOYMENT.md](DEPLOYMENT.md)).
+rollback timer ([DEPLOYMENT.md][deployment]).
 
 ## Docs
 
-- [docs/authoring.md](docs/authoring.md) — **start here**: firewall
+- [docs/authoring.md][authoring] — **start here**: firewall
   structure, adding a rule, which tool to use.
-- [DESIGN.md](DESIGN.md) — the reference: every key and what it renders to.
-- [DECISIONS.md](DECISIONS.md) — why it's built this way.
-- [docs/best-practices.md](docs/best-practices.md),
-  [docs/sets-and-performance.md](docs/sets-and-performance.md),
-  [docs/maps.md](docs/maps.md), [docs/raw.md](docs/raw.md) — nftables
+- [DESIGN.md][design] — the reference: every key and what it renders to.
+- [DECISIONS.md][decisions] — why it's built this way.
+- [docs/best-practices.md][best-practices],
+  [docs/sets-and-performance.md][sets-and-performance],
+  [docs/maps.md][maps], [docs/raw.md][raw] — nftables
   cookbooks, every example checked with `nft -c`.
-- [example-fleet/](example-fleet/) — a realistic 3-site reference;
-  [example/](example/) — a small one.
-- [CHANGELOG.md](CHANGELOG.md) · [TODO.md](TODO.md) ·
-  [docs/testing.md](docs/testing.md).
+- [example-fleet/][example-fleet] — a realistic 3-site reference;
+  [example/][example] — a small one.
+- [CHANGELOG.md][changelog] · [TODO.md][todo] ·
+  [docs/testing.md][testing].
 
 ## Develop
 
@@ -97,7 +97,22 @@ make verify        # lint + tests — put nft and ip on PATH, see docs/testing.m
 
 ## License
 
-MIT (see [LICENSE](LICENSE)). The definitions model reimplements concepts
+MIT (see [LICENSE][license]). The definitions model reimplements concepts
 from [Aerleon](https://github.com/aerleon/aerleon) (Apache-2.0) clean-room —
 no Aerleon code is used; the acknowledgment is courtesy, not a license
 obligation.
+
+[authoring]: https://github.com/aeglanee/nftgen/blob/main/docs/authoring.md
+[best-practices]: https://github.com/aeglanee/nftgen/blob/main/docs/best-practices.md
+[changelog]: https://github.com/aeglanee/nftgen/blob/main/CHANGELOG.md
+[decisions]: https://github.com/aeglanee/nftgen/blob/main/DECISIONS.md
+[deployment]: https://github.com/aeglanee/nftgen/blob/main/DEPLOYMENT.md
+[design]: https://github.com/aeglanee/nftgen/blob/main/DESIGN.md
+[example]: https://github.com/aeglanee/nftgen/tree/main/example/
+[example-fleet]: https://github.com/aeglanee/nftgen/tree/main/example-fleet/
+[license]: https://github.com/aeglanee/nftgen/blob/main/LICENSE
+[maps]: https://github.com/aeglanee/nftgen/blob/main/docs/maps.md
+[raw]: https://github.com/aeglanee/nftgen/blob/main/docs/raw.md
+[sets-and-performance]: https://github.com/aeglanee/nftgen/blob/main/docs/sets-and-performance.md
+[testing]: https://github.com/aeglanee/nftgen/blob/main/docs/testing.md
+[todo]: https://github.com/aeglanee/nftgen/blob/main/TODO.md
