@@ -45,6 +45,17 @@ jobs:
       - name: Lint (ruff / yamllint / markdownlint / gitleaks)
         run: make lint
 
+      # same check as `make lint-links`: local files + anchors, offline
+      - name: Markdown links (offline)
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          lycheeVersion: v0.24.2
+          fail: true
+          args: >-
+            --no-progress --config .lychee.toml
+            --remap 'https://github\.com/aeglanee/nftgen/(?:blob|tree)/main/(.*) file://${{ github.workspace }}/$1'
+            '*.md' 'docs/**/*.md' 'example*/**/*.md'
+
   test:
     name: tests + nft -c (py${{ matrix.python }})
     runs-on: ubuntu-24.04

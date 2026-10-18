@@ -4,7 +4,7 @@ VENV := .venv
 export PATH := $(CURDIR)/$(VENV)/bin:$(PATH)
 
 .DEFAULT_GOAL := help
-.PHONY: help install-dev lint lint-trunk format test verify clean
+.PHONY: help install-dev lint lint-links lint-trunk format test verify clean
 
 # trunk's bundled TLS doesn't find the NixOS CA store on its own
 export SSL_CERT_FILE ?= /etc/ssl/certs/ca-certificates.crt
@@ -26,6 +26,16 @@ lint: ## All linters: ruff, yamllint, markdownlint, whitespace, gitleaks
 	pre-commit run --all-files end-of-file-fixer
 	pre-commit run --all-files trailing-whitespace
 	pre-commit run --all-files gitleaks
+
+# Markdown links: local files + anchors, offline (.lychee.toml). Not in `lint`
+# (it needs the lychee binary); CI runs it in its lint job.
+LINK_REMAP := https://github\.com/aeglanee/nftgen/(?:blob|tree)/main/(.*) file://$(CURDIR)/$$1
+lint-links: ## Check markdown links offline (requires lychee: nix shell nixpkgs#lychee)
+	@command -v lychee >/dev/null 2>&1 || { \
+		echo "lychee is not installed — e.g. nix shell nixpkgs#lychee -c make lint-links"; \
+		exit 1; }
+	lychee --no-progress --config .lychee.toml --remap '$(LINK_REMAP)' \
+		'*.md' 'docs/**/*.md' 'example*/**/*.md'
 
 lint-trunk: ## Optional breadth sweep via trunk (requires trunk CLI; not in verify)
 	@if command -v trunk >/dev/null 2>&1; then \

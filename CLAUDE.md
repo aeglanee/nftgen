@@ -47,7 +47,8 @@ deployer — Ansible (later) ships and applies the output.
 - **Checks:** `make verify` (lint + tests) must be green before every
   commit. Individually: `make lint`, `make test`, `make format`;
   `pytest tests/test_foo.py -v` for one file (venv on PATH via make, or
-  activate it). `make lint-trunk` is an optional breadth sweep
+  activate it). `make lint-links` checks Markdown links offline (needs
+  `lychee`; CI runs it). `make lint-trunk` is an optional breadth sweep
   (shellcheck/shfmt/taplo/trufflehog/checkov via the trunk CLI) — not
   part of the gate.
 - **Keep the status docs current.** [`CHANGELOG.md`](CHANGELOG.md) records

@@ -1,0 +1,6 @@
+# Offline link check (make lint-links, CI's lint job): local files and their
+# anchors only, never a network request. The README's absolute links to this
+# repo on GitHub are remapped to the local files by the caller (--remap).
+offline = true
+include_fragments = "full"
+exclude_path = [".git", ".venv", ".trunk", "dist"]
