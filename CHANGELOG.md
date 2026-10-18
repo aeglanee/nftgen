@@ -22,6 +22,9 @@ the *why* behind design choices is in [DECISIONS.md](DECISIONS.md).
 - Concat vmap rows take `action:` (accept, drop, return, continue, jump, goto).
 - `family: ip | ip6` for concat sets filled at runtime.
 - Protocol numbers (`17`, `112`) are checked as their names everywhere.
+- `render_tables(…, annotate=fn)`: an optional per-rule hook whose note is
+  appended as a `# <note>` file comment (used by ansible-firewall's blame
+  notes); output is unchanged without it.
 
 ### Fixed
 
