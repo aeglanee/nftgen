@@ -31,8 +31,8 @@ mind that only its first line is indented.
 ```
 
 `ip dscp` is IPv4 only; IPv6 needs its own `ip6 dscp set ef` rule. (nft
-parses both; this dev box's rootless namespace refuses to load `dscp set`,
-so they were not load-tested here.)
+parses both; a rootless namespace can refuse to load `dscp set`, so they
+were not load-tested.)
 
 ## Add to a set from a rule
 

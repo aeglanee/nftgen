@@ -20,8 +20,9 @@ build errors and determinism.
 ## Running
 
 - `make verify` — lint + tests. **Put `nft` and `ip` on `PATH` first**:
-  without them the `nft -c` and behavioral tests skip (68 of 396) and the
-  run still looks green. On this NixOS box:
+  without them the `nft -c` and behavioral tests skip (70 of 426) and the
+  run still looks green. Where they aren't on `PATH` (e.g. NixOS without a
+  dev shell), from the Nix store:
 
   ```bash
   nft=$(ls -d /nix/store/*-nftables-*/bin | head -1)
@@ -32,7 +33,7 @@ build errors and determinism.
 - One file: `pytest tests/test_vmaps.py -v`.
 - `nft -c` on a file by hand: plain `nft -c` fails in a `NoNewPrivs` sandbox
   (netlink); `unshare -rn nft -c -f <file>` works. `validate.py` falls back to
-  it, so `nftgen build --check` works here too.
+  it, so `nftgen build --check` works there too.
 - CI runs everything on Python 3.11–3.14; the runner enables unprivileged
   user namespaces so the behavioral tests run instead of skipping.
 
@@ -120,12 +121,8 @@ is on the backlog.
 
 ## Known environment limits
 
-- **`dscp set`** (`ip dscp set ef`) parses, but the kernel refuses it with
-  "Operation not permitted" inside a rootless namespace on this box, so DSCP
-  recipes can't be load-tested here.
+- **`dscp set`** (`ip dscp set ef`) parses, but a kernel can refuse it with
+  "Operation not permitted" inside a rootless namespace, so DSCP recipes
+  aren't load-tested.
 - **`iif`/`oif`** need the interface to exist when the ruleset loads; `nft -c`
   fails on a box without it.
-- **Downstream runs** (ansible-firewall molecule, sessrumnir): Docker here is
-  Podman; sessrumnir's scenarios need root Podman (`DOCKER_HOST` and
-  `CONTAINER_HOST` = `unix:///run/podman/podman.sock`). Portmaster on the
-  desktop blocks container DNS and apt — pause it for a run.

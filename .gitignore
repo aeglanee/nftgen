@@ -11,5 +11,5 @@ venv/
 # whose committed render is the golden their drift tests compare against.
 **/generated/
 !example-fleet/generated/
-# local Claude settings stay local
-.claude/settings.local.json
+# local Claude Code config (agents, settings) stays local
+.claude/

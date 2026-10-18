@@ -96,17 +96,14 @@ across them:
   - [docs/testing.md](docs/testing.md) — test layers, how to run them (nft on
     PATH), the behavioral (netns) matrix B01–B28 + P01–P22, env limits.
   - [docs/review-2026-10.md](docs/review-2026-10.md) — **the 2026-10
-    review working list**: findings (C/D/E), agreed decisions, where we
-    are, and the user's working preferences. Resume work here.
+    review working list**: findings, agreed decisions, where we are.
+    Resume work here.
 
 When you produce a substantial review/finding, add a `docs/<topic>.md` and link
 it here so the structure stays discoverable.
 
-## nft -c on this dev box (no VM needed)
+## nft on PATH
 
-`nft` is in `/nix/store/*-nftables-*/bin/nft`; plain `nft -c` fails here
-(`NoNewPrivs` blocks netlink), but `unshare -rn <nft> -c -f <file>` validates
-correctly (`validate.py` does this automatically). Put `nft` and `ip` on
-`PATH` before `make verify`, or the `nft -c` and behavioral tests skip and
-the run still looks green — the command is in
+Put `nft` and `ip` on `PATH` before `make verify`, or the `nft -c` and
+behavioral tests skip and the run still looks green — see
 [docs/testing.md](docs/testing.md).

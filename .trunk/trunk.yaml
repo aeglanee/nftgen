@@ -35,12 +35,6 @@ lint:
     # prettier's markdown/YAML opinions fight the hand-wrapped 80-col docs
     # and block-style YAML.
     - prettier
-  ignore:
-    - linters: [markdownlint]
-      paths:
-        # agent prompt files (frontmatter + body), not docs — mirrors
-        # .markdownlintignore, which trunk's markdownlint doesn't read
-        - .claude/agents/**
 actions:
   enabled:
     - trunk-upgrade-available
