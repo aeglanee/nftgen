@@ -58,6 +58,38 @@ jobs:
             --remap 'https://github\.com/aeglanee/nftgen/(?:blob|tree)/main/(.*) file://${{ github.workspace }}/$1'
             '*.md' 'docs/**/*.md' 'example*/**/*.md'
 
+  # Build what a release would upload and check it, on every run (incl. the
+  # weekly one): a packaging break or a build-tool change shows up here, not
+  # on release day. Nothing is published.
+  package:
+    name: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Build sdist + wheel, check them
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade build twine
+          python -m build
+          twine check --strict dist/*
+
+      - name: The wheel installs and runs
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install dist/*.whl
+          /tmp/smoke/bin/nftgen --version
+
   test:
     name: tests + nft -c (py${{ matrix.python }})
     runs-on: ubuntu-24.04
