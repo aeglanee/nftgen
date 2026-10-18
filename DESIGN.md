@@ -68,10 +68,12 @@ nftgen <policy.yaml> --defs <dir> [--out f.nft] [--check]   # one file, no flush
 ### As a library
 
 The CLI's renderer is `render_tables(tables, defs, resolver, *, source,
-flush)`. With `PathResolver` it reads include files; with `DictResolver`
-includes are named fragments in a dict — the Ansible vars mode in
-[DEPLOYMENT.md](DEPLOYMENT.md) uses that. `Definitions.from_named_mappings`
+flush, annotate)`. With `PathResolver` it reads include files; with
+`DictResolver` includes are named fragments in a dict — the Ansible vars mode
+in [DEPLOYMENT.md](DEPLOYMENT.md) uses that. `Definitions.from_named_mappings`
 builds definitions from named layers and names both origins of a duplicate.
+`annotate` (optional) returns a note per rule, appended as a `# <note>` file
+comment on every line the rule renders to (dropped by nft on load).
 
 ## Definitions
 

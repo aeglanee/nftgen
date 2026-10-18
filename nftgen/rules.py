@@ -1132,7 +1132,18 @@ def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:
     return out
 
 
-def build_chain(spec: dict, renderer: RuleRenderer) -> Chain:
+def _note_suffix(note) -> str:
+    """A per-rule note from `annotate` -> a trailing `  # <note>` file comment.
+    File-only: nft drops `#` comments on load, so the kernel ruleset (and the
+    rule itself) is unchanged."""
+    if note is None or note == "":
+        return ""
+    if not isinstance(note, str) or "\n" in note or "\r" in note:
+        raise BuildError(f"rule note must be single-line text, got {note!r}")
+    return f"  # {note}"
+
+
+def build_chain(spec: dict, renderer: RuleRenderer, annotate=None) -> Chain:
     unknown = set(spec) - _CHAIN_KEYS
     if unknown:
         raise BuildError(f"unknown chain key(s) {sorted(unknown)}: {spec!r}")
@@ -1157,7 +1168,14 @@ def build_chain(spec: dict, renderer: RuleRenderer) -> Chain:
                 f"unresolved include {r['include']!r} — includes are expanded "
                 f"by render_tables"
             )
-        rule_lines.extend(renderer.render(r))
+        lines = renderer.render(r)
+        suffix = _note_suffix(annotate(r)) if annotate else ""
+        # a wrapped rule (a large vmap) spans several physical lines: the note
+        # goes on its first, where the rule starts (a `#` ends any line)
+        rule_lines.extend(
+            line.replace("\n", f"{suffix}\n", 1) if "\n" in line else f"{line}{suffix}"
+            for line in lines
+        )
     chain = Chain(name=spec["name"], rules=rule_lines)
     if "comment" in spec:
         chain.comment = check_comment(spec["comment"], f"chain {spec['name']!r}")

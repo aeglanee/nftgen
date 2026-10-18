@@ -216,6 +216,18 @@ router shows why a rule exists; a `#` line in the file is dropped on load.
 *Rejected:* copying YAML `#` comments (YAML parsers drop them, and source
 prose isn't written for the box).
 
+### 4.5 Per-rule file notes are a hook, not a feature
+
+`render_tables(…, annotate=fn)` calls `fn(rule)` for each authored rule and
+appends the returned note as `# <note>` to every line the rule renders to.
+The Ansible front end uses it for opt-in git-blame notes
+(`# nftgen-blame: <author> · <sha> · <date>`).
+*Why a hook:* nftgen stays git- and Ansible-agnostic; `#` comments vanish on
+load, so the kernel ruleset is the same with or without notes, and removing
+them gives back the plain render byte for byte.
+*Why `#`, not `comment:`:* git metadata isn't the author's words, and the
+native comment's 128 bytes stay the author's (§4.4).
+
 ## 5. Packaging
 
 ### 5.1 Point at a directory, no config file
