@@ -3,7 +3,13 @@
 What changed per release, newest first. Details are in the commit messages;
 the *why* behind design choices is in [DECISIONS.md](DECISIONS.md).
 
-## Unreleased (on `main`)
+Versioning: [semantic versioning](https://semver.org) from 1.0.0 on. A new
+check that rejects input which rendered a wrong or broken ruleset is a fix,
+not a breaking change.
+
+## 1.0.0 — 2026-10-18
+
+The first release on PyPI (`pip install nftgen`).
 
 ### Breaking
 

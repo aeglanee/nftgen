@@ -1,6 +1,6 @@
 [project]
 name = "nftgen"
-version = "0.7.0"
+version = "1.0.0"
 description = "nftables firewall generator: YAML definitions and host policies → a native nftables ruleset"
 readme = "README.md"
 requires-python = ">=3.11"

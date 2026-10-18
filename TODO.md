@@ -7,8 +7,6 @@ The current working list (review follow-ups, release order) is
 
 ## Next
 
-- [ ] **Release** the unreleased `main` (see CHANGELOG) — 0.8.0, or 1.0.0
-      together with a simpler install (PyPI and/or Ansible Galaxy).
 - [ ] **Blame notes** (spike on `feat/blame-notes` in ansible-firewall and
       sessrumnir; nftgen's `annotate` hook is on `main`): repin both to the
       release, open the PRs. Design record: ansible-firewall

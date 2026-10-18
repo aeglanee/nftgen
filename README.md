@@ -16,9 +16,6 @@ host policies → one native `.nft` ruleset per host, applied with `nft -f`.
   output is a real rule change.
 - **`raw:`** reaches anything nft can do that has no key yet.
 
-Latest release **v0.7.0**; `main` has unreleased changes (see
-[CHANGELOG.md][changelog]).
-
 ## Example
 
 ```yaml
@@ -60,7 +57,7 @@ table inet filter {
 ## Use
 
 ```bash
-pip install "nftgen @ git+https://github.com/aeglanee/nftgen@v0.7.0"
+pip install nftgen
 
 nftgen build <root>                       # every host → <root>/generated/
 nftgen build <root> --host gw1 --stdout   # one host to stdout, write nothing
