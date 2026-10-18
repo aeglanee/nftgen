@@ -140,6 +140,7 @@ class Harness:
         dst: str,
         dport: int,
         flags: list[str],
+        *,
         timeout: float = 1.5,
     ) -> str:
         """Send one crafted TCP segment -> 'replied' | 'silent'."""
