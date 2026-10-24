@@ -259,18 +259,16 @@ def render_tables(  # noqa: PLR0913 - the extras are keyword-only options
     return header + "\n" + prefix + "\n".join(t.render() for t in out_tables)
 
 
-def generate(  # noqa: PLR0913 - flush is the 1.0 alias of deploy
+def generate(
     policy_path: str | pathlib.Path,
     defs_dir: str | pathlib.Path,
     include_base: str | pathlib.Path,
     sites_dir: str | pathlib.Path | None = None,
     deploy: bool = False,
-    flush: bool = False,
 ) -> str:
     """One host policy file -> its ruleset. ``deploy`` starts it with the
     policy's `reset:` (``flush`` by default), as ``build()`` does; otherwise
-    the tables alone. ``flush=True`` is the 1.0 spelling of ``deploy=True``."""
-    deploy = deploy or flush
+    the tables alone."""
     policy_path = pathlib.Path(policy_path)
     include_base = pathlib.Path(include_base)
     policy = yaml.safe_load(policy_path.read_text()) or {}
