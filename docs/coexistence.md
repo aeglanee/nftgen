@@ -6,9 +6,9 @@ or fail2ban also write rules.
 
 | Part | State |
 | --- | --- |
-| Rollback from the previous `/etc/nftables.conf` (fix B) | ansible-firewall PR #70 |
+| Rollback from the previous `/etc/nftables.conf` (fix B) | ansible-firewall 0.3.1 (#70) |
 | `reset: own-tables` in nftgen | built: [DESIGN.md](../DESIGN.md) (`reset:`), [DECISIONS.md](../DECISIONS.md) §5.4, tests B29–B31 |
-| Role side: `nftgen_reset`, ownership check, takeover, rollback composition | decided below, not built — [TODO.md](../TODO.md) (Deployment) |
+| Role side: `nftables_reset`, ownership check, takeover, rollback composition | built in ansible-firewall (branch `feat/own-tables`), as below |
 
 ## Decisions so far
 
@@ -129,13 +129,14 @@ Safeguards: no `flush ruleset` in own-tables files (a role guard, like
 today's inverse check), and a test that loads other tools' tables, deploys,
 forces a rollback, and asserts their tables are unchanged.
 
-## Own-tables mode: ownership and scenarios (role side, not built)
+## Own-tables mode: ownership and scenarios (role side)
 
-### Rules agreed so far
+### Rules
 
 - **Mode per host**, in the YAML: `reset: flush | own-tables` (role var
-  `nftgen_reset`). `flush` is the default and stays exactly as today;
-  everything below applies only to the opt-in `own-tables`.
+  `nftables_reset`, a role setting like `nftables_blame`). `flush` is the
+  default and stays exactly as today; everything below applies only to the
+  opt-in `own-tables`.
 - **Ownership mark per table:** in an own-tables render, every table nftgen
   owns has its `destroy table X` line. No other marker.
 - **Destroy lines:** all at the top, before any table body; one per
@@ -149,7 +150,7 @@ forces a rollback, and asserts their tables are unchanged.
 | Has a `destroy` line, still rendered | Reset and rebuild |
 | Has a `destroy` line, no longer rendered | Delete it (ours) |
 | In a **flush-mode** nftgen render (header + `flush ruleset`) | Ours: rebuild or delete as above |
-| No `destroy` line, file is not a flush-mode render (distro default, hand-written, hand-added) | **Fail** with the list; adopt them into the YAML, or re-run with `-e nftables_takeover=true` (below) |
+| No `destroy` line, file is not a flush-mode render (hand-written, hand-added, a top-level `include`) | **Fail** with the cause and the list; add the tables to keep to the YAML **and** re-run once with `-e nftables_takeover=true` (below) |
 | Live, but in no config file (Docker, Kubernetes, fail2ban) | Never touched |
 
 - **Takeover = one deploy with `flush ruleset`.** With
@@ -168,11 +169,17 @@ forces a rollback, and asserts their tables are unchanged.
   nftables`, md5), it's treated like a flush-mode render — no stop on a fresh
   host. Works on every Debian/Ubuntu release (checked 22.04, 24.04, 26.04,
   Debian 12); any edit changes the checksum and the normal stop applies.
-- **Check mode** warns instead of failing (takeover needed: list of tables)
-  and still shows the diff; with `nftables_takeover` the diff includes the
-  `flush ruleset` line.
-- **Finding the tables in the current file:** text match on `table <family>
-  <name> {` lines. nftgen never writes `include`; a file with one fails.
+- **Check mode** reports instead of failing ("Takeover needed: …"); before
+  nftables is installed it says the real run checks after the install. The
+  diff is of `/etc/nftables.conf`, which never holds the takeover's
+  `flush ruleset` or the extra `destroy` lines: those go into the applied
+  candidate only, in both apply paths (with and without the dead-man).
+- **Finding the tables in the current file:** any spelling nft accepts
+  (`table`, `add table`, `create table`, indented, family omitted = `ip`).
+  nftgen has no top-level `raw:`, so a top-level `include` is never ours and
+  needs a takeover; one inside a table (table `raw:`) is reset with it.
+- **No configuration file:** own-tables refuses to apply (nothing to roll
+  back to), like flush mode.
 - **Rollback (own-tables):** `destroy` lines of the new render + the previous
   `/etc/nftables.conf` as is. If that file is our own-tables render, only our
   tables move. If it isn't (first own-tables deploy), it carries `flush

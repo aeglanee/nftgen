@@ -51,19 +51,12 @@ The current working list (review follow-ups, release order) is
       ignore elements of sets declared without elements (runtime blocklists,
       meters). `fix` re-applies through the rollback (runtime elements are
       lost, as on any apply).
-- [ ] **Rollback restores nothing on hosts with untranslatable iptables-nft
-      rules** (bug). The dead-man reloads `nft list ruleset`; Calico,
-      kube-router, libvirt (`set`, `physdev`, `CHECKSUM`, `recent`) make
-      that file unloadable, so a lockout stays until reboot. Fix: roll back
-      to the previous `/etc/nftables.conf` (option B). Tested matrix and
-      details: [docs/coexistence.md](docs/coexistence.md).
 - [ ] Later, if wanted: rollback from a live snapshot of only our own
       tables (option A) — keeps runtime set elements on a failed deploy.
-- [ ] **Coexistence, role side** (related): nftgen renders `reset:
-      own-tables` (1.1.0); the ansible-firewall role still needs
-      `nftgen_reset`, the ownership check against the previous
-      `/etc/nftables.conf`, the takeover and the rollback composition —
-      decided in [docs/coexistence.md](docs/coexistence.md).
+- [ ] **Coexistence, role side:** built on ansible-firewall
+      `feat/own-tables` (`nftables_reset`, ownership check, takeover,
+      rollback); drop this item once it's merged.
+      [docs/coexistence.md](docs/coexistence.md).
 - [ ] RHEL's `nftables.service` reads `/etc/sysconfig/nftables.conf`; the
       role writes `/etc/nftables.conf` by default, so on RHEL the ruleset
       may not come back after a reboot (unverified).
