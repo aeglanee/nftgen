@@ -1,0 +1,10 @@
+---
+# B29–B31 fixture: one zone; the router also carries a foreign table
+# (stand-in for Docker/Kubernetes) loaded before nftgen's file.
+networks:
+  lan_net: [10.89.1.0/24]
+interfaces:
+  lan_if: [r-lan]
+services:
+  svc: [7000/tcp]
+  foreign_blocked: [7001/tcp]

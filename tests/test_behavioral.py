@@ -899,3 +899,85 @@ def test_b28_rpfilter_passes_dhcp_discover(fw_rpfilter):
         time.sleep(0.05)
     assert _counter_packets(fw_rpfilter, "dhcp_seen") > seen_before
     assert _counter_packets(fw_rpfilter, "rpf_drops") == rpf_before
+
+
+# --------------------------------------------------------------------------- #
+# B29–B31 — `reset: own-tables` beside a foreign table (fixture: own-tables)
+# --------------------------------------------------------------------------- #
+
+OT_ROUTER, OT_CLIENT = "10.89.1.1", "10.89.1.2"
+
+# Stand-in for Docker/Kubernetes: loaded before nftgen's file, earlier
+# priority; it counts 7000 and drops 7001, which nftgen's table accepts.
+_FOREIGN_TABLE = """
+table inet foreign {
+    chain input {
+        type filter hook input priority -5; policy accept;
+        tcp dport 7000 counter
+        tcp dport 7001 drop
+    }
+}
+"""
+
+
+@pytest.fixture(scope="module")
+def fw_own_tables():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": "lan",
+                    "router_if": "r-lan",
+                    "router_addr": f"{OT_ROUTER}/24",
+                    "ns_addr": f"{OT_CLIENT}/24",
+                    "gw": OT_ROUTER,
+                },
+            ]
+        )
+        harness.nft_apply(_FOREIGN_TABLE)
+        harness.artifact = build(FIXTURES / "own-tables")["router"]
+        assert "flush ruleset" not in harness.artifact
+        harness.nft_apply(harness.artifact)
+        harness.listen(None, 7000)
+        harness.listen(None, 7001)
+        yield harness
+    finally:
+        harness.close()
+
+
+def _foreign_hits(fw) -> int:
+    out = fw.run(None, ["nft", "list", "table", "inet", "foreign"]).stdout
+    return int(re.search(r"dport 7000 counter packets (\d+)", out).group(1))
+
+
+@requires_netns
+def test_b29_foreign_table_survives_the_apply_and_still_filters(fw_own_tables):
+    # positive control: 7000 passes both tables, and the foreign rule sees it…
+    before = _foreign_hits(fw_own_tables)
+    assert fw_own_tables.probe_tcp("lan", OT_ROUTER, 7000) == "connected"
+    assert _foreign_hits(fw_own_tables) > before
+    # …so 7001, accepted by nftgen's table, dies on the foreign table's drop
+    assert fw_own_tables.probe_tcp("lan", OT_ROUTER, 7001) == "timeout"
+
+
+@requires_netns
+def test_b30_reapply_is_idempotent_and_leaves_the_foreign_table(fw_own_tables):
+    # `destroy table` + the body, twice: no doubled rules in ours, and the
+    # foreign table untouched
+    first = fw_own_tables.run(None, ["nft", "list", "ruleset"]).stdout
+    fw_own_tables.nft_apply(fw_own_tables.artifact)
+    second = fw_own_tables.run(None, ["nft", "list", "ruleset"]).stdout
+    assert _without_runtime_state(first) == _without_runtime_state(second)
+    assert "table inet foreign" in second
+
+
+@requires_netns
+def test_b31_apply_when_its_table_is_missing(fw_own_tables):
+    # first deploy, or a table added to the YAML: `destroy` of a table that
+    # doesn't exist must not abort the file
+    r = fw_own_tables.run(None, ["nft", "delete", "table", "inet", "filter"])
+    assert r.returncode == 0, r.stderr
+    fw_own_tables.nft_apply(fw_own_tables.artifact)
+    assert fw_own_tables.probe_tcp("lan", OT_ROUTER, 7000) == "connected"
+    assert fw_own_tables.probe_tcp("lan", OT_ROUTER, 7001) == "timeout"
