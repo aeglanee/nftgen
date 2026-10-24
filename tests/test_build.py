@@ -10,7 +10,7 @@ import pytest
 from nftgen import validate
 from nftgen.cli import main
 from nftgen.definitions import Definitions
-from nftgen.generate import DictResolver, build, render_tables
+from nftgen.generate import DictResolver, build, generate, render_tables
 from nftgen.ir import BuildError
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -147,6 +147,26 @@ def test_own_tables_one_destroy_per_distinct_table():
     )
     destroys = [ln for ln in text.splitlines() if ln.startswith("destroy table")]
     assert destroys == ["destroy table inet filter", "destroy table ip nat"]
+
+
+def test_own_tables_dedupes_on_the_rendered_name():
+    # `name: 1` and `name: "1"` render the same table; an unhashable name
+    # renders (nft -c rejects it) instead of crashing
+    tables = [
+        {"family": "inet", "name": 1, "chains": [{"name": "a"}]},
+        {"family": "inet", "name": "1", "chains": [{"name": "b"}]},
+        {"family": "inet", "name": ["x"], "chains": [{"name": "c"}]},
+    ]
+    text = render_tables(tables, Definitions(), DictResolver({}), reset="own-tables")
+    destroys = [ln for ln in text.splitlines() if ln.startswith("destroy table")]
+    assert destroys == ["destroy table inet 1", "destroy table inet ['x']"]
+
+
+def test_generate_flush_true_is_deploy():
+    policy = EXAMPLE / "policies" / "hosts" / "router2.yaml"
+    args = (policy, EXAMPLE / "definitions", EXAMPLE / "policies", EXAMPLE / "sites")
+    assert generate(*args, flush=True) == generate(*args, deploy=True)
+    assert "destroy table inet raw" in generate(*args, deploy=True)
 
 
 def test_flush_true_is_reset_flush():

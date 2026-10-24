@@ -280,6 +280,13 @@ class Table:
 RESET_MODES = ("flush", "own-tables")
 
 
+def check_reset(reset, where: str = "") -> None:
+    if reset is not None and reset not in RESET_MODES:
+        raise BuildError(
+            f"{where}`reset:` must be one of {', '.join(RESET_MODES)}, got {reset!r}"
+        )
+
+
 @dataclass
 class Reset:
     """What a deploy file clears before loading its tables: the whole ruleset
@@ -292,7 +299,8 @@ class Reset:
     def render(self) -> str:
         if self.mode == "flush":
             return "flush ruleset\n"
-        names = dict.fromkeys((t.family, t.name) for t in self.tables)
+        # keyed on the text `table` renders, so the dedupe matches nft's view
+        names = dict.fromkeys((str(t.family), str(t.name)) for t in self.tables)
         return "".join(f"destroy table {family} {name}\n" for family, name in names)
 
 
