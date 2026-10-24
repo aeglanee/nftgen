@@ -7,12 +7,15 @@ Versioning: [semantic versioning](https://semver.org) from 1.0.0 on. A new
 check that rejects input which rendered a wrong or broken ruleset is a fix,
 not a breaking change.
 
-## Unreleased
+## 1.1.0 — 2026-10-24
 
 - New: `reset: own-tables` on a host policy: the deploy file starts with one
   `destroy table` per rendered table instead of `flush ruleset`, so tables of
   other tools (Docker, Kubernetes, fail2ban) survive an apply. `flush` stays
-  the default. `render_tables(reset=…)`; `flush=True` keeps working.
+  the default. Needs nft >= 1.0.7 and kernel >= 6.3.
+  `render_tables(reset=…)`; `flush=True` keeps working.
+- Single-file mode (`nftgen <policy.yaml>`) stays tables only and warns when
+  the policy has `reset:`.
 
 ## 1.0.0 — 2026-10-18
 
