@@ -129,3 +129,6 @@ is on the backlog.
   aren't load-tested.
 - **`iif`/`oif`** need the interface to exist when the ruleset loads; `nft -c`
   fails on a box without it.
+- **`destroy table`** (`reset: own-tables`: router2's `nft -c`, B29–B31) needs
+  nft ≥ 1.0.7 and kernel ≥ 6.3; older boxes fail those tests instead of
+  skipping.

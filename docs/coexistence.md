@@ -15,7 +15,7 @@ or fail2ban also write rules.
 | Topic | Decision |
 | --- | --- |
 | Reset modes | Two: `flush ruleset` (today) and *own tables*. The author picks the mode per host; nftgen derives the table list. Tables dropped from the YAML are removed by the role (no `retired:` key — dropped 2026-10-24). Hand-written resets are rejected: a table left out doubles its rules on every apply. |
-| Own-tables reset | `destroy table X` per table (nft ≥ 1.0.7, kernel ≥ 6.3; the role supports Ubuntu 26.04 only). Replaced the earlier `add`+`delete` pair, kept only for Ubuntu 22.04. |
+| Own-tables reset | `destroy table X` per table — [DESIGN.md](../DESIGN.md#project-layout) `reset:`, why in [DECISIONS.md](../DECISIONS.md) §5.4. No `add`+`delete` fallback. |
 | Rollback bug | Fix with **B**: roll back to the previous `/etc/nftables.conf`. **A** (live snapshot of our own tables) stays a possible later addition. |
 | Distro service | Awareness only; no systemd drop-in. |
 | Taken table names | Document; no reject, no warning. |

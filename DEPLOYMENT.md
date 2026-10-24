@@ -29,11 +29,13 @@ How to author and the rollback steps are in the role's
 
 ### File tree (standalone)
 
-`nftgen build <root>` renders every host into `generated/<host>.nft`, a
-complete file (`flush ruleset` + the host's tables) that ships verbatim as
-`/etc/nftables.conf`. Apply it by hand with `nft -c -f` then `nft -f`, or
-with any tool that copies a file. [example-fleet/](example-fleet/) commits
-its renders, and CI fails when a committed render differs from a fresh one.
+`nftgen build <root>` renders every host into `generated/<host>.nft`: the host's
+reset (`flush ruleset`, or one `destroy table` per own table with `reset:
+own-tables` — [DESIGN.md](DESIGN.md#project-layout)) + its tables, shipped
+verbatim as `/etc/nftables.conf`. Apply it by hand with `nft -c -f` then `nft
+-f`, or with any tool that copies a file. [example-fleet/](example-fleet/)
+commits its renders, and CI fails when a committed render differs from a fresh
+one.
 
 ## Rules for both
 
