@@ -210,7 +210,9 @@ forces a rollback, and asserts their tables are unchanged.
 `nftgen_render` gets `reset: flush | own-tables` (default `flush`) and loses
 `flush:` (added in #53, unused by the role; `flush: false` rendered a file the
 role refuses). A breaking change (`!`), noted in the commit; release-please
-bumps 0.3.x → 0.4.0 either way.
+bumps 0.3.x → 0.4.0 either way. The plugin defaults `reset` to `flush` and fails
+on a blank or unknown value: `render_tables(reset=None)` means "tables only",
+which as a deploy file would add every rule again on each apply.
 
 ### Without the role
 
