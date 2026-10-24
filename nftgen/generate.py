@@ -14,13 +14,13 @@ import yaml
 
 from nftgen.definitions import Definitions
 from nftgen.ir import (
-    RESET_MODES,
     BuildError,
     Reset,
     Table,
     build_sets,
     check_comment,
     check_nft_name,
+    check_reset,
 )
 from nftgen.rules import RuleRenderer, build_chain, build_flowtables
 
@@ -259,20 +259,18 @@ def render_tables(  # noqa: PLR0913 - the extras are keyword-only options
     return header + "\n" + prefix + "\n".join(t.render() for t in out_tables)
 
 
-def check_reset(reset, where: str = "") -> None:
-    if reset is not None and reset not in RESET_MODES:
-        raise BuildError(
-            f"{where}`reset:` must be one of {', '.join(RESET_MODES)}, got {reset!r}"
-        )
-
-
-def generate(
+def generate(  # noqa: PLR0913 - flush is the 1.0 alias of deploy
     policy_path: str | pathlib.Path,
     defs_dir: str | pathlib.Path,
     include_base: str | pathlib.Path,
     sites_dir: str | pathlib.Path | None = None,
     deploy: bool = False,
+    flush: bool = False,
 ) -> str:
+    """One host policy file -> its ruleset. ``deploy`` starts it with the
+    policy's `reset:` (``flush`` by default), as ``build()`` does; otherwise
+    the tables alone. ``flush=True`` is the 1.0 spelling of ``deploy=True``."""
+    deploy = deploy or flush
     policy_path = pathlib.Path(policy_path)
     include_base = pathlib.Path(include_base)
     policy = yaml.safe_load(policy_path.read_text()) or {}
@@ -314,8 +312,8 @@ def build(root: str | pathlib.Path, host: str | None = None) -> dict[str, str]:
 
     Convention layout: ``<root>/{definitions, sites, policies/includes,
     policies/hosts}``.
-    Returns ``{host_name: text}`` where each text is a complete, applyable ruleset
-    (starting with the policy's `reset:`, ``flush ruleset`` by default). The host
+    Returns ``{host_name: text}`` where each text is an applyable deploy file
+    starting with the policy's `reset:` (``flush ruleset`` by default). The host
     name is the policy filename stem — the
     ``inventory_hostname == policies/hosts/<name>.yaml == generated/<name>.nft``
     naming contract (DESIGN.md, Project layout).
