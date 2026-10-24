@@ -1,4 +1,4 @@
-"""Step 2 — build(<root>): fleet generation + flush-ruleset deploy artifact."""
+"""Step 2 — build(<root>): fleet generation + the deploy artifact's reset."""
 
 import os
 import pathlib
@@ -9,7 +9,8 @@ import pytest
 
 from nftgen import validate
 from nftgen.cli import main
-from nftgen.generate import build
+from nftgen.definitions import Definitions
+from nftgen.generate import DictResolver, build, render_tables
 from nftgen.ir import BuildError
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -25,7 +26,10 @@ def test_build_all_hosts():
     assert set(out) == {"gateway", "router1", "router2"}
     for text in out.values():
         assert text.startswith("#!/usr/sbin/nft -f")
-        assert "flush ruleset" in text  # deploy artifact (Shape A)
+    # deploy artifact: flush by default, router2 opts into own-tables
+    assert "flush ruleset" in out["gateway"]
+    assert "flush ruleset" in out["router1"]
+    assert "flush ruleset" not in out["router2"]
 
 
 def test_build_single_host():
@@ -112,6 +116,59 @@ def test_build_body_matches_generate_golden():
     assert text == golden.replace(
         "\n\ntable inet raw", "\n\nflush ruleset\n\ntable inet raw", 1
     )
+
+
+def test_build_own_tables_destroys_only_its_tables():
+    # router2 has `reset: own-tables`: one `destroy table` per rendered table
+    # instead of `flush ruleset`, the body unchanged (== the reset-free golden).
+    text = build(EXAMPLE, host="router2")["router2"]
+    golden = (ROOT / "tests" / "golden" / "router2.nft").read_text()
+    assert text == golden.replace(
+        "\n\ntable inet raw",
+        "\n\ndestroy table inet raw\ndestroy table inet filter\n"
+        "destroy table inet nat\n\ntable inet raw",
+        1,
+    )
+
+
+def _reset_tables():
+    return [
+        {"family": "inet", "name": "filter", "chains": [{"name": "a"}]},
+        {"family": "ip", "name": "nat", "chains": [{"name": "b"}]},
+        {"family": "inet", "name": "filter", "chains": [{"name": "c"}]},
+    ]
+
+
+def test_own_tables_one_destroy_per_distinct_table():
+    # a table listed twice is one table to nft (blocks merge): destroy it once,
+    # first-seen order
+    text = render_tables(
+        _reset_tables(), Definitions(), DictResolver({}), reset="own-tables"
+    )
+    destroys = [ln for ln in text.splitlines() if ln.startswith("destroy table")]
+    assert destroys == ["destroy table inet filter", "destroy table ip nat"]
+
+
+def test_flush_true_is_reset_flush():
+    args = (_reset_tables(), Definitions(), DictResolver({}))
+    assert render_tables(*args, flush=True) == render_tables(*args, reset="flush")
+    with pytest.raises(BuildError, match="conflict"):
+        render_tables(*args, flush=True, reset="own-tables")
+
+
+def test_unknown_reset_errors():
+    with pytest.raises(BuildError, match="must be one of flush, own-tables"):
+        render_tables(_reset_tables(), Definitions(), DictResolver({}), reset="tables")
+
+
+@pytest.mark.parametrize("value", ["reset: tables\n", "reset:\n"])
+def test_policy_reset_typo_or_blank_errors(tmp_path, value):
+    root = _host_tree(tmp_path)
+    (root / "policies" / "hosts" / "h1.yaml").write_text(
+        value + "tables:\n  - family: inet\n    name: t\n"
+    )
+    with pytest.raises(BuildError, match="`reset:`"):
+        build(root)
 
 
 def test_cli_build_writes_files(tmp_path):

@@ -3,6 +3,9 @@
 # only `site:` (and any UNIQUE rules) differ. The shared rules resolve to site2's
 # groups via local_users.
 site: site2
+# Shares the box with other firewall writers (Docker, k8s): reset only the
+# tables below instead of `flush ruleset` (docs/coexistence.md).
+reset: own-tables
 
 tables:
   - family: inet
