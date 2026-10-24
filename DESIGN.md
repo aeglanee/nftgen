@@ -42,9 +42,22 @@ it renders to, what nftgen derives for you, and what fails the build. The
   it reads the file's `rules:`, under a table's `sets:` its `sets:`. That
   section must exist and be a list (`rules: []` for a deliberately empty
   file); any other top-level key is an error.
-- **`generated/<host>.nft`**: `#!/usr/sbin/nft -f` + `flush ruleset` + the
+- **`generated/<host>.nft`**: `#!/usr/sbin/nft -f` + the host's reset + the
   host's tables — directly applyable, shipped as `/etc/nftables.conf`. A
   render, never hand-edited.
+- **`reset:`** (host policy, next to `site:` and `tables:`): what the file
+  clears first. `flush` (default) → `flush ruleset`, everything. `own-tables`
+  → one `destroy table <family> <name>` per distinct rendered table, so other
+  tools' tables (Docker, Kubernetes, fail2ban) survive; needs nft ≥ 1.0.7 and
+  kernel ≥ 6.3. A table dropped from `tables:` stays on the host — the
+  ansible-firewall role removes it ([docs/coexistence.md](docs/coexistence.md)).
+
+  ```nft
+  destroy table inet filter
+  destroy table inet nat
+
+  table inet filter { … }
+  ```
 
 **Naming contract:** `inventory_hostname == policies/hosts/<name>.yaml ==
 generated/<name>.nft`.
@@ -56,7 +69,7 @@ nftgen build <root>                       # every host → <root>/generated/
 nftgen build <root> --host fw1            # one host
 nftgen build <root> --host fw1 --stdout   # print it, write nothing
 nftgen build <root> --check               # also run `nft -c` on each output
-nftgen <policy.yaml> --defs <dir> [--out f.nft] [--check]   # one file, no flush
+nftgen <policy.yaml> --defs <dir> [--out f.nft] [--check]   # one file, no reset
 ```
 
 - `--host` is a plain host name (no path, no pattern); two files for one host
@@ -67,13 +80,15 @@ nftgen <policy.yaml> --defs <dir> [--out f.nft] [--check]   # one file, no flush
 
 ### As a library
 
-The CLI's renderer is `render_tables(tables, defs, resolver, *, source,
-flush, annotate)`. With `PathResolver` it reads include files; with
-`DictResolver` includes are named fragments in a dict — the Ansible vars mode
-in [DEPLOYMENT.md](DEPLOYMENT.md) uses that. `Definitions.from_named_mappings`
-builds definitions from named layers and names both origins of a duplicate.
-`annotate` (optional) returns a note per rule, appended as a `# <note>` file
-comment on every line the rule renders to (dropped by nft on load).
+The CLI's renderer is `render_tables(tables, defs, resolver, *, source, reset,
+annotate)`; `reset` is `"flush"`, `"own-tables"` or `None` (tables only), and
+`flush=True` still means `reset="flush"`. With `PathResolver` it reads include
+files; with `DictResolver` includes are named fragments in a dict — the Ansible
+vars mode in [DEPLOYMENT.md](DEPLOYMENT.md) uses that.
+`Definitions.from_named_mappings` builds definitions from named layers and names
+both origins of a duplicate. `annotate` (optional) returns a note per rule,
+appended as a `# <note>` file comment on every line the rule renders to (dropped
+by nft on load).
 
 ## Definitions
 
@@ -279,7 +294,8 @@ rule order. An empty chain stays empty.
 
 ## What fails the build
 
-- Unknown keys at any level; a policy without `tables:`.
+- Unknown keys at any level; a policy without `tables:`; a `reset:` other
+  than `flush` or `own-tables` (blank too).
 - Values of the wrong shape (`ct: bogus`, `log: {prefx: …}`, a two-key
   `action`, `set-mss: 0`) — checked against one schema before rendering.
 - Undefined names; a group that resolves to nothing; definition and include

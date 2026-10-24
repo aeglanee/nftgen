@@ -64,8 +64,9 @@ nftgen build <root> --host gw1 --stdout   # one host to stdout, write nothing
 nftgen build <root> --check               # also validate each file with nft -c
 ```
 
-Each output is a complete file (`flush ruleset` + the host's tables) that
-ships as `/etc/nftables.conf`. With Ansible, the
+Each output is a complete file (`flush ruleset` + the host's tables, or with
+`reset: own-tables` a `destroy table` per own table, so Docker's or
+Kubernetes' tables survive) that ships as `/etc/nftables.conf`. With Ansible, the
 [ansible-firewall](https://github.com/sessrumnir/ansible-firewall)
 collection renders from inventory variables instead and applies behind a
 rollback timer ([DEPLOYMENT.md][deployment]).

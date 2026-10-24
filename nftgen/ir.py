@@ -277,6 +277,25 @@ class Table:
         return "\n".join(out) + "\n"
 
 
+RESET_MODES = ("flush", "own-tables")
+
+
+@dataclass
+class Reset:
+    """What a deploy file clears before loading its tables: the whole ruleset
+    (`flush`) or only the tables it renders (`own-tables`, one `destroy table`
+    per distinct family + name, first-seen order — so foreign tables survive)."""
+
+    mode: str
+    tables: list[Table] = field(default_factory=list)
+
+    def render(self) -> str:
+        if self.mode == "flush":
+            return "flush ruleset\n"
+        names = dict.fromkeys((t.family, t.name) for t in self.tables)
+        return "".join(f"destroy table {family} {name}\n" for family, name in names)
+
+
 # --------------------------------------------------------------------------- #
 # Named-set construction from a table's `sets:` list
 # --------------------------------------------------------------------------- #
