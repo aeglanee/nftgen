@@ -909,6 +909,7 @@ OT_ROUTER, OT_CLIENT = "10.89.1.1", "10.89.1.2"
 
 # Stand-in for Docker/Kubernetes: loaded before nftgen's file, earlier
 # priority; it counts 7000 and drops 7001, which nftgen's table accepts.
+# 7002 only nftgen's `policy drop` stops, so it proves our table is live.
 _FOREIGN_TABLE = """
 table inet foreign {
     chain input {
@@ -941,6 +942,7 @@ def fw_own_tables():
         harness.nft_apply(harness.artifact)
         harness.listen(None, 7000)
         harness.listen(None, 7001)
+        harness.listen(None, 7002)
         yield harness
     finally:
         harness.close()
@@ -959,6 +961,8 @@ def test_b29_foreign_table_survives_the_apply_and_still_filters(fw_own_tables):
     assert _foreign_hits(fw_own_tables) > before
     # …so 7001, accepted by nftgen's table, dies on the foreign table's drop
     assert fw_own_tables.probe_tcp("lan", OT_ROUTER, 7001) == "timeout"
+    # and nftgen's own table is live: 7002 passes the foreign one, not ours
+    assert fw_own_tables.probe_tcp("lan", OT_ROUTER, 7002) == "timeout"
 
 
 @requires_netns
@@ -981,3 +985,4 @@ def test_b31_apply_when_its_table_is_missing(fw_own_tables):
     fw_own_tables.nft_apply(fw_own_tables.artifact)
     assert fw_own_tables.probe_tcp("lan", OT_ROUTER, 7000) == "connected"
     assert fw_own_tables.probe_tcp("lan", OT_ROUTER, 7001) == "timeout"
+    assert fw_own_tables.probe_tcp("lan", OT_ROUTER, 7002) == "timeout"
