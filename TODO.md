@@ -51,9 +51,21 @@ The current working list (review follow-ups, release order) is
       ignore elements of sets declared without elements (runtime blocklists,
       meters). `fix` re-applies through the rollback (runtime elements are
       lost, as on any apply).
+- [ ] **Rollback restores nothing on hosts with untranslatable iptables-nft
+      rules** (bug). The dead-man reloads `nft list ruleset`; Calico,
+      kube-router, libvirt (`set`, `physdev`, `CHECKSUM`, `recent`) make
+      that file unloadable, so a lockout stays until reboot. Fix: roll back
+      to the previous `/etc/nftables.conf` (option B). Tested matrix and
+      details: [docs/coexistence.md](docs/coexistence.md).
+- [ ] Later, if wanted: rollback from a live snapshot of only our own
+      tables (option A) — keeps runtime set elements on a failed deploy.
 - [ ] **Coexistence** (related): the file starts with `flush ruleset`, so
       every apply also wipes Docker / netavark / libvirt / fail2ban tables.
-      Flushing only our own tables would let them coexist.
+      Second mode resetting only our own tables (`add`+`delete table`),
+      agreed in outline: [docs/coexistence.md](docs/coexistence.md).
+- [ ] RHEL's `nftables.service` reads `/etc/sysconfig/nftables.conf`; the
+      role writes `/etc/nftables.conf` by default, so on RHEL the ruleset
+      may not come back after a reboot (unverified).
 
 ## Upstream nft
 
