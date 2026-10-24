@@ -51,7 +51,7 @@ Network namespaces, no VM, rootless (`unshare -rn`):
   missing.
 - iproute2 7.x needs `ip link add name X type veth …` (explicit `name`).
 
-### Primitives (B01–B28)
+### Primitives (B01–B31)
 
 One small fixture per concern under `tests/behavioral/fixtures/`.
 
@@ -85,6 +85,9 @@ One small fixture per concern under `tests/behavioral/fixtures/`.
 | B26 | reapply | `nft -f` the same file twice | succeeds; ruleset identical |
 | B27 | named service set keeps proto | `app: [7000/tcp, 7001/udp]` named + `proto: tcp` | tcp/7000 connects; tcp/7001 times out — the pre-0.7.0 port-only set connected |
 | B28 | anti-spoofing, strict `fib` (best-practices §5) | lan client probes with a wan-subnet source; a `0.0.0.0` → broadcast DHCPDISCOVER frame | spoof dropped + `rpf_drops` rises (own address passes); DHCP arrives, nothing counted |
+| B29 | `reset: own-tables` beside a foreign table | a foreign `inet foreign` (counts 7000, drops 7001) loaded first, then the artifact | 7000 connects and the foreign counter rises; 7001 (accepted by ours) times out on the foreign drop |
+| B30 | own-tables reapply | apply the artifact again | ruleset identical; `inet foreign` still there |
+| B31 | own-tables, own table missing | `nft delete table inet filter`, then apply | applies (`destroy` of a missing table is a no-op); 7000 connects, 7001 still dropped |
 
 ### Reference fleet (P01–P22)
 
