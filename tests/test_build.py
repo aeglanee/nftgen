@@ -162,11 +162,11 @@ def test_own_tables_dedupes_on_the_rendered_name():
     assert destroys == ["destroy table inet 1", "destroy table inet ['x']"]
 
 
-def test_generate_flush_true_is_deploy():
+def test_generate_deploy_adds_the_reset():
     policy = EXAMPLE / "policies" / "hosts" / "router2.yaml"
     args = (policy, EXAMPLE / "definitions", EXAMPLE / "policies", EXAMPLE / "sites")
-    assert generate(*args, flush=True) == generate(*args, deploy=True)
     assert "destroy table inet raw" in generate(*args, deploy=True)
+    assert "destroy table" not in generate(*args)
 
 
 def test_flush_true_is_reset_flush():
