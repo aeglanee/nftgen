@@ -191,6 +191,17 @@ def test_policy_reset_typo_or_blank_errors(tmp_path, value):
         build(root)
 
 
+def test_cli_single_file_warns_that_reset_is_ignored(tmp_path, capsys):
+    policy = EXAMPLE / "policies" / "hosts"
+    out = tmp_path / "r.nft"
+    args = ["--defs", str(EXAMPLE / "definitions"), "--out", str(out)]
+    assert main([str(policy / "router2.yaml"), *args]) == 0  # has `reset:`
+    assert "`reset:` is ignored in single-file mode" in capsys.readouterr().err
+    assert "destroy table" not in out.read_text()
+    assert main([str(policy / "router1.yaml"), *args]) == 0  # no `reset:`
+    assert "ignored" not in capsys.readouterr().err
+
+
 def test_cli_build_writes_files(tmp_path):
     assert main(["build", str(EXAMPLE), "--out-dir", str(tmp_path)]) == 0
     for host in ("gateway", "router1", "router2"):

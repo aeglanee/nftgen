@@ -185,6 +185,12 @@ def main(argv: list[str] | None = None) -> int:
         include_base=args.base or base_default,
         sites_dir=args.sites or sites_default,
     )
+    if "reset" in (yaml.safe_load(policy.read_text()) or {}):
+        print(
+            "nftgen: warning: `reset:` is ignored in single-file mode (tables "
+            "only, for embedding); `nftgen build` writes the deploy file",
+            file=sys.stderr,
+        )
 
     if args.out:
         out = pathlib.Path(args.out)
