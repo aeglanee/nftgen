@@ -69,7 +69,7 @@ nftgen build <root>                       # every host → <root>/generated/
 nftgen build <root> --host fw1            # one host
 nftgen build <root> --host fw1 --stdout   # print it, write nothing
 nftgen build <root> --check               # also run `nft -c` on each output
-nftgen <policy.yaml> --defs <dir> [--out f.nft] [--check]   # one file, no reset
+nftgen <policy.yaml> --defs <dir> [--out f.nft] [--check]   # one file, tables only (no reset, whatever `reset:` says)
 ```
 
 - `--host` is a plain host name (no path, no pattern); two files for one host

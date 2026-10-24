@@ -60,7 +60,7 @@ The current working list (review follow-ups, release order) is
 - [ ] Later, if wanted: rollback from a live snapshot of only our own
       tables (option A) — keeps runtime set elements on a failed deploy.
 - [ ] **Coexistence, role side** (related): nftgen renders `reset:
-      own-tables` (1.1.0); the ansible-firewall role still needs
+      own-tables` (next release); the ansible-firewall role still needs
       `nftgen_reset`, the ownership check against the previous
       `/etc/nftables.conf`, the takeover and the rollback composition —
       decided in [docs/coexistence.md](docs/coexistence.md).
