@@ -27,7 +27,7 @@ jobs:
   build:
     name: build + check
     needs: ci
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -71,7 +71,7 @@ jobs:
   publish:
     name: publish to PyPI
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     environment:
       name: pypi
@@ -91,7 +91,7 @@ jobs:
   github-release:
     name: GitHub release
     needs: publish
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       contents: write
