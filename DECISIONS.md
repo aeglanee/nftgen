@@ -243,17 +243,37 @@ the CLI wraps them. CLI, CI and the Ansible plugin share one tested path.
 
 ### 5.3 The output is the deploy artifact
 
-`nftgen build` renders every host; each file is complete: shebang +
-`flush ruleset` + the host's tables, shipped verbatim as
-`/etc/nftables.conf`.
+`nftgen build` renders every host; each file is complete: shebang + a reset
+(§5.4) + the host's tables, shipped verbatim as `/etc/nftables.conf`.
 *Why build-all:* rendering is cheap and deterministic, and change detection
-needs every host. *Why `flush ruleset`:* the file is one replaceable,
-atomic unit, safe to reapply. It isn't a hidden rule (§1.5): it's visible
-at the top and belongs to the deploy artifact, not the policy. The
-single-file mode and `generate()` stay flush-free for embedding.
+needs every host. *Why a reset:* the file is one replaceable, atomic unit,
+safe to reapply — without one, `nft -f` appends every rule again. It isn't a
+hidden rule (§1.5): it's visible at the top and belongs to the deploy
+artifact. The single-file mode and `generate()` stay reset-free for
+embedding.
 *Rejected:* a wrapper `nftables.conf` that flushes and includes a flush-free
 file — one more indirection, and the reviewed file is no longer the one on
 the box.
+
+### 5.4 Two reset modes, chosen per host
+
+`reset: flush` (default) starts the file with `flush ruleset`; `reset:
+own-tables` with one `destroy table` per distinct rendered table, so other
+tools' tables (Docker, Kubernetes, fail2ban) survive an apply.
+*Why per host, in the policy:* what else writes rules is a fact about the
+host; a CLI flag would make the output depend on how nftgen was run, not on
+the YAML. *Why derived, not authored:* leaving a table out of the reset
+doubles its rules on every apply, so there's nothing to choose. *Why
+`destroy`:* one line, a no-op on a missing table; plain `delete` aborts the
+file on a first deploy (`add`+`delete` would cover nft < 1.0.7 / kernel < 6.3,
+which the deploy target, Ubuntu 26.04, doesn't need). *Why no `retired:`
+key:* a table dropped from the YAML is removed by the ansible-firewall role,
+which sees the previous `/etc/nftables.conf`; nftgen can't see the host, and
+comparing with its own previous output would make the output depend on more
+than the YAML (§2.5). The ownership and takeover rules are in
+[docs/coexistence.md](docs/coexistence.md).
+*Rejected:* a CLI flag; a hand-written reset list; a `comment` marker on
+tables (table comments belong to the author).
 
 ## 6. Environment notes
 
