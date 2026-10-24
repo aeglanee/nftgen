@@ -61,7 +61,7 @@ The current working list (review follow-ups, release order) is
       tables (option A) — keeps runtime set elements on a failed deploy.
 - [ ] **Coexistence** (related): the file starts with `flush ruleset`, so
       every apply also wipes Docker / netavark / libvirt / fail2ban tables.
-      Second mode resetting only our own tables (`add`+`delete table`),
+      Second mode resetting only our own tables (`destroy table`),
       agreed in outline: [docs/coexistence.md](docs/coexistence.md).
 - [ ] RHEL's `nftables.service` reads `/etc/sysconfig/nftables.conf`; the
       role writes `/etc/nftables.conf` by default, so on RHEL the ruleset
