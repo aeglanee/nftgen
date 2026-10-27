@@ -9,7 +9,8 @@ import pathlib
 import pytest
 
 from nftgen import validate
-from nftgen.generate import generate
+from nftgen.definitions import Definitions
+from nftgen.generate import DictResolver, generate, render_tables
 
 EXAMPLE = pathlib.Path(__file__).resolve().parent.parent / "example"
 
@@ -44,3 +45,47 @@ def test_generated_passes_nft_check(host):
 def test_invalid_ruleset_is_rejected():
     # a sanity check that our checker actually catches bad nft
     assert not validate.check("table inet t { chain c { nonsense-token } }").ok
+
+
+@requires_nft
+def test_ct_mark_save_restore_passes_nft_check():
+    # symmetric return: connections that arrive over the pair link are marked,
+    # and their locally generated replies get the mark back for an `ip rule`
+    tables = [
+        {
+            "family": "inet",
+            "name": "pairmark",
+            "chains": [
+                {
+                    "name": "prerouting",
+                    "hook": "prerouting",
+                    "type": "filter",
+                    "priority": "mangle",
+                    "policy": "accept",
+                    "rules": [
+                        {"iifname": "peer", "ct": ["new"], "set-ct-mark": "0x1"},
+                    ],
+                },
+                {
+                    "name": "output",
+                    "hook": "output",
+                    "type": "route",
+                    "priority": "mangle",
+                    "policy": "accept",
+                    "rules": [
+                        {"ct-mark": "0x1", "set-mark": "ct-mark"},
+                        {"set-ct-mark": "mark"},
+                    ],
+                },
+            ],
+        }
+    ]
+    text = render_tables(
+        tables,
+        Definitions.from_mappings({"interfaces": {"peer": ["peer0"]}}),
+        DictResolver({}),
+    )
+    assert "ct mark set 0x1" in text
+    assert "ct mark 0x1 meta mark set ct mark" in text
+    res = validate.check(text)
+    assert res.ok, res.stderr

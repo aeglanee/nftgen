@@ -293,6 +293,10 @@ def test_mark_values_are_numbers():
     ]
     bad({"mark": "gold", "action": "accept"}, "rule key 'mark'")
     bad({"set-mark": "0x1-0x2"}, "rule key 'set-mark'")  # a range can't be set
+    bad({"set-mark": "mark"}, "rule key 'set-mark'")  # only ct-mark is a source
+    bad({"ct-mark": "gold", "action": "accept"}, "rule key 'ct-mark'")
+    bad({"set-ct-mark": "0x1-0x2"}, "rule key 'set-ct-mark'")
+    bad({"set-ct-mark": "ct-mark"}, "rule key 'set-ct-mark'")  # only mark is a source
 
 
 def test_concat_mark_values_are_numbers():
