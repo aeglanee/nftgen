@@ -1,4 +1,4 @@
-"""Phase 6A — statement rule keys: limit / quota / log / set-mark / set-mss."""
+"""Phase 6A — statement rule keys: limit / quota / log / set-mark / set-ct-mark / set-mss."""
 
 import pytest
 
@@ -63,6 +63,26 @@ def test_set_mark_statement_only():
     assert (
         one({"daddr": "10.0.0.0/8", "set-mark": "0x1"})
         == "ip daddr 10.0.0.0/8 meta mark set 0x1"
+    )
+
+
+def test_set_ct_mark_value_and_save():
+    assert one({"ct": ["new"], "set-ct-mark": "0x1"}) == "ct state new ct mark set 0x1"
+    # save: the packet mark becomes the connection's
+    assert one({"set-ct-mark": "mark"}) == "ct mark set meta mark"
+
+
+def test_set_mark_restores_from_ct_mark():
+    # restore: the connection's mark becomes the packet's, e.g. for an ip rule
+    assert one({"ct-mark": "0x1", "set-mark": "ct-mark"}) == (
+        "ct mark 0x1 meta mark set ct mark"
+    )
+
+
+def test_ct_mark_match():
+    assert one({"ct-mark": "0x1", "action": "accept"}) == "ct mark 0x1 accept"
+    assert one({"ct-mark": "0x10-0x1f", "action": "accept"}) == (
+        "ct mark 0x10-0x1f accept"
     )
 
 

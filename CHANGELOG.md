@@ -7,6 +7,14 @@ Versioning: [semantic versioning](https://semver.org) from 1.0.0 on. A new
 check that rejects input which rendered a wrong or broken ruleset is a fix,
 not a breaking change.
 
+## Unreleased
+
+- New: connection marks. `ct-mark:` matches the connection's mark
+  (`ct mark 0x1`, a number or a range); `set-ct-mark:` sets it (`0x1`) or
+  saves the packet mark into it (`mark` → `ct mark set meta mark`); and
+  `set-mark: ct-mark` restores it onto the packet
+  (`meta mark set ct mark`). Recipe: docs/best-practices.md §8e.
+
 ## 1.1.0 — 2026-10-24
 
 - New: `reset: own-tables` on a host policy: the deploy file starts with one

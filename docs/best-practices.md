@@ -499,3 +499,51 @@ in the base chain. Structure the drops so every one is attributed:
   the traffic you're testing (a `raw:` rule, temporary) and watch
   `nft monitor trace` — it prints every chain and rule the packet
   traverses and the exact rule that issued the verdict.
+
+### 8e. One-way flows through a router pair: return them with connection marks
+
+Two routers that share a LAN (VRRP, or an ESI-LAG anycast gateway) and a
+pair link have a trap for traffic to one router's own address, such as its
+loopback: the client's packets may arrive at the *other* router, which
+routes them over the pair link, while the owner answers the client directly
+on the LAN. The forwarding router then sees the SYN and never the SYN-ACK,
+so conntrack marks the client's next packets `invalid`, and a base chain
+that drops `ct state invalid` (§1) kills the connection.
+
+Fix the path, not the firewall: mark connections that arrive over the pair
+link, and route their replies back the same way.
+
+```yaml
+chains:
+  - name: prerouting
+    hook: prerouting
+    type: filter
+    priority: mangle
+    policy: accept
+    rules:
+      - iifname: peer
+        ct: [new]
+        set-ct-mark: 0x1 # remember: this connection came over the pair link
+  - name: output
+    hook: output
+    type: route # a mark change re-routes the packet
+    priority: mangle
+    policy: accept
+    rules:
+      - ct-mark: 0x1
+        set-mark: ct-mark # the reply carries the mark again
+```
+
+renders
+
+```nft
+iifname "peer0" ct state new ct mark set 0x1
+ct mark 0x1 meta mark set ct mark
+```
+
+and an `ip rule` sends marked packets to a table whose route points back
+over the pair link (`ip rule add fwmark 0x1 lookup 100` with
+`ip route add default via <partner> dev peer0 table 100`). Every router on
+the path now sees both directions, conntrack stays strict everywhere, and
+no rule has to accept invalid packets. `output` must be `type route`: only
+a route chain re-runs the routing decision after the mark changes.

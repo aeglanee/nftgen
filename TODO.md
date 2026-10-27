@@ -19,8 +19,7 @@ The current working list (review follow-ups, release order) is
 - [ ] Named / reusable maps: a table-level `maps:` (verdict maps, dnat
       targets) referenced from a `vmap:` rule or a dnat map.
 - [ ] `set-dscp`, rendered per family (`ip dscp set` / `ip6 dscp set`).
-- [ ] `redirect` action; `ct mark` (match + set); more meta matches
-      (`pkttype`, `skuid`, …).
+- [ ] `redirect` action; more meta matches (`pkttype`, `skuid`, …).
 - [ ] Anti-spoofing (`fib saddr . mark . iif oif missing drop`) as a key,
       strict or loose; the recipe is in
       [docs/best-practices.md](docs/best-practices.md) §5, proven by

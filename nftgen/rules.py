@@ -147,6 +147,7 @@ _KNOWN_RULE_KEYS = frozenset(
         "daddr",
         "ct",
         "mark",
+        "ct-mark",
         "proto",
         "sport",
         "dport",
@@ -159,6 +160,7 @@ _KNOWN_RULE_KEYS = frozenset(
         "quota",
         "log",
         "set-mark",
+        "set-ct-mark",
         "set-mss",
         "flow-offload",
         "counter",
@@ -180,6 +182,7 @@ _CONCAT_RULE_KEYS = frozenset(
         "quota",
         "log",
         "set-mark",
+        "set-ct-mark",
         "set-mss",
         "flow-offload",
     }
@@ -334,6 +337,8 @@ class RuleRenderer:
                     parts.append("ct state " + ",".join(rule["ct"]))
                 if "mark" in rule:
                     parts.append(f"meta mark {rule['mark']}")
+                if "ct-mark" in rule:
+                    parts.append(f"ct mark {rule['ct-mark']}")
                 if "icmp-type" in rule:
                     proto = proto_name(rule.get("proto"))
                     if proto not in ("icmp", "icmpv6"):
@@ -379,7 +384,11 @@ class RuleRenderer:
         if "log" in rule and rule["log"] is not False:
             out.append(self._log(rule["log"]))
         if "set-mark" in rule:
-            out.append(f"meta mark set {rule['set-mark']}")
+            src = rule["set-mark"]
+            out.append(f"meta mark set {'ct mark' if src == 'ct-mark' else src}")
+        if "set-ct-mark" in rule:
+            src = rule["set-ct-mark"]
+            out.append(f"ct mark set {'meta mark' if src == 'mark' else src}")
         if "set-mss" in rule:
             mss = rule["set-mss"]
             target = "rt mtu" if str(mss) in ("pmtu", "rt-mtu", "rt_mtu") else str(mss)
