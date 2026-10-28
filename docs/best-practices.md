@@ -523,14 +523,14 @@ chains:
     rules:
       - iifname: peer
         ct: [new]
-        set-ct-mark: 0x1 # remember: this connection came over the pair link
+        set-ct-mark: "0x1" # remember: this connection came over the pair link
   - name: output
     hook: output
     type: route # a mark change re-routes the packet
     priority: mangle
     policy: accept
     rules:
-      - ct-mark: 0x1
+      - ct-mark: "0x1"
         set-mark: ct-mark # the reply carries the mark again
 ```
 

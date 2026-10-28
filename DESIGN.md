@@ -193,8 +193,8 @@ forms below. Rule order is kept exactly.
 | `proto` | `proto: icmp` | `meta l4proto icmp` (a name, or a number 0–255) |
 | `sport` / `dport` | `proto: tcp` + `dport: ssh` | `tcp dport 22` |
 | `ct` | `ct: [established, related]` | `ct state established,related` |
-| `mark` | `mark: 0x1` | `meta mark 0x1` (a number, `0x…`, or a range) |
-| `ct-mark` | `ct-mark: 0x1` | `ct mark 0x1` (the connection's mark; a number, `0x…`, or a range) |
+| `mark` | `mark: "0x1"` | `meta mark 0x1` (a number, `0x…`, or a range; quote hex, or YAML reads `0x1` as `1`) |
+| `ct-mark` | `ct-mark: "0x1"` | `ct mark 0x1` (the connection's mark; a number, `0x…`, or a range) |
 | `icmp-type` | `proto: icmpv6` + `icmp-type: [nd-neighbor-solicit]` | `icmpv6 type nd-neighbor-solicit` (needs `proto: icmp`/`icmpv6`, no ports) |
 | `flags` | `flags: {match: [syn], mask: [syn, ack]}` | `tcp flags & (syn\|ack) == syn` (a list makes one line each) |
 
@@ -227,8 +227,8 @@ set can't go inside a list.
 | `limit` | `4/minute` | `limit rate 4/minute` |
 | `meter` | `{set: m, key: saddr, rate: 4/minute, timeout: 1m}` | `update @m { ip saddr timeout 1m limit rate 4/minute }` (a `dynamic` set; keys saddr/daddr/iifname/oifname) |
 | `quota` | `over 10 mbytes` | `quota over 10 mbytes` |
-| `set-mark` | `0x1` / `ct-mark` | `meta mark set 0x1` / `meta mark set ct mark` (restore the connection's mark) |
-| `set-ct-mark` | `0x1` / `mark` | `ct mark set 0x1` / `ct mark set meta mark` (save the packet's mark) |
+| `set-mark` | `"0x1"` / `ct-mark` | `meta mark set 0x1` / `meta mark set ct mark` (restore the connection's mark) |
+| `set-ct-mark` | `"0x1"` / `mark` | `ct mark set 0x1` / `ct mark set meta mark` (save the packet's mark) |
 | `set-mss` | `pmtu` / `1452` | `tcp flags syn tcp option maxseg size set rt mtu` / `… 1452` (1–65535) |
 | `flow-offload` | `ft` | `flow add @ft` (a declared flowtable; a separate rule from the verdict) |
 | `comment` | `"admins → router ssh"` | `comment "…"`, last on every line of the rule; kept by the kernel; no `"`, ≤ 128 bytes |
