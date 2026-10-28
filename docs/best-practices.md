@@ -511,7 +511,13 @@ so conntrack marks the client's next packets `invalid`, and a base chain
 that drops `ct state invalid` (§1) kills the connection.
 
 Fix the path, not the firewall: mark connections that arrive over the pair
-link, and route their replies back the same way.
+link, and route their replies back the same way. The pair link is an
+interface group in the definitions:
+
+```yaml
+interfaces:
+  peer: [peer0]
+```
 
 ```yaml
 chains:
@@ -557,4 +563,7 @@ everywhere, and no rule has to accept invalid packets. `output` must be
 `type route`: only a route chain re-runs the routing decision after the
 mark changes.
 
+Sources: `man nft` (chain types: a `route` chain does a new route lookup
+when relevant parts of the header changed); Linux
+`net/netfilter/nft_chain_route.c` (the mark is one of them, IPv4 and IPv6).
 Checked with `nft -c` and behavioral test B32, IPv4 and IPv6.
