@@ -92,16 +92,23 @@ class Harness:
         """
         self._rpc(op="topology", zones=zones)
 
+    def link(self, a: str | None, a_if: str, b: str | None, b_if: str) -> None:
+        """A veth between two namespaces (None = the router), both ends up."""
+        self._rpc(op="link", a=a, a_if=a_if, b=b, b_if=b_if)
+
     def nft_apply(self, text: str) -> None:
         self._rpc(op="nft", text=text)
 
-    def listen(self, ns: str | None, port: int, echo_peer: bool = False) -> None:
+    def listen(
+        self, ns: str | None, port: int, echo_peer: bool = False, addr: str = "0.0.0.0"
+    ) -> None:
         """TCP accept-loop in a zone ns (or the router when ns is None).
 
         echo_peer: the listener writes the accepted peer's address back on
         the connection — probe_tcp_reply() reads it (NAT assertions).
+        addr: the bind address; a v6 one makes an IPv6 listener.
         """
-        self._rpc(op="listen", ns=ns, port=port, echo_peer=echo_peer)
+        self._rpc(op="listen", ns=ns, port=port, echo_peer=echo_peer, addr=addr)
 
     def probe_tcp(
         self,
