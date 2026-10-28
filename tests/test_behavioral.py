@@ -1047,18 +1047,32 @@ _PAIR_ROUTES = [  # the recipe's routing half, on B
     "ip -6 route add default via fd91:9::1 dev peer0 table 100",
 ]
 
-# best-practices §5, strict, in its own table beside the recipe
-_PAIR_FIB_STRICT = """
-table inet rpf {
-    chain rpfilter {
-        type filter hook prerouting priority -140; policy accept;
-        fib saddr . mark . iif oif missing counter drop
-    }
+# best-practices §5 in its own table beside the recipe: strict everywhere, or
+# loose on the pair link only (its traffic is one-sided by design)
+_PAIR_FIB = {
+    "strict": "fib saddr . mark . iif oif missing counter drop",
+    "loose-on-peer": """iifname "peer0" fib saddr . mark oif missing counter drop
+        iifname != "peer0" fib saddr . mark . iif oif missing counter drop""",
 }
+_PAIR_RPF_TABLE = """
+table inet rpf {{
+    chain rpfilter {{
+        type filter hook prerouting priority -140; policy accept;
+        {rules}
+    }}
+}}
 """
 
+# the kernel's own reverse-path check (IPv4 only); strict is the RHEL default,
+# and the per-interface value only wins when it is the higher one
+_PAIR_KERNEL_RPF = {
+    "strict": "sysctl -qw net.ipv4.conf.all.rp_filter=1",
+    "loose-on-peer": "sysctl -qw net.ipv4.conf.all.rp_filter=1 "
+    "net.ipv4.conf.peer0.rp_filter=2",
+}
 
-def _pair_harness(host: str | None, fib_strict: bool, kernel_strict: bool):
+
+def _pair_harness(recipe: bool, fib: str | None, kernel: str | None):
     h = Harness()
     try:
         h.topology(
@@ -1081,18 +1095,10 @@ def _pair_harness(host: str | None, fib_strict: bool, kernel_strict: bool):
         )
         h.link("a", "lan0", "client", "eth1")
         steps = list(_PAIR_SETUP)
-        if host is not None:
+        if recipe:
             steps += [(None, cmd) for cmd in _PAIR_ROUTES]
-        if kernel_strict:
-            # the kernel's own reverse-path check, strict (the RHEL default);
-            # src_valid_mark lets it route by the restored mark
-            steps.append(
-                (
-                    None,
-                    "sysctl -qw net.ipv4.conf.all.rp_filter=1 "
-                    "net.ipv4.conf.peer0.src_valid_mark=1",
-                )
-            )
+        if kernel:
+            steps.append((None, _PAIR_KERNEL_RPF[kernel]))
         for ns, cmd in steps:
             r = h.run(ns, ["sh", "-c", cmd])
             assert r.returncode == 0, f"{cmd}: {r.stderr}"
@@ -1105,10 +1111,10 @@ def _pair_harness(host: str | None, fib_strict: bool, kernel_strict: bool):
         ):
             assert time.time() < deadline, "IPv6 DAD did not settle"
             time.sleep(0.05)
-        if host is not None:
-            h.nft_apply(build(FIXTURES / "ct-mark")[host])
-        if fib_strict:
-            h.nft_apply(_PAIR_FIB_STRICT)
+        if recipe:
+            h.nft_apply(build(FIXTURES / "ct-mark")["pair"])
+        if fib:
+            h.nft_apply(_PAIR_RPF_TABLE.format(rules=_PAIR_FIB[fib]))
         for addr in (*PAIR_OWNER.values(), PAIR_OWNER_LAN):
             h.listen(None, 9000, echo_peer=True, addr=addr)
         return h
@@ -1127,34 +1133,32 @@ def _a_invalid_drops(h, fam: str) -> int:
 
 @requires_netns
 @pytest.mark.parametrize(
-    ("host", "fib_strict", "kernel_strict", "v4", "v6"),
+    ("recipe", "fib", "kernel", "v4", "v6"),
     [
         # no recipe: the problem is real — A sees one direction, drops invalid
-        (None, False, False, "timeout", "timeout"),
+        (False, None, None, "timeout", "timeout"),
         # the recipe returns the flow over the pair link, both families
-        ("pair", False, False, "connected", "connected"),
+        (True, None, None, "connected", "connected"),
         # §5 strict fib: the SYN arrives on peer0, the route back is lan0
-        ("pair", True, False, "timeout", "timeout"),
-        # …unless the mark is restored in prerouting before the check
-        ("pair-restore", True, False, "connected", "connected"),
-        # kernel rp_filter strict (IPv4 only) hits the plain recipe too
-        ("pair", False, True, "timeout", "connected"),
-        # …fixed by the restore plus src_valid_mark
-        ("pair-restore", False, True, "connected", "connected"),
+        (True, "strict", None, "timeout", "timeout"),
+        # …so the pair link gets the loose check, the rest stays strict
+        (True, "loose-on-peer", None, "connected", "connected"),
+        # kernel rp_filter strict (IPv4 only) hits the recipe the same way
+        (True, None, "strict", "timeout", "connected"),
+        # …and loose on the pair link mends it
+        (True, None, "loose-on-peer", "connected", "connected"),
     ],
     ids=[
         "no-recipe",
         "recipe",
         "fib-strict",
-        "fib-strict-restore",
+        "fib-loose-on-peer",
         "kernel-strict",
-        "kernel-strict-restore",
+        "kernel-loose-on-peer",
     ],
 )
-def test_b32_router_pair_returns_one_way_flows(  # noqa: PLR0913 - the case table
-    host, fib_strict, kernel_strict, v4, v6
-):
-    h = _pair_harness(host, fib_strict, kernel_strict)
+def test_b32_router_pair_returns_one_way_flows(recipe, fib, kernel, v4, v6):
+    h = _pair_harness(recipe, fib, kernel)
     try:
         # positive control: B answers the client directly on the shared LAN
         assert h.probe_tcp_reply("client", PAIR_OWNER_LAN, 9000)[0] == "connected"
@@ -1163,7 +1167,7 @@ def test_b32_router_pair_returns_one_way_flows(  # noqa: PLR0913 - the case tabl
             assert outcome == expected, fam
             if expected == "connected":
                 assert peer == PAIR_CLIENT[fam]
-        if host is None:  # the drop is A's conntrack, not a broken topology
+        if not recipe:  # the drop is A's conntrack, not a broken topology
             assert _a_invalid_drops(h, "v4") > 0
             assert _a_invalid_drops(h, "v6") > 0
     finally:
