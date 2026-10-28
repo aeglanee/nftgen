@@ -329,4 +329,14 @@ def check_rule(rule) -> dict:
             f"`icmp-type` can't be combined with `sport`/`dport` — icmp has no "
             f"ports: {rule!r}"
         )
+    if (
+        "set-mark" in out
+        and "set-ct-mark" in out
+        and (out["set-mark"] == "ct-mark" or out["set-ct-mark"] == "mark")
+    ):
+        raise BuildError(
+            f"`set-mark` and `set-ct-mark` can't share a rule when one copies the "
+            f"other — the order decides the result; split them into two rules: "
+            f"{rule!r}"
+        )
     return out

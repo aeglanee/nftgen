@@ -305,6 +305,8 @@ rule order. An empty chain stays empty.
 - A named set mixing v4 and v6; a rule whose addresses share no family.
 - Object names that are reserved nft keywords (`counter`, `fwd`, `map`, …).
 - `flow-offload:` and an action in one rule (the verdict would never run).
+- `set-mark:` and `set-ct-mark:` in one rule when one copies the other
+  (`ct-mark` / `mark`): the result would depend on their order.
 - Duplicate map keys; reject/NAT inside a vmap; a port on a protocol without
   ports.
 
