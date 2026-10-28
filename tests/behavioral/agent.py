@@ -14,11 +14,15 @@ Ops:
       "ns_addr", "gw", "router_addr6"?, "ns_addr6"?, "gw6"?}, …]}
                                        veths, addrs, routes, ip_forward=1
                                        (v6 keys optional; forwarding too)
+  {"op": "link", "a": name|null, "a_if", "b": name|null, "b_if"}
+                                       a veth between any two namespaces
+                                       (null = the router), both ends up
   {"op": "nft", "text": "…"}           apply a ruleset in the router ns
   {"op": "listen", "ns": name|null, "port": N,
-      "echo_peer": bool}               TCP accept-loop; echo_peer writes the
+      "echo_peer": bool, "addr"?}      TCP accept-loop; echo_peer writes the
                                        accepted peer address back on the conn
-  {"op": "probe", "ns": name|null, "dst": "a.b.c.d", "port": N,
+                                       (addr: bind address, v4 or v6)
+  {"op": "probe", "ns": name|null, "dst": v4|v6, "port": N,
       "timeout": secs, "read": bool}   -> connected | refused | timeout
                                        (read: also return the server's reply)
   {"op": "ping", "ns": name|null, "dst": addr, "timeout": secs}
@@ -177,6 +181,33 @@ def _wait_dad_settled(zones: list[dict], timeout: float = 5.0) -> None:
         time.sleep(0.05)
 
 
+def op_link(req: dict) -> dict:
+    a, b = req.get("a"), req.get("b")
+    b_pid = NAMESPACES[b] if b is not None else os.getpid()
+    _sh(
+        a,
+        "ip",
+        "link",
+        "add",
+        "name",
+        req["a_if"],
+        "type",
+        "veth",
+        "peer",
+        "name",
+        req["b_if"],
+        "netns",
+        str(b_pid),
+    )
+    _sh(a, "ip", "link", "set", req["a_if"], "up")
+    _sh(b, "ip", "link", "set", req["b_if"], "up")
+    return {"ok": True}
+
+
+def _family(addr: str) -> int:
+    return socket.AF_INET6 if ":" in addr else socket.AF_INET
+
+
 def op_nft(req: dict) -> dict:
     with tempfile.NamedTemporaryFile("w", suffix=".nft", delete=False) as fh:
         fh.write(req["text"])
@@ -200,9 +231,10 @@ def op_listen(req: dict) -> dict:
         try:
             if ns_pid is not None:
                 _setns_net(ns_pid)
-            srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            addr = req.get("addr", "0.0.0.0")
+            srv = socket.socket(_family(addr), socket.SOCK_STREAM)
             srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            srv.bind((req.get("addr", "0.0.0.0"), req["port"]))
+            srv.bind((addr, req["port"]))
             srv.listen(8)
         except Exception:
             os._exit(1)
@@ -240,7 +272,7 @@ def op_probe(req: dict) -> dict:
         try:
             if ns_pid is not None:
                 _setns_net(ns_pid)
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock = socket.socket(_family(req["dst"]), socket.SOCK_STREAM)
             sock.settimeout(timeout)
             if req.get("src"):  # bind a specific source (must exist on an iface)
                 sock.bind((req["src"], 0))
@@ -533,6 +565,7 @@ def op_run(req: dict) -> dict:
 def main() -> int:
     handlers = {
         "topology": op_topology,
+        "link": op_link,
         "nft": op_nft,
         "listen": op_listen,
         "probe": op_probe,
