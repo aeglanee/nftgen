@@ -986,3 +986,185 @@ def test_b31_apply_when_its_table_is_missing(fw_own_tables):
     assert fw_own_tables.probe_tcp("lan", OT_ROUTER, 7000) == "connected"
     assert fw_own_tables.probe_tcp("lan", OT_ROUTER, 7001) == "timeout"
     assert fw_own_tables.probe_tcp("lan", OT_ROUTER, 7002) == "timeout"
+
+
+# --------------------------------------------------------------------------- #
+# B32 — router pair: return one-way flows with connection marks (ct-mark)
+# --------------------------------------------------------------------------- #
+
+# The router ns is B, the owner of PAIR_OWNER. The client's gateway is A, so
+# its packets to B's own address go client -> A -> pair link -> B, while B
+# would answer straight on the shared LAN (a bridge in the client ns). A
+# drops `ct state invalid`, so it kills the flow unless B's replies go back
+# over the pair link. Each case is a fresh harness; B gets its variant.
+PAIR_OWNER = {"v4": "10.91.0.2", "v6": "fd91::2"}
+PAIR_OWNER_LAN = "10.91.1.2"
+PAIR_CLIENT = {"v4": "10.91.1.10", "v6": "fd91:1::10"}
+
+_PAIR_SETUP = [
+    # the shared LAN: the client's eth0 (to B) and eth1 (to A) on one bridge
+    ("client", "ip link add br0 type bridge"),
+    ("client", "ip link set eth0 master br0"),
+    ("client", "ip link set eth1 master br0"),
+    ("client", "ip link set br0 up"),
+    ("client", "ip addr flush dev eth0"),
+    ("client", "ip addr add 10.91.1.10/24 dev br0"),
+    ("client", "ip -6 addr add fd91:1::10/64 dev br0 nodad"),
+    ("client", "ip route add default via 10.91.1.1"),
+    ("client", "ip -6 route add default via fd91:1::1"),
+    # A: on the LAN as lan0, the pair link is its eth0 (default via B)
+    ("a", "sysctl -qw net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1"),
+    ("a", "ip addr add 10.91.1.1/24 dev lan0"),
+    ("a", "ip -6 addr add fd91:1::1/64 dev lan0 nodad"),
+    ("a", "ip -6 addr add fd91:9::1/64 dev eth0 nodad"),
+    ("a", "ip -6 route add default via fd91:9::2"),
+    ("a", "nft add table inet f"),
+    (
+        "a",
+        "nft 'add chain inet f forward "
+        "{ type filter hook forward priority 0; policy accept; }'",
+    ),
+    (
+        "a",
+        "nft add rule inet f forward meta nfproto ipv4 ct state invalid counter drop",
+    ),
+    (
+        "a",
+        "nft add rule inet f forward meta nfproto ipv6 ct state invalid counter drop",
+    ),
+    # B: its own address on lo; the pair link is peer0
+    (None, "ip addr add 10.91.0.2/32 dev lo"),
+    (None, "ip -6 addr add fd91::2/128 dev lo"),
+    (None, "ip -6 addr add fd91:1::2/64 dev lan0 nodad"),
+    (None, "ip -6 addr add fd91:9::2/64 dev peer0 nodad"),
+    (None, "sysctl -qw net.ipv4.conf.all.rp_filter=0 net.ipv4.conf.peer0.rp_filter=0"),
+]
+
+_PAIR_ROUTES = [  # the recipe's routing half, on B
+    "ip rule add fwmark 0x1 lookup 100",
+    "ip route add default via 10.91.9.1 dev peer0 table 100",
+    "ip -6 rule add fwmark 0x1 lookup 100",
+    "ip -6 route add default via fd91:9::1 dev peer0 table 100",
+]
+
+# best-practices §5, strict, in its own table beside the recipe
+_PAIR_FIB_STRICT = """
+table inet rpf {
+    chain rpfilter {
+        type filter hook prerouting priority -140; policy accept;
+        fib saddr . mark . iif oif missing counter drop
+    }
+}
+"""
+
+
+def _pair_harness(host: str | None, fib_strict: bool, kernel_strict: bool):
+    h = Harness()
+    try:
+        h.topology(
+            [
+                {
+                    "name": "client",
+                    "router_if": "lan0",
+                    "router_addr": "10.91.1.2/24",
+                    "ns_addr": "10.91.1.10/24",
+                    "gw": "10.91.1.1",
+                },
+                {
+                    "name": "a",
+                    "router_if": "peer0",
+                    "router_addr": "10.91.9.2/30",
+                    "ns_addr": "10.91.9.1/30",
+                    "gw": "10.91.9.2",
+                },
+            ]
+        )
+        h.link("a", "lan0", "client", "eth1")
+        steps = list(_PAIR_SETUP)
+        if host is not None:
+            steps += [(None, cmd) for cmd in _PAIR_ROUTES]
+        if kernel_strict:
+            # the kernel's own reverse-path check, strict (the RHEL default);
+            # src_valid_mark lets it route by the restored mark
+            steps.append(
+                (
+                    None,
+                    "sysctl -qw net.ipv4.conf.all.rp_filter=1 "
+                    "net.ipv4.conf.peer0.src_valid_mark=1",
+                )
+            )
+        for ns, cmd in steps:
+            r = h.run(ns, ["sh", "-c", cmd])
+            assert r.returncode == 0, f"{cmd}: {r.stderr}"
+        # the new links' link-local addresses run DAD; v6 neighbour discovery
+        # waits on them, so a probe before they settle would time out
+        deadline = time.time() + 5
+        while any(
+            h.run(ns, ["ip", "-6", "addr", "show", "tentative"]).stdout
+            for ns in (None, "client", "a")
+        ):
+            assert time.time() < deadline, "IPv6 DAD did not settle"
+            time.sleep(0.05)
+        if host is not None:
+            h.nft_apply(build(FIXTURES / "ct-mark")[host])
+        if fib_strict:
+            h.nft_apply(_PAIR_FIB_STRICT)
+        for addr in (*PAIR_OWNER.values(), PAIR_OWNER_LAN):
+            h.listen(None, 9000, echo_peer=True, addr=addr)
+        return h
+    except BaseException:
+        h.close()
+        raise
+
+
+def _a_invalid_drops(h, fam: str) -> int:
+    out = h.run("a", ["nft", "list", "table", "inet", "f"]).stdout
+    nfproto = {"v4": "ipv4", "v6": "ipv6"}[fam]
+    m = re.search(rf"nfproto {nfproto} ct state invalid counter packets (\d+)", out)
+    assert m, out
+    return int(m.group(1))
+
+
+@requires_netns
+@pytest.mark.parametrize(
+    ("host", "fib_strict", "kernel_strict", "v4", "v6"),
+    [
+        # no recipe: the problem is real — A sees one direction, drops invalid
+        (None, False, False, "timeout", "timeout"),
+        # the recipe returns the flow over the pair link, both families
+        ("pair", False, False, "connected", "connected"),
+        # §5 strict fib: the SYN arrives on peer0, the route back is lan0
+        ("pair", True, False, "timeout", "timeout"),
+        # …unless the mark is restored in prerouting before the check
+        ("pair-restore", True, False, "connected", "connected"),
+        # kernel rp_filter strict (IPv4 only) hits the plain recipe too
+        ("pair", False, True, "timeout", "connected"),
+        # …fixed by the restore plus src_valid_mark
+        ("pair-restore", False, True, "connected", "connected"),
+    ],
+    ids=[
+        "no-recipe",
+        "recipe",
+        "fib-strict",
+        "fib-strict-restore",
+        "kernel-strict",
+        "kernel-strict-restore",
+    ],
+)
+def test_b32_router_pair_returns_one_way_flows(  # noqa: PLR0913 - the case table
+    host, fib_strict, kernel_strict, v4, v6
+):
+    h = _pair_harness(host, fib_strict, kernel_strict)
+    try:
+        # positive control: B answers the client directly on the shared LAN
+        assert h.probe_tcp_reply("client", PAIR_OWNER_LAN, 9000)[0] == "connected"
+        for fam, expected in (("v4", v4), ("v6", v6)):
+            outcome, peer = h.probe_tcp_reply("client", PAIR_OWNER[fam], 9000)
+            assert outcome == expected, fam
+            if expected == "connected":
+                assert peer == PAIR_CLIENT[fam]
+        if host is None:  # the drop is A's conntrack, not a broken topology
+            assert _a_invalid_drops(h, "v4") > 0
+            assert _a_invalid_drops(h, "v6") > 0
+    finally:
+        h.close()

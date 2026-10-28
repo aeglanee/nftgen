@@ -1,0 +1,4 @@
+---
+# B32 fixture: the owner router of a pair; `peer0` is its pair link.
+interfaces:
+  peer: [peer0]

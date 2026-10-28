@@ -42,7 +42,8 @@ build errors and determinism.
 Network namespaces, no VM, rootless (`unshare -rn`):
 
 - A **router** namespace holds the ruleset under test, with one veth per
-  zone into peer namespaces (`client`, `server`, `wan`, …).
+  zone into peer namespaces (`client`, `server`, `wan`, …). `link` adds a
+  veth between any two of them, e.g. a second router (B32).
 - The **rendered file is applied verbatim** (`nft -f generated/<host>.nft`) —
   the deploy artifact, not a copy.
 - Probes tell three outcomes apart: connected, refused (reject), timeout
@@ -51,7 +52,7 @@ Network namespaces, no VM, rootless (`unshare -rn`):
   missing.
 - iproute2 7.x needs `ip link add name X type veth …` (explicit `name`).
 
-### Primitives (B01–B31)
+### Primitives (B01–B32)
 
 One small fixture per concern under `tests/behavioral/fixtures/`.
 
@@ -88,6 +89,7 @@ One small fixture per concern under `tests/behavioral/fixtures/`.
 | B29 | `reset: own-tables` beside a foreign table | a foreign `inet foreign` (counts 7000, drops 7001) loaded first, then the artifact | 7000 connects and the foreign counter rises; 7001 (accepted by ours) times out on the foreign drop |
 | B30 | own-tables reapply | apply the artifact again | ruleset identical; `inet foreign` still there |
 | B31 | own-tables, own table missing | `nft delete table inet filter`, then apply | applies (`destroy` of a missing table is a no-op); 7000 connects, 7001 still dropped |
+| B32 | router pair, one-way flows returned by connection marks (best-practices §8e) | the client's gateway is router A, its target is router B's own address; A drops `ct state invalid`; B runs a `ct-mark` variant | no recipe: v4 + v6 time out, A counts invalid; recipe: both connect; + strict §5 `fib`: both time out, + mark restored in prerouting: both connect; kernel `rp_filter=1`: v4 times out, + restore + `src_valid_mark`: both connect |
 
 ### Reference fleet (P01–P22)
 

@@ -98,7 +98,7 @@ across them:
     (Docker, k8s, libvirt, fail2ban): the rollback bug, own-tables reset
     mode, distro-service and table-name caveats; working decisions.
   - [docs/testing.md](docs/testing.md) — test layers, how to run them (nft on
-    PATH), the behavioral (netns) matrix B01–B31 + P01–P22, env limits.
+    PATH), the behavioral (netns) matrix B01–B32 + P01–P22, env limits.
   - [docs/review-2026-10.md](docs/review-2026-10.md) — **the 2026-10
     review working list**: findings, agreed decisions, where we are.
     Resume work here.

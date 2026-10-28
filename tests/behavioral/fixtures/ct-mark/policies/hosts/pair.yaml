@@ -1,0 +1,25 @@
+---
+# B32: the router-pair recipe (docs/best-practices.md §8e) on the owner.
+# Connections that arrive over the pair link are marked; the owner's replies
+# get the mark back, so an `ip rule` sends them over the pair link too.
+tables:
+  - family: inet
+    name: pairmark
+    chains:
+      - name: prerouting
+        hook: prerouting
+        type: filter
+        priority: mangle
+        policy: accept
+        rules:
+          - iifname: peer
+            ct: [new]
+            set-ct-mark: "0x1"
+      - name: output
+        hook: output
+        type: route
+        priority: mangle
+        policy: accept
+        rules:
+          - ct-mark: "0x1"
+            set-mark: ct-mark
