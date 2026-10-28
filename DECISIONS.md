@@ -188,9 +188,9 @@ hand becomes the bottleneck across many sites.
 
 ### 4.1 Statements are rule keys
 
-`limit`, `quota`, `log`, `set-mark`, `set-mss`, `meter`, `flow-offload` are
-keys; a rule may have statements and no action (an MSS clamp).
-**Named counters** are declared on the table and referenced by name.
+`limit`, `quota`, `log`, `set-mark`, `set-ct-mark`, `set-mss`, `meter`,
+`flow-offload` are keys; a rule may have statements and no action (an MSS
+clamp). **Named counters** are declared on the table and referenced by name.
 *Why named:* readable `nft list counters` and a stable identity across
 reloads; the ansible-firewall metrics export only named counters.
 
