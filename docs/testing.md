@@ -20,9 +20,9 @@ build errors and determinism.
 ## Running
 
 - `make verify` — lint + tests. **Put `nft` and `ip` on `PATH` first**:
-  without them the `nft -c` and behavioral tests skip (70 of 426) and the
-  run still looks green. Where they aren't on `PATH` (e.g. NixOS without a
-  dev shell), from the Nix store:
+  without them the `nft -c` and behavioral tests skip (about a fifth of
+  the suite) and the run still looks green. Where they aren't on `PATH`
+  (e.g. NixOS without a dev shell), from the Nix store:
 
   ```bash
   nft=$(ls -d /nix/store/*-nftables-*/bin | head -1)
