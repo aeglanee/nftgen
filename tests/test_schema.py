@@ -299,6 +299,17 @@ def test_mark_values_are_numbers():
     bad({"set-ct-mark": "ct-mark"}, "rule key 'set-ct-mark'")  # only mark is a source
 
 
+def test_mark_copy_and_set_in_one_rule_is_rejected():
+    # set-mark always renders first, so a copy beside a set would read the old
+    # value: `meta mark set ct mark ct mark set 0x1` copies 0, not 0x1
+    bad({"set-ct-mark": "0x1", "set-mark": "ct-mark"}, "split them into two rules")
+    bad({"set-ct-mark": "mark", "set-mark": "ct-mark"}, "split them into two rules")
+    bad({"set-ct-mark": "mark", "set-mark": "0x2"}, "split them into two rules")
+    assert R.render({"set-ct-mark": "0x1", "set-mark": "0x2"}) == [
+        "meta mark set 0x2 ct mark set 0x1"
+    ]
+
+
 def test_concat_mark_values_are_numbers():
     with pytest.raises(BuildError, match=r"field mark='gold' is not a mark"):
         build_sets([{"name": "m", "concat": ["mark"], "tuples": [["gold"]]}], DEFS)
