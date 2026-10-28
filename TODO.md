@@ -36,6 +36,10 @@ The current working list (review follow-ups, release order) is
       [docs/sets-and-performance.md](docs/sets-and-performance.md) §5.
 - [ ] Definition values checked where they're defined (`22/tpc`,
       `99999/tcp`), not only where they're used.
+- [ ] Mark values checked for meaning, not only shape: at most 32 bits,
+      a range low-high (`0x1f-0x10` and `0x100000000` fail only at
+      `nft -c`). One shared check for `mark`, `ct-mark`, `set-mark`,
+      `set-ct-mark` and concat `mark` fields (`MARK_VALUE` in `ir.py`).
 
 ## Deployment (ansible-firewall)
 
