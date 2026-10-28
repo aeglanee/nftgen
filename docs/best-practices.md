@@ -542,8 +542,19 @@ ct mark 0x1 meta mark set ct mark
 ```
 
 and an `ip rule` sends marked packets to a table whose route points back
-over the pair link (`ip rule add fwmark 0x1 lookup 100` with
-`ip route add default via <partner> dev peer0 table 100`). Every router on
-the path now sees both directions, conntrack stays strict everywhere, and
-no rule has to accept invalid packets. `output` must be `type route`: only
-a route chain re-runs the routing decision after the mark changes.
+over the pair link — once per family, since the `inet` table marks IPv6
+connections too:
+
+```sh
+ip rule add fwmark 0x1 lookup 100
+ip route add default via <partner> dev peer0 table 100
+ip -6 rule add fwmark 0x1 lookup 100
+ip -6 route add default via <partner-v6> dev peer0 table 100
+```
+
+Every router on the path now sees both directions, conntrack stays strict
+everywhere, and no rule has to accept invalid packets. `output` must be
+`type route`: only a route chain re-runs the routing decision after the
+mark changes.
+
+Checked with `nft -c` and behavioral test B32, IPv4 and IPv6.
