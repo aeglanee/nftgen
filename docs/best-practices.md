@@ -563,7 +563,30 @@ everywhere, and no rule has to accept invalid packets. `output` must be
 `type route`: only a route chain re-runs the routing decision after the
 mark changes.
 
+- **Reverse-path checks drop the first packet.** The client's SYN arrives
+  on `peer0`, but the route back to the client leaves on the LAN, so a
+  strict check (§5's `fib … . iif`, or the kernel's `rp_filter=1`, the
+  RHEL default) drops it as spoofed. Pair-link traffic is one-sided by
+  design: check it loosely, keep every other interface strict:
+
+  ```yaml
+  - raw: 'iifname "peer0" fib saddr . mark oif missing drop'
+  - raw: 'iifname != "peer0" fib saddr . mark . iif oif missing drop'
+  ```
+
+  For the kernel check, `net.ipv4.conf.peer0.rp_filter=2` (the higher of
+  `all` and the interface value wins). Don't restore the mark in
+  prerouting to please a strict check instead: the recipe marks *every*
+  connection from the pair link, so transit traffic would follow table 100
+  back to the partner and loop.
+- **Only the router's own addresses.** `output` sees only locally
+  generated packets. A flow *through* the pair (a host behind the owner)
+  is just as one-sided, and this recipe doesn't return it.
+
 Sources: `man nft` (chain types: a `route` chain does a new route lookup
 when relevant parts of the header changed); Linux
-`net/netfilter/nft_chain_route.c` (the mark is one of them, IPv4 and IPv6).
-Checked with `nft -c` and behavioral test B32, IPv4 and IPv6.
+`net/netfilter/nft_chain_route.c` (the mark is one of them, IPv4 and IPv6);
+Linux `Documentation/networking/ip-sysctl.rst` (`rp_filter`: strict, loose,
+the max of `all` and the interface; loose for asymmetric routing).
+Checked with `nft -c` and behavioral test B32, IPv4 and IPv6, with both
+reverse-path checks strict and loose on the pair link.
