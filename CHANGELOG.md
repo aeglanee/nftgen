@@ -10,7 +10,7 @@ not a breaking change.
 ## Unreleased
 
 - New: connection marks. `ct-mark:` matches the connection's mark
-  (`ct mark 0x1`, a number or a range); `set-ct-mark:` sets it (`0x1`) or
+  (`ct mark 0x1`, a number or a range); `set-ct-mark:` sets it (`"0x1"`) or
   saves the packet mark into it (`mark` → `ct mark set meta mark`); and
   `set-mark: ct-mark` restores it onto the packet
   (`meta mark set ct mark`). Recipe: docs/best-practices.md §8e.
