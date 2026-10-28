@@ -280,6 +280,7 @@ def _comment(key, value):
 _ADDR = _one_or_list("an address, a network group, or a set", _scalar)
 _PORT = _one_or_list("a port, a port range, or a service", _scalar)
 _IFACE = _one_or_list("an interface group or a set", _scalar)
+_MARK = _pattern(MARK_VALUE, "a mark (a number or 0x…, or a range a-b)")
 
 RULE_SCHEMA = {
     "saddr": _ADDR,
@@ -291,8 +292,8 @@ RULE_SCHEMA = {
     "iif": _IFACE,
     "oif": _IFACE,
     "ct": _ct,
-    "mark": _pattern(MARK_VALUE, "a mark (a number or 0x…, or a range a-b)"),
-    "ct-mark": _pattern(MARK_VALUE, "a mark (a number or 0x…, or a range a-b)"),
+    "mark": _MARK,
+    "ct-mark": _MARK,
     "proto": _proto,
     "icmp-type": _one_or_list("an icmp type name", _scalar),
     "flags": _flags,
