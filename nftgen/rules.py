@@ -341,6 +341,16 @@ class RuleRenderer:
                 families = [only]
         else:
             families = [None]
+        verdict = self._verdict(rule["action"]) if "action" in rule else None
+        nat = verdict.split(" ", 2) if verdict else []
+        if addr and nat[:1] in (["snat"], ["dnat"]) and families != [nat[1]]:
+            # nft refuses `ip6 saddr … snat ip to …` ("conflicting protocols")
+            raise BuildError(
+                f"{nat[0]} to an {'IPv4' if nat[1] == 'ip' else 'IPv6'} target, but "
+                f"the rule's addresses are also "
+                f"{'IPv6' if nat[1] == 'ip' else 'IPv4'} — split the rule per "
+                f"family: {rule!r}"
+            )
 
         lines = []
         for fam in families:
@@ -389,8 +399,8 @@ class RuleRenderer:
                 parts.extend(statements)
                 if rule.get("counter"):
                     parts.append(self._counter(rule["counter"]))
-                if "action" in rule:
-                    parts.append(self._verdict(rule["action"]))
+                if verdict:
+                    parts.append(verdict)
                 lines.append(" ".join(p for p in parts if p))
         return lines
 

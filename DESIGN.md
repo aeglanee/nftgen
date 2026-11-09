@@ -333,7 +333,8 @@ rule order. An empty chain stays empty.
   `action`, `set-mss: 0`) — checked against one schema before rendering.
 - Undefined names; a group that resolves to nothing; definition and include
   cycles; an include with a missing or misnamed section.
-- A named set mixing v4 and v6; a rule whose addresses share no family.
+- A named set mixing v4 and v6; a rule whose addresses share no family; a
+  NAT rule whose addresses include the other family than its target.
 - Object names that are reserved nft keywords (`counter`, `fwd`, `map`, …).
 - `flow-offload:` and an action in one rule (the verdict would never run).
 - `set-mark:` and `set-ct-mark:` in one rule when one copies the other

@@ -133,3 +133,33 @@ def test_kernel_loads_the_snat_map(tmp_path):
     )
     assert proc.returncode == 0, proc.stderr
     assert "snat ip to oifname map @lease_snat" in proc.stdout
+
+
+@pytest.mark.parametrize(
+    "target", [{"snat": {"key": "oifname", "map": "lease_snat"}}, {"snat": "192.0.2.1"}]
+)
+def test_nat_family_must_match_the_rule_addresses(target):
+    defs = Definitions.from_mappings(
+        {
+            "interfaces": {"uplink": ["wan0"]},
+            "networks": {"both": ["10.0.0.0/8", "fd00::/8"]},
+        }
+    )
+    tables = [
+        {
+            "family": "inet",
+            "name": "nat",
+            "maps": MAPS[:1],
+            "chains": [
+                {
+                    "name": "post",
+                    "hook": "postrouting",
+                    "type": "nat",
+                    "priority": "srcnat",
+                    "rules": [{"oifname": "uplink", "saddr": "both", "action": target}],
+                }
+            ],
+        }
+    ]
+    with pytest.raises(BuildError, match="split the rule per family"):
+        render_tables(tables, defs, DictResolver({}))

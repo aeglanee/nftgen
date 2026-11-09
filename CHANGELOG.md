@@ -25,6 +25,9 @@ not a breaking change.
   renders `snat ip to oifname map @lease_snat`; keys iifname, oifname,
   saddr, daddr, sport/dport (with `proto:`) and mark, checked against the
   map's key type.
+- Fix: a dnat/snat rule whose addresses include the other family than its
+  target (`ip6 saddr … snat ip to …`) fails the build instead of at
+  `nft -c`. Split the rule per family.
 
 ## 1.2.0 — 2026-10-28
 
