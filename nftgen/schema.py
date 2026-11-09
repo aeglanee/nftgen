@@ -215,6 +215,67 @@ def _counter(key, value):
     return _fail(key, "true, false, or a declared counter name", value)
 
 
+def _bool(key, value):
+    if isinstance(value, bool):
+        return value
+    return _fail(key, "true or false", value)
+
+
+FIB_KEYS = ("saddr", "daddr", "mark", "iif", "oif")
+FIB_RESULTS = ("oif", "oifname", "type")
+FIB_PRESENCE = ("missing", "exists")
+ADDRESS_TYPES = (
+    "unspec",
+    "unicast",
+    "local",
+    "broadcast",
+    "anycast",
+    "multicast",
+    "blackhole",
+    "unreachable",
+    "prohibit",
+)
+
+
+def _fib(key, value):
+    if not isinstance(value, dict):
+        _fail(key, "a mapping of key / result / match", value)
+    unknown = set(value) - {"key", "result", "match"}
+    missing = {"key", "result", "match"} - set(value)
+    if unknown or missing:
+        raise BuildError(
+            f"rule key {key!r}: takes `key:`, `result:` and `match:`, got {value!r}"
+        )
+    fields = value["key"] if isinstance(value["key"], list) else [value["key"]]
+    if not fields or any(f not in FIB_KEYS for f in fields):
+        _fail(f"{key}.key", f"one or a list of {', '.join(FIB_KEYS)}", value["key"])
+    if len(fields) != len(set(fields)):
+        _fail(f"{key}.key", "each field once", value["key"])
+    if len(set(fields) & {"saddr", "daddr"}) != 1:
+        _fail(f"{key}.key", "exactly one of saddr, daddr", value["key"])
+    if {"iif", "oif"} <= set(fields):
+        _fail(f"{key}.key", "at most one of iif, oif", value["key"])
+    result = value["result"]
+    if result not in FIB_RESULTS:
+        _fail(f"{key}.result", f"one of {', '.join(FIB_RESULTS)}", result)
+    match = value["match"]
+    if result == "type":
+        _one_or_list(
+            f"an address type ({', '.join(ADDRESS_TYPES)})",
+            lambda k, v, what: v in ADDRESS_TYPES or _fail(k, what, v),
+        )(f"{key}.match", match)
+    else:
+        _one_or_list(
+            f"an interface group, a set, or one of {', '.join(FIB_PRESENCE)}",
+            _scalar,
+        )(f"{key}.match", match)
+        if isinstance(match, list) and set(match) & set(FIB_PRESENCE):
+            _fail(f"{key}.match", "missing or exists alone, not in a list", match)
+        if match in FIB_PRESENCE and result != "oif":
+            _fail(f"{key}.result", f"oif with `match: {match}`", result)
+    return {**value, "key": fields}
+
+
 def _set_mss(key, value):
     if value in MSS_ALIASES:
         return value
@@ -325,6 +386,7 @@ RULE_SCHEMA = {
     "oif": _IFACE,
     "ether-saddr": _ether,
     "ether-daddr": _ether,
+    "fib": _fib,
     "ct": _ct,
     "mark": _MARK,
     "ct-mark": _MARK,
@@ -339,6 +401,7 @@ RULE_SCHEMA = {
     "set-ct-mark": _mark_or("mark", "a mark (a number or 0x…) or `mark`"),
     "set-mss": _set_mss,
     "flow-offload": _text("a flowtable name"),
+    "notrack": _bool,
     "counter": _counter,
     "action": _action,
     "comment": _comment,

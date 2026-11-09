@@ -199,6 +199,7 @@ forms below. Rule order is kept exactly.
 | `flags` | `flags: {match: [syn], mask: [syn, ack]}` | `tcp flags & (syn\|ack) == syn` (a list makes one line each) |
 | `ether-saddr` / `ether-daddr` | `ether-saddr: "02:00:00:00:00:01"` | `ether saddr 02:00:00:00:00:01` (one MAC or a list; quote it, or YAML may read it as a number) |
 | `ether-saddr` / `ether-daddr` | `ether-daddr: {match: "01:00:00:00:00:00", mask: "01:00:00:00:00:00"}` | `ether daddr & 01:00:00:00:00:00 == 01:00:00:00:00:00` (masked: the multicast bit; `match` must lie inside `mask`) |
+| `fib` | `fib: {key: daddr, result: oifname, match: lo}` | `fib daddr oifname "lo"` (a routing lookup; `key` is one of saddr/daddr plus mark and iif or oif, in nft's order; `match` is an interface group, a set, or `missing`/`exists` with `result: oif`, or address types with `result: type`) |
 
 **One value or a list:** `saddr`/`daddr`, `sport`/`dport`, the interface keys,
 `ether-saddr`/`ether-daddr`, `ct` and `icmp-type` take one value or a list
@@ -233,6 +234,7 @@ it would alone; a named set can't go inside a list.
 | `set-ct-mark` | `"0x1"` / `mark` | `ct mark set 0x1` / `ct mark set meta mark` (save the packet's mark) |
 | `set-mss` | `pmtu` / `1452` | `tcp flags syn tcp option maxseg size set rt mtu` / `… 1452` (1–65535) |
 | `flow-offload` | `ft` | `flow add @ft` (a declared flowtable; a separate rule from the verdict) |
+| `notrack` | `true` | `notrack` (no conntrack entry; in a chain hooked before conntrack, `priority: raw`) |
 | `comment` | `"admins → router ssh"` | `comment "…"`, last on every line of the rule; kept by the kernel; no `"`, ≤ 128 bytes |
 
 A rule may have statements and no action (e.g. an MSS clamp).
@@ -247,7 +249,7 @@ A rule may have statements and no action (e.g. an MSS clamp).
 | `{dnat: 192.168.10.5:443}` / `{snat: wan_ip}` | `dnat ip to 192.168.10.5:443` — family from the address; a single-address network group resolves |
 | `{dnat: {proto: tcp, map: {80: web, 443: db}}}` | `dnat ip to tcp dport map { 80 : …, 443 : … }` (address-only targets) |
 
-Anything else (`queue`, `notrack`, …) is a `raw:` rule.
+Anything else (`queue`, `redirect`, …) is a `raw:` rule.
 
 ### Other rule forms
 

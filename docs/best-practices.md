@@ -237,7 +237,12 @@ for your own subnets:
   priority: -140          # mangle + 10: after marks set at mangle
   policy: accept          # not the filter default — drop would drop everything
   rules:
-    - raw: "fib saddr . mark . iif oif missing counter name rpf_drops drop"
+    - fib:
+        key: [saddr, mark, iif]
+        result: oif
+        match: missing
+      counter: rpf_drops
+      action: drop
 ```
 
 ```nft
@@ -263,7 +268,6 @@ chain rpfilter {
   `::` to link-local (duplicate address detection) and loopback all pass.
   firewalld's `icmpv6 type { nd-router-advert, nd-neighbor-solicit } accept`
   exemption worked around a 4.16–4.17 kernel bug.
-- The rule is `raw:` until it gets a key ([TODO.md](../TODO.md)).
 
 Sources: `man nft` (FIB expressions);
 [nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Matching_routing_information);

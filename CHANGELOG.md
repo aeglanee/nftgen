@@ -14,6 +14,10 @@ not a breaking change.
   `{match: …, mask: …}` (`ether daddr & 01:00:00:00:00:00 == 01:00:00:00:00:00`,
   the multicast bit). A MAC YAML read as a number fails with a hint to
   quote it.
+- New: routing lookups. `fib: {key, result, match}` renders
+  `fib daddr oifname "lo"`, `fib saddr . mark . iif oif missing` (the
+  anti-spoofing recipe, now without `raw:`) or `fib daddr type local`.
+- New: `notrack: true`, the statement that skips connection tracking.
 
 ## 1.2.0 — 2026-10-28
 

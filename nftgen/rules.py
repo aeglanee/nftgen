@@ -29,7 +29,7 @@ from nftgen.ir import (
     proto_name,
     render_literal,
 )
-from nftgen.schema import check_proto, check_rule
+from nftgen.schema import FIB_PRESENCE, check_proto, check_rule
 
 PRIORITIES = {
     "raw": -300,
@@ -177,6 +177,7 @@ _KNOWN_RULE_KEYS = frozenset(
         "oif",
         "ether-saddr",
         "ether-daddr",
+        "fib",
         "flags",
         "icmp-type",
         "meter",
@@ -187,6 +188,7 @@ _KNOWN_RULE_KEYS = frozenset(
         "set-ct-mark",
         "set-mss",
         "flow-offload",
+        "notrack",
         "counter",
         "action",
         "raw",
@@ -209,6 +211,7 @@ _CONCAT_RULE_KEYS = frozenset(
         "set-ct-mark",
         "set-mss",
         "flow-offload",
+        "notrack",
     }
 )
 
@@ -356,6 +359,8 @@ class RuleRenderer:
                 for key in ("ether-saddr", "ether-daddr"):
                     if key in rule:
                         parts.append(_ether_match(key, rule[key]))
+                if "fib" in rule:
+                    parts.append(self._fib(rule["fib"]))
                 if "saddr" in rule:
                     parts.append(f"{fam} saddr {addr['saddr'][fam]}")
                 if "daddr" in rule:
@@ -431,7 +436,25 @@ class RuleRenderer:
                     f"`flowtables:` (declared: {declared})"
                 )
             out.append(f"flow add @{name}")
+        if rule.get("notrack"):
+            out.append("notrack")
         return out
+
+    # -- fib (routing lookup) ----------------------------------------------- #
+    _FIB_ORDER = ("saddr", "daddr", "mark", "iif", "oif")
+
+    def _fib(self, spec: dict) -> str:
+        """`fib: {key, result, match}` -> `fib daddr oifname "lo"`. The key
+        renders in nft's own order (address, mark, interface), as `nft list`
+        shows it."""
+        fields = " . ".join(f for f in self._FIB_ORDER if f in spec["key"])
+        result, match = spec["result"], spec["match"]
+        if result == "type":
+            types = match if isinstance(match, list) else [match]
+            return f"fib {fields} type {_anon(list(dict.fromkeys(types)))}"
+        if match in FIB_PRESENCE:
+            return f"fib {fields} oif {match}"
+        return f"fib {fields} {result} {self._iface(match, index=result == 'oif')}"
 
     _METER_KEYS = frozenset({"saddr", "daddr", "iifname", "oifname"})
     _METER_SPEC_KEYS = frozenset({"set", "key", "rate", "timeout"})
