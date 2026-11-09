@@ -205,6 +205,35 @@ class NamedSet:
 
 
 @dataclass
+class NamedMap:
+    name: str
+    key_type: str
+    value_type: str
+    elements: list[str] = field(default_factory=list)
+    include: str | None = None
+    flags: list[str] = field(default_factory=list)
+    comment: str | None = None
+
+    def render(self) -> list[str]:
+        lines = [
+            f"{SET_INDENT}map {self.name} {{",
+            f"{BODY_INDENT}type {self.key_type} : {self.value_type}",
+        ]
+        if self.flags:
+            lines.append(f"{BODY_INDENT}flags {', '.join(self.flags)}")
+        if self.comment:
+            lines.append(f'{BODY_INDENT}comment "{self.comment}"')
+        if self.include:
+            lines.append(f'{BODY_INDENT}include "{self.include}"')
+        if self.elements:
+            lines.append(
+                f"{BODY_INDENT}elements = {render_literal(self.elements, BODY_INDENT)}"
+            )
+        lines.append(f"{SET_INDENT}}}")
+        return lines
+
+
+@dataclass
 class Chain:
     name: str
     rules: list[str] = field(default_factory=list)  # rendered rule lines (Phase 3)
@@ -251,6 +280,7 @@ class Table:
     family: str
     name: str
     sets: list[NamedSet] = field(default_factory=list)
+    maps: list[NamedMap] = field(default_factory=list)
     chains: list[Chain] = field(default_factory=list)
     raw: list[str] = field(default_factory=list)  # table-level raw object declarations
     counters: list[str] = field(default_factory=list)  # named counter objects
@@ -268,6 +298,7 @@ class Table:
             [f"{SET_INDENT}counter {c} {{", f"{SET_INDENT}}}"] for c in self.counters
         ]
         blocks += [s.render() for s in self.sets]
+        blocks += [m.render() for m in self.maps]
         blocks += [c.render() for c in self.chains]
         for i, block in enumerate(blocks):
             out.extend(block)
@@ -330,6 +361,132 @@ def build_sets(sets_spec: list, defs: Definitions) -> list[NamedSet]:
         if isinstance(entry, dict) and "comment" in entry:
             out[-1].comment = check_comment(entry["comment"], f"set {out[-1].name!r}")
     return out
+
+
+_MAP_KEYS = frozenset({"name", "type", "elements", "include", "flags", "comment"})
+_MAP_TYPE = re.compile(r"^\s*(\S(?:.*\S)?)\s+:\s+(\S(?:.*\S)?)\s*$")
+_ADDR_TYPES = ("ipv4_addr", "ipv6_addr")
+
+
+def build_maps(maps_spec: list, defs: Definitions, sets=()) -> list[NamedMap]:
+    """A table's `maps:` -> named maps. `type:` is nft's `<key> : <value>`;
+    `elements:` is a key -> value mapping, or `include:` names a file (or a
+    glob) whose `elements = { … }` a service writes."""
+    set_names = {s.name for s in sets}
+    out: list[NamedMap] = []
+    for entry in maps_spec or []:
+        if not isinstance(entry, dict):
+            raise BuildError(f"a map must be a mapping, got {entry!r}")
+        unknown = set(entry) - _MAP_KEYS
+        if unknown:
+            raise BuildError(f"unknown map key(s) {sorted(unknown)}: {entry!r}")
+        if "name" not in entry or "type" not in entry:
+            raise BuildError(f"a map needs `name:` and `type:`: {entry!r}")
+        name = entry["name"]
+        check_nft_name(name, "map")
+        if name in set_names or name in {m.name for m in out}:
+            raise BuildError(
+                f"map {name!r}: the table already has a set or map so named"
+            )
+        typed = _MAP_TYPE.match(str(entry["type"]))
+        if not typed or ":" in typed[1] or ":" in typed[2]:
+            raise BuildError(
+                f"map {name!r}: `type:` is nft's `<key type> : <value type>`, "
+                f'quoted (`type: "ifname : ipv4_addr"`), got {entry["type"]!r}'
+            )
+        key_type, value_type = typed[1], typed[2]
+        if "elements" in entry and "include" in entry:
+            raise BuildError(f"map {name!r}: `elements:` or `include:`, not both")
+        include = entry.get("include")
+        if include is not None and (
+            not isinstance(include, str)
+            or not include
+            or '"' in include
+            or "\n" in include
+        ):
+            raise BuildError(
+                f"map {name!r}: `include:` takes a path or a glob without a "
+                f"double quote, got {include!r}"
+            )
+        flags = _set_values({**entry, "name": name}, "flags")
+        for f in flags:
+            if f not in SET_FLAGS:
+                raise BuildError(
+                    f"map {name!r}: unknown flag {f!r} (nft flags: {', '.join(SET_FLAGS)})"
+                )
+        nm = NamedMap(
+            name=name,
+            key_type=key_type,
+            value_type=value_type,
+            elements=_map_elements(
+                name, entry.get("elements"), key_type, value_type, defs
+            ),
+            include=include,
+            flags=list(dict.fromkeys(flags)),
+        )
+        if "comment" in entry:
+            nm.comment = check_comment(entry["comment"], f"map {name!r}")
+        out.append(nm)
+    return out
+
+
+def _map_elements(name, elements, key_type, value_type, defs) -> list[str]:
+    if elements is None:
+        return []
+    if not isinstance(elements, dict) or not elements:
+        raise BuildError(
+            f"map {name!r}: `elements:` takes a non-empty key -> value mapping, "
+            f"got {elements!r}"
+        )
+    rows: dict[str, str] = {}
+    for key, value in elements.items():
+        val = _map_value(name, value, value_type, defs)
+        for k in _map_keys(name, key, key_type, defs):
+            if k in rows and rows[k] != val:
+                raise BuildError(f"map {name!r}: key {k} maps to {rows[k]} and {val}")
+            rows[k] = val
+    return [f"{k} : {v}" for k, v in rows.items()]
+
+
+def _map_keys(name, key, key_type, defs) -> list[str]:
+    if key_type == "ifname":
+        if key not in defs.interfaces:
+            raise BuildError(
+                f"map {name!r}: unknown interface group {key!r} (define it under "
+                f"`interfaces:`)"
+            )
+        return [f'"{d}"' for d in defs.interface(key)]
+    return [_map_scalar(name, key, key_type, defs)]
+
+
+def _map_value(name, value, value_type, defs) -> str:
+    if value_type == "ifname":
+        if not isinstance(value, str) or not value or '"' in value:
+            raise BuildError(f"map {name!r}: interface value {value!r} is not a name")
+        return f'"{value}"'
+    return _map_scalar(name, value, value_type, defs)
+
+
+def _map_scalar(name, value, typ, defs) -> str:
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        raise BuildError(f"map {name!r}: {value!r} is not a {typ} value")
+    text = str(value)
+    if typ in _ADDR_TYPES and text in defs.networks:
+        addrs = defs.network(text)
+        if len(addrs) != 1:
+            raise BuildError(
+                f"map {name!r}: network group {text!r} resolves to {len(addrs)} "
+                f"addresses; a map element takes one"
+            )
+        text = addrs[0]
+    if typ in _ADDR_TYPES:
+        try:
+            addr = ipaddress.ip_address(text)
+        except ValueError:
+            raise BuildError(f"map {name!r}: {text!r} is not an address") from None
+        if (addr.version == 4) != (typ == "ipv4_addr"):
+            raise BuildError(f"map {name!r}: {text} is not an {typ}")
+    return text
 
 
 def _set_from_definition(name: str, defs: Definitions) -> NamedSet:

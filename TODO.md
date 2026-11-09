@@ -16,8 +16,8 @@ The current working list (review follow-ups, release order) is
 
 - [ ] `port/proto` literals in rule port keys: `dport: [dns, 8080/tcp]`
       (vmaps already take them).
-- [ ] Named / reusable maps: a table-level `maps:` (verdict maps, dnat
-      targets) referenced from a `vmap:` rule or a dnat map.
+- [ ] Named verdict maps: a `maps:` entry of type `… : verdict` referenced
+      from a `vmap:` rule (named data maps for NAT exist).
 - [ ] `set-dscp`, rendered per family (`ip dscp set` / `ip6 dscp set`).
 - [ ] `redirect` action; more meta matches (`pkttype`, `skuid`, …).
 

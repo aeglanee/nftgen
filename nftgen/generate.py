@@ -17,6 +17,7 @@ from nftgen.ir import (
     BuildError,
     Reset,
     Table,
+    build_maps,
     build_sets,
     check_comment,
     check_nft_name,
@@ -29,7 +30,17 @@ from nftgen.rules import RuleRenderer, build_chain, build_flowtables
 # passes — with `flush ruleset` that artifact wipes the firewall on deploy.
 _POLICY_KEYS = frozenset({"site", "reset", "tables"})
 _TABLE_KEYS = frozenset(
-    {"family", "name", "sets", "chains", "counters", "raw", "flowtables", "comment"}
+    {
+        "family",
+        "name",
+        "sets",
+        "maps",
+        "chains",
+        "counters",
+        "raw",
+        "flowtables",
+        "comment",
+    }
 )
 # An include file holds these sections; the `- include:` entry's position
 # (a table's `sets:` or a chain's `rules:`) picks which one is pulled.
@@ -145,7 +156,7 @@ def _check_table(tspec, where: str) -> None:
         )
     if "family" not in tspec or "name" not in tspec:
         raise BuildError(f"{where}a table needs `family:` and `name:`: {tspec!r}")
-    for key in ("sets", "chains", "flowtables"):
+    for key in ("sets", "maps", "chains", "flowtables"):
         if tspec.get(key) is not None and not isinstance(tspec[key], list):
             # a single mapping was iterated by its keys (confusing errors)
             raise BuildError(
@@ -216,9 +227,11 @@ def render_tables(  # noqa: PLR0913 - the extras are keyword-only options
             if not isinstance(line, str):
                 raise BuildError(f"{where}table `raw:` takes nft text, got {line!r}")
         flowtables = build_flowtables(tspec.get("flowtables") or [], defs)
+        maps = build_maps(tspec.get("maps") or [], defs, sets)
         renderer = RuleRenderer(
             defs,
             {s.name: s for s in sets},
+            maps={m.name: m for m in maps},
             counters=set(counters),
             flowtables={ft.name for ft in flowtables},
         )
@@ -238,6 +251,7 @@ def render_tables(  # noqa: PLR0913 - the extras are keyword-only options
                 family=tspec["family"],
                 name=tspec["name"],
                 sets=sets,
+                maps=maps,
                 chains=chains,
                 raw=raw,
                 counters=counters,

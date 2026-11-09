@@ -18,6 +18,9 @@ not a breaking change.
   `fib daddr oifname "lo"`, `fib saddr . mark . iif oif missing` (the
   anti-spoofing recipe, now without `raw:`) or `fib daddr type local`.
 - New: `notrack: true`, the statement that skips connection tracking.
+- New: named data maps, a table's `maps:` with `type: "ifname : ipv4_addr"`
+  and `elements:` (groups resolve) or `include:`, a file or glob a service
+  fills (`elements = { … }`).
 
 ## 1.2.0 — 2026-10-28
 

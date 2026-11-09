@@ -122,6 +122,7 @@ interfaces:
 | --- | --- |
 | `family`, `name` | `table inet filter { … }` — required |
 | `sets` | named sets (below) |
+| `maps` | named data maps (below) |
 | `chains` | base and regular chains (below) |
 | `counters` | named counters, one name or a list: `counters: [bad_tcp]` → `counter bad_tcp { }` |
 | `flowtables` | `{name, devices, hook?, priority?}` — `devices` is one interface group or a list (a device in two groups is listed once); hook defaults to `ingress`, priority to `0` |
@@ -162,6 +163,31 @@ rules:
 Each tuple field takes one value (a single-value group or a literal). The
 family comes from the tuples; a set filled at runtime (no tuples) with an
 address field needs `family: ip` or `ip6`.
+
+## Maps
+
+A table's `maps:` declares named data maps. A rule uses one through a NAT
+action (`snat ip to oifname map @lease_snat`, under Actions).
+
+```yaml
+maps:
+  - name: lease_snat
+    type: "ifname : ipv4_addr"       # nft's <key type> : <value type>, quoted
+    include: /var/lib/leases/*.nft   # files with `elements = { … }`
+  - name: static_snat
+    type: "ifname : ipv4_addr"
+    elements:
+      uplinks: wan_ip                # groups resolve: one row per device
+```
+
+| Key | Meaning |
+| --- | --- |
+| `name`, `type` | required; `type` is nft's `<key> : <value>`, quoted (YAML reads `a : b` as a mapping) |
+| `elements` | key → value; an `ifname` key is an interface group (one row per device), an address value may be a one-address network group |
+| `include` | a path or a glob that nft reads at load; a service writes the `elements = { … }` there. A glob that matches nothing leaves the map empty, so `nft -c` passes without the files. Not with `elements` |
+| `flags`, `comment` | as for a set |
+
+A set and a map can't share a name. Verdict maps are still inline (`vmap:`).
 
 ## Chains
 
@@ -320,5 +346,5 @@ overlapping prefixes in a named set or a vmap (`10.0.0.0/8` and
 entry.
 
 **Not modelled** (use `raw:` at table level): `netdev` per-device chains, set
-tuning (`size`, `gc-interval`), named maps, named stateful objects other than
-counters.
+tuning (`size`, `gc-interval`), named verdict maps, named stateful objects other
+than counters.

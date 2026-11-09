@@ -272,9 +272,11 @@ class RuleRenderer:
         named: dict[str, NamedSet],
         counters=frozenset(),
         flowtables=None,
+        maps=None,
     ):
         self.defs = defs
         self.named = named
+        self.maps = maps or {}
         self.counters = frozenset(counters)
         # None = not known (a renderer used on its own): no flowtable check
         self.flowtables = None if flowtables is None else frozenset(flowtables)
