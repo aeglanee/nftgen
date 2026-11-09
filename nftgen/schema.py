@@ -313,7 +313,11 @@ def _action(key, value):
     if kind in ("jump", "goto"):
         _name(f"action.{kind}", target, "a chain name")
     elif not (_is_scalar(target) or isinstance(target, dict)):
-        _fail(f"action.{kind}", "an address, a network group, or a port map", target)
+        _fail(
+            f"action.{kind}",
+            "an address, a network group, a port map, or a named map",
+            target,
+        )
     return value
 
 

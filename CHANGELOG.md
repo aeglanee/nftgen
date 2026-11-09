@@ -21,6 +21,10 @@ not a breaking change.
 - New: named data maps, a table's `maps:` with `type: "ifname : ipv4_addr"`
   and `elements:` (groups resolve) or `include:`, a file or glob a service
   fills (`elements = { … }`).
+- New: NAT through a named map: `snat: {key: oifname, map: lease_snat}`
+  renders `snat ip to oifname map @lease_snat`; keys iifname, oifname,
+  saddr, daddr, sport/dport (with `proto:`) and mark, checked against the
+  map's key type.
 
 ## 1.2.0 — 2026-10-28
 

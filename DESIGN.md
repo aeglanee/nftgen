@@ -274,6 +274,7 @@ A rule may have statements and no action (e.g. an MSS clamp).
 | `{jump: chain}` / `{goto: chain}` | `jump chain` / `goto chain` |
 | `{dnat: 192.168.10.5:443}` / `{snat: wan_ip}` | `dnat ip to 192.168.10.5:443` — family from the address; a single-address network group resolves |
 | `{dnat: {proto: tcp, map: {80: web, 443: db}}}` | `dnat ip to tcp dport map { 80 : …, 443 : … }` (address-only targets) |
+| `{snat: {key: oifname, map: lease_snat}}` | `snat ip to oifname map @lease_snat` — a table's named map; `key` is iifname, oifname, saddr, daddr, sport, dport (with `proto:`) or mark, and must match the map's key type; the family comes from its values |
 
 Anything else (`queue`, `redirect`, …) is a `raw:` rule.
 

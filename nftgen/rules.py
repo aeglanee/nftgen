@@ -1067,6 +1067,8 @@ class RuleRenderer:
             if kind in ("jump", "goto"):
                 return f"{kind} {target}"
             if kind in ("dnat", "snat"):
+                if isinstance(target, dict) and isinstance(target.get("map"), str):
+                    return self._nat_named_map(kind, target)
                 if isinstance(target, dict):  # map form: dnat to <proto> dport map {…}
                     return self._nat_map(kind, target)
                 target = self._nat_target(kind, target)
@@ -1132,6 +1134,70 @@ class RuleRenderer:
         return (
             f"{kind} {fam} to {proto} {key} map {render_literal(entries, BODY_INDENT)}"
         )
+
+    _NAT_MAP_KEY_TYPES = {
+        "iifname": "ifname",
+        "oifname": "ifname",
+        "saddr": "addr",
+        "daddr": "addr",
+        "sport": "inet_service",
+        "dport": "inet_service",
+        "mark": "mark",
+    }
+    _NAT_FAMILY = {"ipv4_addr": "ip", "ipv6_addr": "ip6"}
+
+    def _nat_named_map(self, kind: str, spec: dict) -> str:
+        """`dnat/snat: {key, map: <name>, proto?}` -> `snat ip to oifname map
+        @name`: the target comes from a table's named map."""
+        unknown = set(spec) - {"key", "map", "proto"}
+        if unknown:
+            raise BuildError(f"unknown {kind} map key(s) {sorted(unknown)}: {spec!r}")
+        name = spec["map"]
+        if name not in self.maps:
+            declared = ", ".join(sorted(self.maps)) or "none"
+            raise BuildError(
+                f"{kind} map @{name} is not declared in the table's `maps:` "
+                f"(declared: {declared})"
+            )
+        m = self.maps[name]
+        fam = self._NAT_FAMILY.get(m.value_type)
+        if fam is None:
+            raise BuildError(
+                f"{kind} map @{name} holds {m.value_type}; a nat map's values are "
+                f"ipv4_addr or ipv6_addr"
+            )
+        key = spec.get("key")
+        wanted = self._NAT_MAP_KEY_TYPES.get(key)
+        if wanted is None:
+            raise BuildError(
+                f"{kind} map key must be one of {', '.join(self._NAT_MAP_KEY_TYPES)}, "
+                f"got {key!r}"
+            )
+        proto = proto_name(spec.get("proto")) if "proto" in spec else None
+        if wanted == "inet_service":
+            if proto not in PORT_PROTOS:
+                raise BuildError(
+                    f"{kind} map key {key} needs `proto:` with ports "
+                    f"({', '.join(PORT_PROTOS)})"
+                )
+            expr = f"{proto} {key}"
+        elif proto is not None:
+            raise BuildError(f"{kind} map key {key} takes no `proto:`")
+        elif wanted == "addr":
+            expr = f"{self._NAT_FAMILY.get(m.key_type, '?')} {key}"
+            wanted = (
+                m.key_type
+                if m.key_type in self._NAT_FAMILY
+                else "ipv4_addr or ipv6_addr"
+            )
+        else:
+            expr = "meta mark" if key == "mark" else key
+        if m.key_type != wanted:
+            raise BuildError(
+                f"{kind} map @{name} is keyed by {m.key_type}, but `key: {key}` "
+                f"looks up {wanted}"
+            )
+        return f"{kind} {fam} to {expr} map @{name}"
 
     def _map_port_key(self, kind: str, val, proto: str) -> str:
         val = str(val)

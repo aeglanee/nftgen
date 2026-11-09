@@ -6,7 +6,8 @@ flavours, by *what the value is*. Every nft block below is `nft -c`-verified.
 
 > In nftgen: inline verdict maps (`vmap:`, one key or concatenated keys)
 > and the inline dnat map; every key is in [DESIGN.md](../DESIGN.md).
-> Named data maps are a table's `maps:`, used by a NAT action; named
+> Named data maps are a table's `maps:`, used by a NAT action
+> (`snat: {key: oifname, map: lease_snat}`); named
 > verdict maps aren't modelled yet — declare one with table-level `raw:`.
 
 ---
