@@ -139,6 +139,28 @@ def _flag_clause(check: dict) -> str:
     return f"tcp flags & {_fmt_flags(mask)} == {_fmt_flags(match)}"
 
 
+def _mac_bits(mac: str) -> int:
+    return int(mac.replace(":", ""), 16)
+
+
+def _ether_match(key: str, value) -> str:
+    """`ether-saddr`/`ether-daddr` -> `ether saddr <mac>`, an anonymous set of
+    them, or a masked test `ether saddr & <mask> == <match>`."""
+    field = key.removeprefix("ether-")
+    if not isinstance(value, dict):
+        macs = value if isinstance(value, list) else [value]
+        return f"ether {field} {_anon(list(dict.fromkeys(m.lower() for m in macs)))}"
+    match, mask = value["match"].lower(), value["mask"].lower()
+    if not _mac_bits(mask):
+        raise BuildError(f"{key}: an all-zero mask matches every frame: {value!r}")
+    if _mac_bits(match) & ~_mac_bits(mask):
+        raise BuildError(
+            f"{key}: match {match} sets bits outside mask {mask}, so it never "
+            f"matches: {value!r}"
+        )
+    return f"ether {field} & {mask} == {match}"
+
+
 _KNOWN_RULE_KEYS = frozenset(
     {
         "iifname",
@@ -153,6 +175,8 @@ _KNOWN_RULE_KEYS = frozenset(
         "dport",
         "iif",
         "oif",
+        "ether-saddr",
+        "ether-daddr",
         "flags",
         "icmp-type",
         "meter",
@@ -329,6 +353,9 @@ class RuleRenderer:
                     parts.append(f"iif {self._iface(rule['iif'], index=True)}")
                 if "oif" in rule:
                     parts.append(f"oif {self._iface(rule['oif'], index=True)}")
+                for key in ("ether-saddr", "ether-daddr"):
+                    if key in rule:
+                        parts.append(_ether_match(key, rule[key]))
                 if "saddr" in rule:
                     parts.append(f"{fam} saddr {addr['saddr'][fam]}")
                 if "daddr" in rule:

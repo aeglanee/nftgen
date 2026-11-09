@@ -143,6 +143,38 @@ def _flags(key, value):
     return value
 
 
+MAC_ADDRESS = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+_MAC = "a MAC address such as 02:42:ac:11:00:02"
+
+
+def _mac(key, value, what=_MAC):
+    if isinstance(value, int) and not isinstance(value, bool):
+        # YAML 1.1 reads an unquoted 52:54:00:12:34:56 as a base-60 number
+        raise BuildError(
+            f"rule key {key!r}: expected {what}, got the number {value} — quote "
+            f"the address (YAML reads an unquoted MAC whose parts are all below "
+            f"60 as a base-60 number)"
+        )
+    if not isinstance(value, str) or not MAC_ADDRESS.match(value):
+        _fail(key, what, value)
+
+
+def _ether(key, value):
+    if isinstance(value, dict):
+        unknown = set(value) - {"match", "mask"}
+        if unknown or set(value) != {"match", "mask"}:
+            raise BuildError(
+                f"rule key {key!r}: a masked match takes exactly `match:` and "
+                f"`mask:`, got {value!r}"
+            )
+        _mac(f"{key}.match", value["match"])
+        _mac(f"{key}.mask", value["mask"])
+        return value
+    return _one_or_list(f"{_MAC}, a list of them, or a {{match, mask}} mapping", _mac)(
+        key, value
+    )
+
+
 def _log(key, value):
     if isinstance(value, bool):
         return value  # false = no log statement, like `counter: false`
@@ -291,6 +323,8 @@ RULE_SCHEMA = {
     "oifname": _IFACE,
     "iif": _IFACE,
     "oif": _IFACE,
+    "ether-saddr": _ether,
+    "ether-daddr": _ether,
     "ct": _ct,
     "mark": _MARK,
     "ct-mark": _MARK,

@@ -7,6 +7,14 @@ Versioning: [semantic versioning](https://semver.org) from 1.0.0 on. A new
 check that rejects input which rendered a wrong or broken ruleset is a fix,
 not a breaking change.
 
+## Unreleased
+
+- New: Ethernet address matches. `ether-saddr:` / `ether-daddr:` take a
+  MAC or a list (`ether saddr { … }`), or a masked test
+  `{match: …, mask: …}` (`ether daddr & 01:00:00:00:00:00 == 01:00:00:00:00:00`,
+  the multicast bit). A MAC YAML read as a number fails with a hint to
+  quote it.
+
 ## 1.2.0 — 2026-10-28
 
 - New: connection marks. `ct-mark:` matches the connection's mark

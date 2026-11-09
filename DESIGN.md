@@ -197,11 +197,13 @@ forms below. Rule order is kept exactly.
 | `ct-mark` | `ct-mark: "0x1"` | `ct mark 0x1` (the connection's mark; a number, `0x…`, or a range) |
 | `icmp-type` | `proto: icmpv6` + `icmp-type: [nd-neighbor-solicit]` | `icmpv6 type nd-neighbor-solicit` (needs `proto: icmp`/`icmpv6`, no ports) |
 | `flags` | `flags: {match: [syn], mask: [syn, ack]}` | `tcp flags & (syn\|ack) == syn` (a list makes one line each) |
+| `ether-saddr` / `ether-daddr` | `ether-saddr: "02:00:00:00:00:01"` | `ether saddr 02:00:00:00:00:01` (one MAC or a list; quote it, or YAML may read it as a number) |
+| `ether-saddr` / `ether-daddr` | `ether-daddr: {match: "01:00:00:00:00:00", mask: "01:00:00:00:00:00"}` | `ether daddr & 01:00:00:00:00:00 == 01:00:00:00:00:00` (masked: the multicast bit; `match` must lie inside `mask`) |
 
 **One value or a list:** `saddr`/`daddr`, `sport`/`dport`, the interface keys,
-`ct` and `icmp-type` take one value or a list (`dport: [ssh, 8080]` →
-`tcp dport { 22, 8080 }`). Each element resolves as it would alone; a named
-set can't go inside a list.
+`ether-saddr`/`ether-daddr`, `ct` and `icmp-type` take one value or a list
+(`dport: [ssh, 8080]` → `tcp dport { 22, 8080 }`). Each element resolves as
+it would alone; a named set can't go inside a list.
 
 **Named or inline:** a value that is a set listed under `sets:` renders
 `@name`; a definition renders its values inline; a literal renders itself.
