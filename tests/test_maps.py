@@ -87,6 +87,59 @@ def test_literal_keys_and_values():
     assert "elements = { 80 : 192.0.2.10, 443 : 192.0.2.20 }" in text
 
 
+def test_mark_keys():
+    text = _render(
+        [
+            {
+                "name": "by_mark",
+                "type": "mark : ipv4_addr",
+                "elements": {"0x1": "192.0.2.10", 2: "192.0.2.20"},
+            }
+        ]
+    )
+    assert "elements = { 0x1 : 192.0.2.10, 2 : 192.0.2.20 }" in text
+
+
+@pytest.mark.parametrize(
+    ("typ", "elements", "message"),
+    [
+        ("inet_service : ipv4_addr", {"80, 81": "192.0.2.1"}, "is not a port"),
+        ("inet_service : ipv4_addr", {"http": "192.0.2.1"}, "is not a port"),
+        ("inet_service : ipv4_addr", {70000: "192.0.2.1"}, "is not a port"),
+        ("inet_service : ipv4_addr", {"80\n": "192.0.2.1"}, "is not a port"),
+        ("mark : ipv4_addr", {"gold": "192.0.2.1"}, "is not a mark"),
+        ("mark : ipv4_addr", {"0x1-0x2": "192.0.2.1"}, "is not a mark"),
+        (
+            "ether_addr : ipv4_addr",
+            {"02:00:00:00:00:01": "192.0.2.1"},
+            "not ether_addr",
+        ),
+        ("ifname : verdict", {"lan": "accept"}, "not verdict"),
+        (
+            "ipv4_addr . inet_service : ipv4_addr",
+            {"10.0.0.1 . 80": "192.0.2.1"},
+            "not ipv4_addr . inet_service",
+        ),
+    ],
+)
+def test_elements_are_checked_or_refused(typ, elements, message):
+    with pytest.raises(BuildError, match=message):
+        _render([{"name": "m", "type": typ, "elements": elements}])
+
+
+def test_a_map_of_another_type_is_declared_without_elements():
+    text = _render(
+        [
+            {
+                "name": "by_mac",
+                "type": "ether_addr : ipv4_addr",
+                "include": "/var/lib/macs/*.nft",
+            }
+        ]
+    )
+    assert "type ether_addr : ipv4_addr\n" in text
+
+
 def test_maps_render_after_sets():
     text = _render(
         [{"name": "m", "type": "ifname : ipv4_addr"}],

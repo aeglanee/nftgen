@@ -366,6 +366,9 @@ def build_sets(sets_spec: list, defs: Definitions) -> list[NamedSet]:
 _MAP_KEYS = frozenset({"name", "type", "elements", "include", "flags", "comment"})
 _MAP_TYPE = re.compile(r"^\s*(\S(?:.*\S)?)\s+:\s+(\S(?:.*\S)?)\s*$")
 _ADDR_TYPES = ("ipv4_addr", "ipv6_addr")
+# the types `elements:` can check; a map of another type is filled through
+# `include:` or at runtime, or declared whole in the table's `raw:`
+_ELEMENT_TYPES = ("ifname", *_ADDR_TYPES, "inet_service", "mark")
 
 
 def build_maps(maps_spec: list, defs: Definitions, sets=()) -> list[NamedMap]:
@@ -438,6 +441,13 @@ def _map_elements(name, elements, key_type, value_type, defs) -> list[str]:
             f"map {name!r}: `elements:` takes a non-empty key -> value mapping, "
             f"got {elements!r}"
         )
+    for typ in (key_type, value_type):
+        if typ not in _ELEMENT_TYPES:
+            raise BuildError(
+                f"map {name!r}: `elements:` takes the types "
+                f"{', '.join(_ELEMENT_TYPES)}, not {typ} — fill the map through "
+                f"`include:`, or declare it in the table's `raw:`"
+            )
     rows: dict[str, str] = {}
     for key, value in elements.items():
         val = _map_value(name, value, value_type, defs)
@@ -491,6 +501,12 @@ def _map_scalar(name, value, typ, defs) -> str:
             raise BuildError(f"map {name!r}: {text!r} is not an address") from None
         if (addr.version == 4) != (typ == "ipv4_addr"):
             raise BuildError(f"map {name!r}: {text} is not an {typ}")
+    if typ == "inet_service" and not (
+        text.isascii() and text.isdigit() and int(text) <= 65535
+    ):
+        raise BuildError(f"map {name!r}: {text!r} is not a port (0-65535)")
+    if typ == "mark" and not MARK_SET_VALUE.match(text):
+        raise BuildError(f"map {name!r}: {text!r} is not a mark (a number or 0x…)")
     return text
 
 
