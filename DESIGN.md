@@ -183,7 +183,7 @@ maps:
 | Key | Meaning |
 | --- | --- |
 | `name`, `type` | required; `type` is nft's `<key> : <value>`, quoted (YAML reads `a : b` as a mapping) |
-| `elements` | key → value, for the types `ifname`, `ipv4_addr`, `ipv6_addr`, `inet_service` (a port number) and `mark`; an `ifname` key is an interface group (one row per device), an address may be a one-address network group. A map of another type takes no `elements:`: fill it through `include:` or at runtime, or declare it in the table's `raw:` |
+| `elements` | key → value, for the types `ifname`, `ipv4_addr`, `ipv6_addr`, `inet_service` (a port number) and `mark`, one value each (no range or prefix); an `ifname` key is an interface group (one row per device), an address may be a one-address network group. A map of another type takes no `elements:`: fill it through `include:` or at runtime, or declare it in the table's `raw:` |
 | `include` | a path or a glob that nft reads at load; a service writes the `elements = { … }` there. A glob that matches nothing leaves the map empty, so `nft -c` passes without the files. Not with `elements` |
 | `flags`, `comment` | as for a set |
 

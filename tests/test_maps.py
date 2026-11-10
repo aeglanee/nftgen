@@ -108,6 +108,13 @@ def test_mark_keys():
         ("inet_service : ipv4_addr", {70000: "192.0.2.1"}, "is not a port"),
         ("inet_service : ipv4_addr", {"80\n": "192.0.2.1"}, "is not a port"),
         ("mark : ipv4_addr", {"gold": "192.0.2.1"}, "is not a mark"),
+        ("inet_service : ipv4_addr", {"8000-8100": "192.0.2.1"}, "no range"),
+        ("inet_service : ipv4_addr", {"0443": "192.0.2.1"}, "is not a port"),
+        ("mark : ipv4_addr", {"010": "192.0.2.1"}, "is not a mark"),
+        ("mark : ipv4_addr", {"\u0661\u0662": "192.0.2.1"}, "is not a mark"),
+        ("mark : ipv4_addr", {"0x1ffffffff": "192.0.2.1"}, "is not a mark"),
+        ("mark : ifname", {1: "wan0\n"}, "is not a name"),
+        ("mark : ifname", {1: "a-name-longer-than-15"}, "is not a name"),
         ("mark : ipv4_addr", {"0x1-0x2": "192.0.2.1"}, "is not a mark"),
         (
             "ether_addr : ipv4_addr",
@@ -251,7 +258,7 @@ def test_conflicting_elements_fail():
         )
 
 
-def test_two_spellings_of_one_address_are_one_key():
+def test_two_spellings_of_one_key_are_one_key():
     spellings = {"2001:db8::1": "fd00::1", "2001:0db8:0:0:0:0:0:1": "fd00::2"}
     with pytest.raises(BuildError, match="maps to"):
         _render([{"name": "m", "type": "ipv6_addr : ipv6_addr", "elements": spellings}])
@@ -260,6 +267,16 @@ def test_two_spellings_of_one_address_are_one_key():
         [{"name": "m", "type": "ipv6_addr : ipv6_addr", "elements": spellings}]
     )
     assert "elements = { 2001:db8::1 : fd00::1 }" in text
+    with pytest.raises(BuildError, match="maps to"):
+        _render(
+            [
+                {
+                    "name": "m",
+                    "type": "mark : ipv4_addr",
+                    "elements": {"0x10": "192.0.2.1", 16: "192.0.2.2"},
+                }
+            ]
+        )
 
 
 @pytest.mark.skipif(not validate.can_check(), reason="nft -c not usable here")

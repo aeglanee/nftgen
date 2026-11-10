@@ -369,6 +369,11 @@ _ADDR_TYPES = ("ipv4_addr", "ipv6_addr")
 # the types `elements:` can check; a map of another type is filled through
 # `include:` or at runtime, or declared whole in the table's `raw:`
 _ELEMENT_TYPES = ("ifname", *_ADDR_TYPES, "inet_service", "mark")
+# one value as nft reads it: no range, and no leading zero (nft reads `010`
+# as octal 8)
+_ELEMENT_PORT = re.compile(r"(?:0|[1-9][0-9]{0,4})\Z")
+_ELEMENT_MARK = re.compile(r"(?:0x[0-9a-fA-F]{1,8}|0|[1-9][0-9]{0,9})\Z")
+_ELEMENT_IFNAME = re.compile(r"[^\s\"]{1,15}\Z")
 
 
 def build_maps(maps_spec: list, defs: Definitions, sets=()) -> list[NamedMap]:
@@ -459,9 +464,13 @@ def _map_elements(name, elements, key_type, value_type, defs) -> list[str]:
 
 
 def _compared(text: str, typ: str):
-    """Two spellings of one address (`2001:db8::1`, `2001:0db8::1`) are one
-    key to nft."""
-    return ipaddress.ip_address(text) if typ in _ADDR_TYPES else text
+    """Two spellings of one address (`2001:db8::1`, `2001:0db8::1`) or of one
+    number (`0x10`, `16`) are one key to nft."""
+    if typ in _ADDR_TYPES:
+        return ipaddress.ip_address(text)
+    if typ in ("inet_service", "mark"):
+        return int(text, 0)
+    return text
 
 
 def _map_keys(name, key, key_type, defs) -> list[str]:
@@ -482,7 +491,7 @@ def _map_keys(name, key, key_type, defs) -> list[str]:
 
 def _map_value(name, value, value_type, defs) -> str:
     if value_type == "ifname":
-        if not isinstance(value, str) or not value or '"' in value:
+        if not isinstance(value, str) or not _ELEMENT_IFNAME.match(value):
             raise BuildError(f"map {name!r}: interface value {value!r} is not a name")
         return f'"{value}"'
     return _map_scalar(name, value, value_type, defs)
@@ -508,11 +517,15 @@ def _map_scalar(name, value, typ, defs) -> str:
         if (addr.version == 4) != (typ == "ipv4_addr"):
             raise BuildError(f"map {name!r}: {text} is not an {typ}")
     if typ == "inet_service" and not (
-        text.isascii() and text.isdigit() and int(text) <= 65535
+        _ELEMENT_PORT.match(text) and int(text) <= 0xFFFF
     ):
-        raise BuildError(f"map {name!r}: {text!r} is not a port (0-65535)")
-    if typ == "mark" and not MARK_SET_VALUE.match(text):
-        raise BuildError(f"map {name!r}: {text!r} is not a mark (a number or 0x…)")
+        raise BuildError(
+            f"map {name!r}: {text!r} is not a port (one number 0-65535, no range)"
+        )
+    if typ == "mark" and not (_ELEMENT_MARK.match(text) and int(text, 0) <= 0xFFFFFFFF):
+        raise BuildError(
+            f"map {name!r}: {text!r} is not a mark (one number or 0x…, no range)"
+        )
     return text
 
 
