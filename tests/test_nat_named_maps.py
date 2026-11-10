@@ -163,3 +163,34 @@ def test_nat_family_must_match_the_rule_addresses(target):
     ]
     with pytest.raises(BuildError, match="split the rule per family"):
         render_tables(tables, defs, DictResolver({}))
+
+
+def test_nat_family_must_match_a_concat_set():
+    tables = [
+        {
+            "family": "inet",
+            "name": "nat",
+            "sets": [
+                {
+                    "name": "pairs",
+                    "concat": ["saddr", "oifname"],
+                    "tuples": [["fd00::1", "uplink"]],
+                }
+            ],
+            "chains": [
+                {
+                    "name": "post",
+                    "hook": "postrouting",
+                    "type": "nat",
+                    "priority": "srcnat",
+                    "rules": [{"set": "pairs", "action": {"snat": "192.0.2.1"}}],
+                }
+            ],
+        }
+    ]
+    with pytest.raises(BuildError, match="split the rule per family"):
+        render_tables(tables, DEFS, DictResolver({}))
+    tables[0]["chains"][0]["rules"][0]["action"] = {"snat": "2001:db8::1"}
+    assert "ip6 saddr . oifname @pairs snat ip6 to 2001:db8::1\n" in render_tables(
+        tables, DEFS, DictResolver({})
+    )

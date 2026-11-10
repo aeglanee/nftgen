@@ -27,7 +27,7 @@ not a breaking change.
   map's key type.
 - Fix: a dnat/snat rule whose addresses include the other family than its
   target (`ip6 saddr … snat ip to …`) fails the build instead of at
-  `nft -c`. Split the rule per family.
+  `nft -c`, a concat rule (`set:`) included. Split the rule per family.
 - Fix: a value ending in a line break (a YAML `|` block) fails the build.
   `mark: "0x1\n"` rendered `meta mark 0x1` and `accept` as two rules, the
   second one unconditional; the same for `ct-mark`, `set-mark`, ports,

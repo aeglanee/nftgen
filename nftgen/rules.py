@@ -161,6 +161,17 @@ def _ether_match(key: str, value) -> str:
     return f"ether {field} & {mask} == {match}"
 
 
+def _check_nat_family(verdict: str | None, families: list, rule: dict) -> None:
+    """nft refuses `ip6 saddr … snat ip to …` ("conflicting protocols")."""
+    nat = verdict.split(" ", 2) if verdict else []
+    if nat[:1] in (["snat"], ["dnat"]) and families != [nat[1]]:
+        raise BuildError(
+            f"{nat[0]} to an {'IPv4' if nat[1] == 'ip' else 'IPv6'} target, but "
+            f"the rule matches {'IPv6' if nat[1] == 'ip' else 'IPv4'} addresses "
+            f"— split the rule per family: {rule!r}"
+        )
+
+
 _KNOWN_RULE_KEYS = frozenset(
     {
         "iifname",
@@ -342,15 +353,8 @@ class RuleRenderer:
         else:
             families = [None]
         verdict = self._verdict(rule["action"]) if "action" in rule else None
-        nat = verdict.split(" ", 2) if verdict else []
-        if addr and nat[:1] in (["snat"], ["dnat"]) and families != [nat[1]]:
-            # nft refuses `ip6 saddr … snat ip to …` ("conflicting protocols")
-            raise BuildError(
-                f"{nat[0]} to an {'IPv4' if nat[1] == 'ip' else 'IPv6'} target, but "
-                f"the rule's addresses are also "
-                f"{'IPv6' if nat[1] == 'ip' else 'IPv4'} — split the rule per "
-                f"family: {rule!r}"
-            )
+        if addr:
+            _check_nat_family(verdict, families, rule)
 
         lines = []
         for fam in families:
@@ -1041,12 +1045,15 @@ class RuleRenderer:
                 exprs.append("meta mark")
             else:  # iifname / oifname: field name is the nft expression
                 exprs.append(f)
+        verdict = self._verdict(rule["action"]) if "action" in rule else None
+        if s.concat_family:
+            _check_nat_family(verdict, [s.concat_family], rule)
         parts = [" . ".join(exprs) + f" @{name}"]
         parts.extend(self._statements(rule))
         if rule.get("counter"):
             parts.append(self._counter(rule["counter"]))
-        if "action" in rule:
-            parts.append(self._verdict(rule["action"]))
+        if verdict:
+            parts.append(verdict)
         return " ".join(p for p in parts if p)
 
     _VMAP_VERDICTS = ("accept", "drop", "return", "continue")
