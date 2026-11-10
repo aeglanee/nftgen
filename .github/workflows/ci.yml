@@ -8,8 +8,9 @@ on:
     branches:
       - main
   pull_request:
-  # Weekly, even with no commits: PyYAML/pytest/pre-commit are ranges, not
-  # pins, so a new upstream release can break us without a Renovate PR.
+  # Weekly, even with no commits: uv, build/twine and the runner's nftables
+  # are not pinned, so a new upstream release can break us without a
+  # Renovate PR.
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
@@ -34,31 +35,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.14"
-
-      - name: Install dev dependencies
-        run: |
-          set -euo pipefail
-          python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -e '.[dev]'
-
-      - name: Lint (ruff / yamllint / markdownlint / gitleaks)
+      # every linter in its own container, images pinned in tools.mk
+      - name: Lint
         run: make lint
-
-      # same check as `make lint-links`: local files + anchors, offline
-      - name: Markdown links (offline)
-        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
-        with:
-          lycheeVersion: v0.24.2
-          fail: true
-          args: >-
-            --no-progress --config .lychee.toml
-            --remap 'https://github\.com/aeglanee/nftgen/(?:blob|tree)/main/(.*) file://${{ github.workspace }}/$1'
-            '*.md' 'docs/**/*.md' 'example*/**/*.md'
 
   # Build what a release would upload and check it, on every run (incl. the
   # weekly one): a packaging break or a build-tool change shows up here, not
@@ -107,8 +86,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      - name: Set up uv + Python
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: ${{ matrix.python }}
 
@@ -119,11 +98,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends nftables iproute2
 
       - name: Install dev dependencies
-        run: |
-          set -euo pipefail
-          python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -e '.[dev]'
+        run: make deps
 
       # Ubuntu 24.04 restricts unprivileged user namespaces via AppArmor, which
       # blocks the rootless `unshare -rn nft -c` path and the netns harness.
