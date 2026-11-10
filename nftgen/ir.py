@@ -455,7 +455,12 @@ def _map_keys(name, key, key_type, defs) -> list[str]:
                 f"map {name!r}: unknown interface group {key!r} (define it under "
                 f"`interfaces:`)"
             )
-        return [f'"{d}"' for d in defs.interface(key)]
+        devices = defs.interface(key)
+        if not devices:
+            raise BuildError(
+                f"map {name!r}: interface group {key!r} resolves to no devices"
+            )
+        return [f'"{d}"' for d in devices]
     return [_map_scalar(name, key, key_type, defs)]
 
 

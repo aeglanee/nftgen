@@ -12,7 +12,7 @@ from nftgen.ir import BuildError
 
 DEFS = Definitions.from_mappings(
     {
-        "interfaces": {"uplinks": ["wan0", "wan1"], "lan": ["lan0"]},
+        "interfaces": {"uplinks": ["wan0", "wan1"], "lan": ["lan0"], "unplugged": []},
         "networks": {"wan_ip": ["192.0.2.1"], "pool": ["192.0.2.0/24"]},
     }
 )
@@ -134,6 +134,16 @@ def test_maps_render_after_sets():
                 }
             ],
             "unknown interface group",
+        ),
+        (
+            [
+                {
+                    "name": "m",
+                    "type": "ifname : ipv4_addr",
+                    "elements": {"unplugged": "192.0.2.1"},
+                }
+            ],
+            "resolves to no devices",
         ),
         (
             [{"name": "m", "type": "ifname : ipv4_addr", "elements": {"lan": "pool"}}],
