@@ -7,7 +7,7 @@ Versioning: [semantic versioning](https://semver.org) from 1.0.0 on. A new
 check that rejects input which rendered a wrong or broken ruleset is a fix,
 not a breaking change.
 
-## Unreleased
+## 1.3.0 — 2026-11-10
 
 - New: Ethernet address matches. `ether-saddr:` / `ether-daddr:` take a
   MAC or a list (`ether saddr { … }`), or a masked test
