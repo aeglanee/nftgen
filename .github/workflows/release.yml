@@ -22,7 +22,7 @@ concurrency:
 jobs:
   ci:
     name: ci
-    uses: ./.github/workflows/ci.yml
+    uses: $/.github/workflows/ci.yml
 
   build:
     name: build + check

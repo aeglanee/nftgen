@@ -42,15 +42,14 @@ deployer — Ansible (later) ships and applies the output.
   traffic semantics are in question. No increment without tests.
 - **YAML examples are block-style** (no `{ }` flow mappings) — author
   preference.
-- **Setup:** `make install-dev` — own `.venv`, nftgen editable +
-  ruff/yamllint/pre-commit, git hook wired.
+- **Setup:** `make deps` — own `.venv` built from `uv.lock` (needs `uv`):
+  pytest + nftgen editable. `make hooks` runs `make lint` before every
+  push (it replaced the pre-commit hook).
 - **Checks:** `make verify` (lint + tests) must be green before every
   commit. Individually: `make lint`, `make test`, `make format`;
-  `pytest tests/test_foo.py -v` for one file (venv on PATH via make, or
-  activate it). `make lint-links` checks Markdown links offline (needs
-  `lychee`; CI runs it). `make lint-trunk` is an optional breadth sweep
-  (shellcheck/shfmt/taplo/trufflehog/checkov via the trunk CLI) — not
-  part of the gate.
+  `.venv/bin/pytest tests/test_foo.py -v` for one file. `make lint` runs
+  every linter in its own container (images pinned in `tools.mk`).
+  `make links` is the offline Markdown link check.
 - **Keep the status docs current.** [`CHANGELOG.md`](CHANGELOG.md) records
   each release (and the unreleased `main`); [`TODO.md`](TODO.md) is the one
   backlog. Update them when a change lands, not on every turn.

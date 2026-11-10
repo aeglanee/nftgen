@@ -29,17 +29,16 @@ Documentation = "https://github.com/aeglanee/nftgen/blob/main/docs/authoring.md"
 Changelog = "https://github.com/aeglanee/nftgen/blob/main/CHANGELOG.md"
 Issues = "https://github.com/aeglanee/nftgen/issues"
 
-[project.optional-dependencies]
-test = ["pytest>=8.0"]
-dev = [
-  "pytest>=8.0",
-  "ruff==0.17.4",    # keep in sync with .pre-commit-config.yaml
-  "yamllint==1.38.0", # keep in sync with .pre-commit-config.yaml
-  "pre-commit>=4.0",
-]
-
 [project.scripts]
 nftgen = "nftgen.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest==9.2.0",
+]
+
+[tool.uv]
+default-groups = ["dev"]
 
 [build-system]
 requires = ["hatchling>=1.27"]  # license-files (PEP 639)
@@ -50,7 +49,7 @@ packages = ["nftgen"]
 core-metadata-version = "2.4"  # what PyPI and twine read; 2.5 is rejected
 
 [tool.hatch.build.targets.sdist]
-# source + tests and their fixtures; never local tool state (.trunk, .venv)
+# source + tests and their fixtures; never local tool state (.venv)
 include = ["/nftgen", "/tests", "/example", "/example-fleet", "/CHANGELOG.md"]
 core-metadata-version = "2.4"
 

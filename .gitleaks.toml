@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Local tool state: virtualenvs and caches"
+paths = [
+  '''^\.venv/''',
+  '''^\.git/''',
+]

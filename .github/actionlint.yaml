@@ -1,0 +1,10 @@
+---
+# Until actionlint knows the GitHub-hosted ubuntu-26.04 runner label.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
+# Until actionlint knows the $/ self-repository syntax: https://github.com/rhysd/actionlint/issues/711
+paths:
+  .github/workflows/release.yml:
+    ignore:
+      - 'reusable workflow call "\$/\.github/workflows/ci\.yml" at "uses" is not following the format'

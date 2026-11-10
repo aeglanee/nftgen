@@ -19,6 +19,10 @@ build errors and determinism.
 
 ## Running
 
+- `make deps` — builds `.venv` from `uv.lock` (needs `uv`): pytest and
+  nftgen, editable. `make test` runs it first.
+- `make lint` — every linter in its own container (needs Docker; the
+  images are pinned in `tools.mk`). `make hooks` runs it before every push.
 - `make verify` — lint + tests. **Put `nft` and `ip` on `PATH` first**:
   without them the `nft -c` and behavioral tests skip (about a fifth of
   the suite) and the run still looks green. Where they aren't on `PATH`
@@ -30,7 +34,7 @@ build errors and determinism.
   PATH=$nft:$ip:$PATH make verify
   ```
 
-- One file: `pytest tests/test_vmaps.py -v`.
+- One file: `.venv/bin/pytest tests/test_vmaps.py -v`.
 - `nft -c` on a file by hand: plain `nft -c` fails in a `NoNewPrivs` sandbox
   (netlink); `unshare -rn nft -c -f <file>` works. `validate.py` falls back to
   it, so `nftgen build --check` works there too.

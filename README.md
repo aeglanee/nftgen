@@ -86,11 +86,20 @@ rollback timer ([DEPLOYMENT.md][deployment]).
 - [CHANGELOG.md][changelog] · [TODO.md][todo] ·
   [docs/testing.md][testing].
 
-## Develop
+## Development
+
+`make deps` builds `.venv` from `uv.lock` (needs `uv`). `make lint` runs
+every linter in its own container (Docker, no network); `make hooks` runs
+it before every push. `make verify` is lint + tests: put `nft` and `ip` on
+`PATH` first, see [docs/testing.md][testing].
 
 ```bash
-make install-dev   # .venv with nftgen (editable), linters, pre-commit hook
-make verify        # lint + tests — put nft and ip on PATH, see docs/testing.md
+make deps
+make hooks
+make lint
+make format
+make test
+make verify
 ```
 
 ## License
