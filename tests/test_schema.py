@@ -361,6 +361,11 @@ def test_non_ascii_digits_are_not_numbers(text):
         {"proto": "tcp", "sport": "1024-2048\n", "action": "accept"},
         {"proto": "tcp\n", "action": "accept"},
         {"action": "reject with icmp port-unreachable\n"},
+        {"limit": "10/minute\n", "action": "accept"},
+        {"quota": "25 mbytes\n", "action": "drop"},
+        {"proto": "icmp", "icmp-type": ["echo-request\n"], "action": "accept"},
+        {"action": {"jump": "wan_in\n"}},
+        {"vmap": {"key": "mark", "map": {"0x1\n": "accept"}}},
         {"ether-saddr": "02:00:00:00:00:01\n", "action": "accept"},
         {
             "ether-daddr": {
@@ -372,9 +377,8 @@ def test_non_ascii_digits_are_not_numbers(text):
     ],
 )
 def test_a_value_ending_in_a_newline_is_rejected(rule):
-    # `$` also matches before a final newline (a YAML `|` block ends in one):
-    # `mark: "0x1\n"` rendered `meta mark 0x1` and ` accept` as two rules, the
-    # second one unconditional
+    # a YAML `|` block ends in a newline: `mark: "0x1\n"` rendered
+    # `meta mark 0x1` and ` accept` as two rules, the second one unconditional
     with pytest.raises(BuildError):
         R.render(rule)
 

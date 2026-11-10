@@ -415,6 +415,16 @@ RULE_SCHEMA = {
 }
 
 
+def _has_line_break(value) -> bool:
+    if isinstance(value, str):
+        return "\n" in value or "\r" in value
+    if isinstance(value, dict):
+        return any(_has_line_break(k) or _has_line_break(v) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_has_line_break(v) for v in value)
+    return False
+
+
 def check_rule(rule) -> dict:
     """Check every value of a rule against RULE_SCHEMA; return a normalized
     copy (e.g. `ct: established` → `ct: [established]`). Unknown keys are left
@@ -423,6 +433,13 @@ def check_rule(rule) -> dict:
         raise BuildError(f"a rule must be a mapping of keys, got {_got(rule)}")
     out = dict(rule)
     for key, value in rule.items():
+        if key != "raw" and _has_line_break(value):
+            # a rule is one line: `limit: "10/minute\n"` ended the rule there
+            # and left its verdict behind as a second, unconditional rule
+            raise BuildError(
+                f"rule key {key!r}: a value contains a line break (a YAML `|` "
+                f"block ends in one): {value!r}"
+            )
         check = RULE_SCHEMA.get(key)
         if check is not None:
             out[key] = check(key, value)
