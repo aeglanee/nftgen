@@ -84,5 +84,9 @@ The set is a `sets:` entry with `flags: [dynamic]`. With a rate limit, use the
 | log / limit / quota | `log:` / `limit:` / `quota:` |
 | flowtables | table `flowtables:` + rule `flow-offload:` |
 | named counters | table `counters:` + rule `counter: <name>` |
+| masked Ethernet matches | `ether-saddr:` / `ether-daddr:` with `match:` + `mask:` |
+| routing lookups, anti-spoofing | `fib:` |
+| notrack | `notrack: true` |
+| named data maps, NAT through one | table `maps:` + `snat: {key, map}` |
 
 Every key: [DESIGN.md](../DESIGN.md). Candidates for a key: [TODO.md](../TODO.md).

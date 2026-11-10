@@ -122,6 +122,7 @@ interfaces:
 | --- | --- |
 | `family`, `name` | `table inet filter { … }` — required |
 | `sets` | named sets (below) |
+| `maps` | named data maps (below) |
 | `chains` | base and regular chains (below) |
 | `counters` | named counters, one name or a list: `counters: [bad_tcp]` → `counter bad_tcp { }` |
 | `flowtables` | `{name, devices, hook?, priority?}` — `devices` is one interface group or a list (a device in two groups is listed once); hook defaults to `ingress`, priority to `0` |
@@ -163,6 +164,31 @@ Each tuple field takes one value (a single-value group or a literal). The
 family comes from the tuples; a set filled at runtime (no tuples) with an
 address field needs `family: ip` or `ip6`.
 
+## Maps
+
+A table's `maps:` declares named data maps. A rule uses one through a NAT
+action (`snat ip to oifname map @lease_snat`, under Actions).
+
+```yaml
+maps:
+  - name: lease_snat
+    type: "ifname : ipv4_addr"       # nft's <key type> : <value type>, quoted
+    include: /var/lib/leases/*.nft   # files with `elements = { … }`
+  - name: static_snat
+    type: "ifname : ipv4_addr"
+    elements:
+      uplinks: wan_ip                # groups resolve: one row per device
+```
+
+| Key | Meaning |
+| --- | --- |
+| `name`, `type` | required; `type` is nft's `<key> : <value>`, quoted (YAML reads `a : b` as a mapping) |
+| `elements` | key → value, for the types `ifname`, `ipv4_addr`, `ipv6_addr`, `inet_service` (a port number) and `mark`, one value each (no range or prefix); an `ifname` key is an interface group (one row per device), an address may be a one-address network group. A map of another type takes no `elements:`: fill it through `include:` or at runtime, or declare it in the table's `raw:` |
+| `include` | a path or a glob that nft reads at load; a service writes the `elements = { … }` there. A glob that matches nothing leaves the map empty, so `nft -c` passes without the files. Not with `elements` |
+| `flags`, `comment` | as for a set |
+
+A set and a map can't share a name. Verdict maps are still inline (`vmap:`).
+
 ## Chains
 
 | Key | Meaning |
@@ -197,11 +223,14 @@ forms below. Rule order is kept exactly.
 | `ct-mark` | `ct-mark: "0x1"` | `ct mark 0x1` (the connection's mark; a number, `0x…`, or a range) |
 | `icmp-type` | `proto: icmpv6` + `icmp-type: [nd-neighbor-solicit]` | `icmpv6 type nd-neighbor-solicit` (needs `proto: icmp`/`icmpv6`, no ports) |
 | `flags` | `flags: {match: [syn], mask: [syn, ack]}` | `tcp flags & (syn\|ack) == syn` (a list makes one line each) |
+| `ether-saddr` / `ether-daddr` | `ether-saddr: "02:00:00:00:00:01"` | `ether saddr 02:00:00:00:00:01` (one MAC or a list; quote it, or YAML may read it as a number) |
+| `ether-saddr` / `ether-daddr` | `ether-daddr: {match: "01:00:00:00:00:00", mask: "01:00:00:00:00:00"}` | `ether daddr & 01:00:00:00:00:00 == 01:00:00:00:00:00` (masked: the multicast bit; `match` must lie inside `mask`) |
+| `fib` | `fib: {key: daddr, result: oifname, match: lo}` | `fib daddr oifname "lo"` (a routing lookup; `key` is one of saddr/daddr plus mark and iif or oif, in nft's order; `match` is an interface group, a set, or `missing`/`exists` with `result: oif`, or address types with `result: type`) |
 
 **One value or a list:** `saddr`/`daddr`, `sport`/`dport`, the interface keys,
-`ct` and `icmp-type` take one value or a list (`dport: [ssh, 8080]` →
-`tcp dport { 22, 8080 }`). Each element resolves as it would alone; a named
-set can't go inside a list.
+`ether-saddr`/`ether-daddr`, `ct` and `icmp-type` take one value or a list
+(`dport: [ssh, 8080]` → `tcp dport { 22, 8080 }`). Each element resolves as
+it would alone; a named set can't go inside a list.
 
 **Named or inline:** a value that is a set listed under `sets:` renders
 `@name`; a definition renders its values inline; a literal renders itself.
@@ -231,6 +260,7 @@ set can't go inside a list.
 | `set-ct-mark` | `"0x1"` / `mark` | `ct mark set 0x1` / `ct mark set meta mark` (save the packet's mark) |
 | `set-mss` | `pmtu` / `1452` | `tcp flags syn tcp option maxseg size set rt mtu` / `… 1452` (1–65535) |
 | `flow-offload` | `ft` | `flow add @ft` (a declared flowtable; a separate rule from the verdict) |
+| `notrack` | `true` | `notrack` (no conntrack entry; in a chain hooked before conntrack, `priority: raw`) |
 | `comment` | `"admins → router ssh"` | `comment "…"`, last on every line of the rule; kept by the kernel; no `"`, ≤ 128 bytes |
 
 A rule may have statements and no action (e.g. an MSS clamp).
@@ -244,8 +274,9 @@ A rule may have statements and no action (e.g. an MSS clamp).
 | `{jump: chain}` / `{goto: chain}` | `jump chain` / `goto chain` |
 | `{dnat: 192.168.10.5:443}` / `{snat: wan_ip}` | `dnat ip to 192.168.10.5:443` — family from the address; a single-address network group resolves |
 | `{dnat: {proto: tcp, map: {80: web, 443: db}}}` | `dnat ip to tcp dport map { 80 : …, 443 : … }` (address-only targets) |
+| `{snat: {key: oifname, map: lease_snat}}` | `snat ip to oifname map @lease_snat` — a table's named map; `key` is iifname, oifname, saddr, daddr, sport, dport (with `proto:`) or mark, and must match the map's key type; the family comes from its values, and a saddr/daddr key is of that family too |
 
-Anything else (`queue`, `notrack`, …) is a `raw:` rule.
+Anything else (`queue`, `redirect`, …) is a `raw:` rule.
 
 ### Other rule forms
 
@@ -302,7 +333,8 @@ rule order. An empty chain stays empty.
   `action`, `set-mss: 0`) — checked against one schema before rendering.
 - Undefined names; a group that resolves to nothing; definition and include
   cycles; an include with a missing or misnamed section.
-- A named set mixing v4 and v6; a rule whose addresses share no family.
+- A named set mixing v4 and v6; a rule whose addresses share no family; a
+  NAT rule whose addresses include the other family than its target.
 - Object names that are reserved nft keywords (`counter`, `fwd`, `map`, …).
 - `flow-offload:` and an action in one rule (the verdict would never run).
 - `set-mark:` and `set-ct-mark:` in one rule when one copies the other
@@ -316,5 +348,5 @@ overlapping prefixes in a named set or a vmap (`10.0.0.0/8` and
 entry.
 
 **Not modelled** (use `raw:` at table level): `netdev` per-device chains, set
-tuning (`size`, `gc-interval`), named maps, named stateful objects other than
-counters.
+tuning (`size`, `gc-interval`), named verdict maps, named stateful objects other
+than counters.

@@ -7,6 +7,33 @@ Versioning: [semantic versioning](https://semver.org) from 1.0.0 on. A new
 check that rejects input which rendered a wrong or broken ruleset is a fix,
 not a breaking change.
 
+## Unreleased
+
+- New: Ethernet address matches. `ether-saddr:` / `ether-daddr:` take a
+  MAC or a list (`ether saddr { … }`), or a masked test
+  `{match: …, mask: …}` (`ether daddr & 01:00:00:00:00:00 == 01:00:00:00:00:00`,
+  the multicast bit). A MAC YAML read as a number fails with a hint to
+  quote it.
+- New: routing lookups. `fib: {key, result, match}` renders
+  `fib daddr oifname "lo"`, `fib saddr . mark . iif oif missing` (the
+  anti-spoofing recipe, now without `raw:`) or `fib daddr type local`.
+- New: `notrack: true`, the statement that skips connection tracking.
+- New: named data maps, a table's `maps:` with `type: "ifname : ipv4_addr"`
+  and `elements:` (groups resolve) or `include:`, a file or glob a service
+  fills (`elements = { … }`).
+- New: NAT through a named map: `snat: {key: oifname, map: lease_snat}`
+  renders `snat ip to oifname map @lease_snat`; keys iifname, oifname,
+  saddr, daddr, sport/dport (with `proto:`) and mark, checked against the
+  map's key type.
+- Fix: a dnat/snat rule whose addresses include the other family than its
+  target (`ip6 saddr … snat ip to …`) fails the build instead of at
+  `nft -c`, a concat rule (`set:`) included. Split the rule per family.
+- Fix: a rule value with a line break in it (a YAML `|` block ends in one)
+  fails the build, for every key but `raw:`. `mark: "0x1\n"` rendered
+  `meta mark 0x1` and `accept` as two rules, the second one unconditional;
+  the same for ports, `limit`, `icmp-type` and others, and for marks or
+  ports in a concat set.
+
 ## 1.2.0 — 2026-10-28
 
 - New: connection marks. `ct-mark:` matches the connection's mark

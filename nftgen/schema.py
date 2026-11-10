@@ -33,8 +33,8 @@ LOG_LEVELS = (
 VERDICTS = ("accept", "drop", "reject", "return", "continue", "masquerade")
 ACTION_MAPPING_KEYS = ("jump", "goto", "dnat", "snat")
 MSS_ALIASES = ("pmtu", "rt-mtu", "rt_mtu")
-_PROTO_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9-]*$")  # tcp, icmpv6, vrrp, …
-_REJECT_WITH = re.compile(r"^reject with \S.*$")
+_PROTO_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9-]*\Z")  # tcp, icmpv6, vrrp, …
+_REJECT_WITH = re.compile(r"^reject with \S.*\Z")
 
 
 def _got(value) -> str:
@@ -143,6 +143,38 @@ def _flags(key, value):
     return value
 
 
+MAC_ADDRESS = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}\Z")
+_MAC = "a MAC address such as 02:42:ac:11:00:02"
+
+
+def _mac(key, value, what=_MAC):
+    if isinstance(value, int) and not isinstance(value, bool):
+        # YAML 1.1 reads an unquoted 52:54:00:12:34:56 as a base-60 number
+        raise BuildError(
+            f"rule key {key!r}: expected {what}, got the number {value} — quote "
+            f"the address (YAML reads an unquoted MAC whose parts are all below "
+            f"60 as a base-60 number)"
+        )
+    if not isinstance(value, str) or not MAC_ADDRESS.match(value):
+        _fail(key, what, value)
+
+
+def _ether(key, value):
+    if isinstance(value, dict):
+        unknown = set(value) - {"match", "mask"}
+        if unknown or set(value) != {"match", "mask"}:
+            raise BuildError(
+                f"rule key {key!r}: a masked match takes exactly `match:` and "
+                f"`mask:`, got {value!r}"
+            )
+        _mac(f"{key}.match", value["match"])
+        _mac(f"{key}.mask", value["mask"])
+        return value
+    return _one_or_list(f"{_MAC}, a list of them, or a {{match, mask}} mapping", _mac)(
+        key, value
+    )
+
+
 def _log(key, value):
     if isinstance(value, bool):
         return value  # false = no log statement, like `counter: false`
@@ -183,6 +215,67 @@ def _counter(key, value):
     return _fail(key, "true, false, or a declared counter name", value)
 
 
+def _bool(key, value):
+    if isinstance(value, bool):
+        return value
+    return _fail(key, "true or false", value)
+
+
+FIB_KEYS = ("saddr", "daddr", "mark", "iif", "oif")
+FIB_RESULTS = ("oif", "oifname", "type")
+FIB_PRESENCE = ("missing", "exists")
+ADDRESS_TYPES = (
+    "unspec",
+    "unicast",
+    "local",
+    "broadcast",
+    "anycast",
+    "multicast",
+    "blackhole",
+    "unreachable",
+    "prohibit",
+)
+
+
+def _fib(key, value):
+    if not isinstance(value, dict):
+        _fail(key, "a mapping of key / result / match", value)
+    unknown = set(value) - {"key", "result", "match"}
+    missing = {"key", "result", "match"} - set(value)
+    if unknown or missing:
+        raise BuildError(
+            f"rule key {key!r}: takes `key:`, `result:` and `match:`, got {value!r}"
+        )
+    fields = value["key"] if isinstance(value["key"], list) else [value["key"]]
+    if not fields or any(f not in FIB_KEYS for f in fields):
+        _fail(f"{key}.key", f"one or a list of {', '.join(FIB_KEYS)}", value["key"])
+    if len(fields) != len(set(fields)):
+        _fail(f"{key}.key", "each field once", value["key"])
+    if len(set(fields) & {"saddr", "daddr"}) != 1:
+        _fail(f"{key}.key", "exactly one of saddr, daddr", value["key"])
+    if {"iif", "oif"} <= set(fields):
+        _fail(f"{key}.key", "at most one of iif, oif", value["key"])
+    result = value["result"]
+    if result not in FIB_RESULTS:
+        _fail(f"{key}.result", f"one of {', '.join(FIB_RESULTS)}", result)
+    match = value["match"]
+    if result == "type":
+        _one_or_list(
+            f"an address type ({', '.join(ADDRESS_TYPES)})",
+            lambda k, v, what: v in ADDRESS_TYPES or _fail(k, what, v),
+        )(f"{key}.match", match)
+    else:
+        _one_or_list(
+            f"an interface group, a set, or one of {', '.join(FIB_PRESENCE)}",
+            _scalar,
+        )(f"{key}.match", match)
+        if isinstance(match, list) and set(match) & set(FIB_PRESENCE):
+            _fail(f"{key}.match", "missing or exists alone, not in a list", match)
+        if match in FIB_PRESENCE and result != "oif":
+            _fail(f"{key}.result", f"oif with `match: {match}`", result)
+    return {**value, "key": fields}
+
+
 def _set_mss(key, value):
     if value in MSS_ALIASES:
         return value
@@ -220,7 +313,11 @@ def _action(key, value):
     if kind in ("jump", "goto"):
         _name(f"action.{kind}", target, "a chain name")
     elif not (_is_scalar(target) or isinstance(target, dict)):
-        _fail(f"action.{kind}", "an address, a network group, or a port map", target)
+        _fail(
+            f"action.{kind}",
+            "an address, a network group, a port map, or a named map",
+            target,
+        )
     return value
 
 
@@ -291,6 +388,9 @@ RULE_SCHEMA = {
     "oifname": _IFACE,
     "iif": _IFACE,
     "oif": _IFACE,
+    "ether-saddr": _ether,
+    "ether-daddr": _ether,
+    "fib": _fib,
     "ct": _ct,
     "mark": _MARK,
     "ct-mark": _MARK,
@@ -305,6 +405,7 @@ RULE_SCHEMA = {
     "set-ct-mark": _mark_or("mark", "a mark (a number or 0x…) or `mark`"),
     "set-mss": _set_mss,
     "flow-offload": _text("a flowtable name"),
+    "notrack": _bool,
     "counter": _counter,
     "action": _action,
     "comment": _comment,
@@ -312,6 +413,16 @@ RULE_SCHEMA = {
     "vmap": _mapping("a mapping with `key:` and `map:`"),
     "set": _text("a concat set name"),
 }
+
+
+def _has_line_break(value) -> bool:
+    if isinstance(value, str):
+        return "\n" in value or "\r" in value
+    if isinstance(value, dict):
+        return any(_has_line_break(k) or _has_line_break(v) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_has_line_break(v) for v in value)
+    return False
 
 
 def check_rule(rule) -> dict:
@@ -322,6 +433,13 @@ def check_rule(rule) -> dict:
         raise BuildError(f"a rule must be a mapping of keys, got {_got(rule)}")
     out = dict(rule)
     for key, value in rule.items():
+        if key != "raw" and _has_line_break(value):
+            # a rule is one line: `limit: "10/minute\n"` ended the rule there
+            # and left its verdict behind as a second, unconditional rule
+            raise BuildError(
+                f"rule key {key!r}: a value contains a line break (a YAML `|` "
+                f"block ends in one): {value!r}"
+            )
         check = RULE_SCHEMA.get(key)
         if check is not None:
             out[key] = check(key, value)
