@@ -17,12 +17,12 @@ from nftgen.protocols import (  # noqa: F401 - re-exported
     proto_name,
 )
 
-_PORT_LITERAL = re.compile(r"^\d+(-\d+)?$")  # port or port-range
+_PORT_LITERAL = re.compile(r"^\d+(-\d+)?\Z")  # port or port-range
 _MARK_NUMBER = r"(?:0x[0-9a-fA-F]+|\d+)"
 MARK_VALUE = re.compile(
-    rf"^{_MARK_NUMBER}(?:-{_MARK_NUMBER})?$"
+    rf"^{_MARK_NUMBER}(?:-{_MARK_NUMBER})?\Z"
 )  # match: may be a range
-MARK_SET_VALUE = re.compile(rf"^{_MARK_NUMBER}$")  # set: one value
+MARK_SET_VALUE = re.compile(rf"^{_MARK_NUMBER}\Z")  # set: one value
 
 SET_INDENT = "    "
 BODY_INDENT = "        "

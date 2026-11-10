@@ -348,3 +348,41 @@ def test_non_ascii_digits_are_not_numbers(text):
     # int("²") crashed, the others were rendered into the .nft as written
     bad({"proto": "tcp", "set-mss": text}, "rule key 'set-mss'")
     bad({"proto": text, "action": "accept"}, "rule key 'proto'")
+
+
+# -- a value ending in a line break ---------------------------------------------- #
+@pytest.mark.parametrize(
+    "rule",
+    [
+        {"mark": "0x1\n", "action": "accept"},
+        {"ct-mark": "0x1\n", "action": "accept"},
+        {"set-mark": "0x1\n"},
+        {"proto": "tcp", "dport": "22\n", "action": "accept"},
+        {"proto": "tcp", "sport": "1024-2048\n", "action": "accept"},
+        {"proto": "tcp\n", "action": "accept"},
+        {"action": "reject with icmp port-unreachable\n"},
+        {"ether-saddr": "02:00:00:00:00:01\n", "action": "accept"},
+        {
+            "ether-daddr": {
+                "match": "01:00:00:00:00:00",
+                "mask": "01:00:00:00:00:00\n",
+            },
+            "action": "accept",
+        },
+    ],
+)
+def test_a_value_ending_in_a_newline_is_rejected(rule):
+    # `$` also matches before a final newline (a YAML `|` block ends in one):
+    # `mark: "0x1\n"` rendered `meta mark 0x1` and ` accept` as two rules, the
+    # second one unconditional
+    with pytest.raises(BuildError):
+        R.render(rule)
+
+
+def test_a_concat_field_ending_in_a_newline_is_rejected():
+    for concat, tuples in ((["mark"], [["0x1\n"]]), (["dport"], [["22\n"]])):
+        with pytest.raises(BuildError):
+            build_sets(
+                [{"name": "m", "concat": concat, "proto": "tcp", "tuples": tuples}],
+                DEFS,
+            )

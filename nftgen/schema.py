@@ -33,8 +33,8 @@ LOG_LEVELS = (
 VERDICTS = ("accept", "drop", "reject", "return", "continue", "masquerade")
 ACTION_MAPPING_KEYS = ("jump", "goto", "dnat", "snat")
 MSS_ALIASES = ("pmtu", "rt-mtu", "rt_mtu")
-_PROTO_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9-]*$")  # tcp, icmpv6, vrrp, …
-_REJECT_WITH = re.compile(r"^reject with \S.*$")
+_PROTO_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9-]*\Z")  # tcp, icmpv6, vrrp, …
+_REJECT_WITH = re.compile(r"^reject with \S.*\Z")
 
 
 def _got(value) -> str:
@@ -143,7 +143,7 @@ def _flags(key, value):
     return value
 
 
-MAC_ADDRESS = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+MAC_ADDRESS = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}\Z")
 _MAC = "a MAC address such as 02:42:ac:11:00:02"
 
 

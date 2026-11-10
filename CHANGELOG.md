@@ -28,6 +28,10 @@ not a breaking change.
 - Fix: a dnat/snat rule whose addresses include the other family than its
   target (`ip6 saddr … snat ip to …`) fails the build instead of at
   `nft -c`. Split the rule per family.
+- Fix: a value ending in a line break (a YAML `|` block) fails the build.
+  `mark: "0x1\n"` rendered `meta mark 0x1` and `accept` as two rules, the
+  second one unconditional; the same for `ct-mark`, `set-mark`, ports,
+  `proto`, `reject with …` and marks or ports in a concat set.
 
 ## 1.2.0 — 2026-10-28
 
