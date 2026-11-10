@@ -1214,6 +1214,12 @@ class RuleRenderer:
                 f"{kind} map @{name} is keyed by {m.key_type}, but `key: {key}` "
                 f"looks up {wanted}"
             )
+        if key in ("saddr", "daddr") and m.key_type != m.value_type:
+            # `snat ip to ip6 saddr map @m` loads, and never translates a packet
+            raise BuildError(
+                f"{kind} map @{name} maps {m.key_type} to {m.value_type}; a "
+                f"`key: {key}` lookup needs both of one family"
+            )
         return f"{kind} {fam} to {expr} map @{name}"
 
     def _map_port_key(self, kind: str, val, proto: str) -> str:

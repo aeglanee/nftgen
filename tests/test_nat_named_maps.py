@@ -26,6 +26,7 @@ MAPS = [
     {"name": "src_snat", "type": "ipv6_addr : ipv6_addr"},
     {"name": "mark_snat", "type": "mark : ipv4_addr"},
     {"name": "verdicts", "type": "ifname : verdict"},
+    {"name": "mixed", "type": "ipv6_addr : ipv4_addr"},
 ]
 
 
@@ -99,6 +100,7 @@ def test_other_keys(target, line):
         ({"snat": {"key": "oifname", "proto": "tcp", "map": "lease_snat"}}, "takes no"),
         ({"snat": {"key": "saddr", "map": "lease_snat"}}, "keyed by ifname"),
         ({"dnat": {"key": "dport", "proto": "tcp", "map": "src_snat"}}, "keyed by"),
+        ({"snat": {"key": "saddr", "map": "mixed"}}, "both of one family"),
         ({"snat": {"key": "oifname", "map": "lease_snat", "x": 1}}, "unknown snat map"),
     ],
 )
