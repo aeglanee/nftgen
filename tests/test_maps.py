@@ -251,6 +251,17 @@ def test_conflicting_elements_fail():
         )
 
 
+def test_two_spellings_of_one_address_are_one_key():
+    spellings = {"2001:db8::1": "fd00::1", "2001:0db8:0:0:0:0:0:1": "fd00::2"}
+    with pytest.raises(BuildError, match="maps to"):
+        _render([{"name": "m", "type": "ipv6_addr : ipv6_addr", "elements": spellings}])
+    spellings["2001:0db8:0:0:0:0:0:1"] = "fd00:0::1"
+    text = _render(
+        [{"name": "m", "type": "ipv6_addr : ipv6_addr", "elements": spellings}]
+    )
+    assert "elements = { 2001:db8::1 : fd00::1 }" in text
+
+
 @pytest.mark.skipif(not validate.can_check(), reason="nft -c not usable here")
 def test_passes_nft_check_without_include_files(tmp_path):
     text = _render(

@@ -448,14 +448,20 @@ def _map_elements(name, elements, key_type, value_type, defs) -> list[str]:
                 f"{', '.join(_ELEMENT_TYPES)}, not {typ} — fill the map through "
                 f"`include:`, or declare it in the table's `raw:`"
             )
-    rows: dict[str, str] = {}
+    rows: dict = {}  # the key as nft compares it -> (key, value) as written
     for key, value in elements.items():
         val = _map_value(name, value, value_type, defs)
         for k in _map_keys(name, key, key_type, defs):
-            if k in rows and rows[k] != val:
-                raise BuildError(f"map {name!r}: key {k} maps to {rows[k]} and {val}")
-            rows[k] = val
-    return [f"{k} : {v}" for k, v in rows.items()]
+            seen = rows.setdefault(_compared(k, key_type), (k, val))
+            if _compared(seen[1], value_type) != _compared(val, value_type):
+                raise BuildError(f"map {name!r}: key {k} maps to {seen[1]} and {val}")
+    return [f"{k} : {v}" for k, v in rows.values()]
+
+
+def _compared(text: str, typ: str):
+    """Two spellings of one address (`2001:db8::1`, `2001:0db8::1`) are one
+    key to nft."""
+    return ipaddress.ip_address(text) if typ in _ADDR_TYPES else text
 
 
 def _map_keys(name, key, key_type, defs) -> list[str]:
