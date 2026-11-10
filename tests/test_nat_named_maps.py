@@ -163,7 +163,7 @@ def test_nat_family_must_match_the_rule_addresses(target):
             ],
         }
     ]
-    with pytest.raises(BuildError, match="split the rule per family"):
+    with pytest.raises(BuildError, match="are one family"):
         render_tables(tables, defs, DictResolver({}))
 
 
@@ -190,7 +190,7 @@ def test_nat_family_must_match_a_concat_set():
             ],
         }
     ]
-    with pytest.raises(BuildError, match="split the rule per family"):
+    with pytest.raises(BuildError, match="are one family"):
         render_tables(tables, DEFS, DictResolver({}))
     tables[0]["chains"][0]["rules"][0]["action"] = {"snat": "2001:db8::1"}
     assert "ip6 saddr . oifname @pairs snat ip6 to 2001:db8::1\n" in render_tables(

@@ -168,7 +168,7 @@ def _check_nat_family(verdict: str | None, families: list, rule: dict) -> None:
         raise BuildError(
             f"{nat[0]} to an {'IPv4' if nat[1] == 'ip' else 'IPv6'} target, but "
             f"the rule matches {'IPv6' if nat[1] == 'ip' else 'IPv4'} addresses "
-            f"— split the rule per family: {rule!r}"
+            f"— a NAT rule's addresses and target are one family: {rule!r}"
         )
 
 
