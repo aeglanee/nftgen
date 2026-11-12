@@ -194,15 +194,33 @@ A set and a map can't share a name. Verdict maps are still inline (`vmap:`).
 | Key | Meaning |
 | --- | --- |
 | `name` | required; not a reserved nft keyword |
-| `hook` | makes it a base chain (`input`, `forward`, `output`, `prerouting`, `postrouting`, `ingress`) |
+| `hook` | makes it a base chain (`input`, `forward`, `output`, `prerouting`, `postrouting`, `ingress`, `egress`) |
 | `type` | `filter` (default), `nat`, `route` — base chains only |
 | `priority` | a number or `raw`, `mangle`, `dstnat`, `filter` (0, default), `security`, `srcnat` — base chains only |
 | `policy` | defaults to `drop` for `filter`, `accept` otherwise — base chains only |
+| `devices` | one interface group or a list (a device in two groups is listed once): `type filter hook ingress devices = { "wan0", "wwan0" } priority 0; …` — required with `hook: ingress` / `egress`, an error with any other hook |
 | `rules` | the rules, in order (first match wins) |
 | `comment` | nft `comment "…"` on the chain |
 
 A chain without `hook` is a regular chain, reached by `jump`/`goto`;
-`type`/`priority`/`policy` on it are an error.
+`type`/`priority`/`policy`/`devices` on it are an error.
+
+An `ingress` or `egress` chain runs on its devices only, before the
+`inet` hooks; `ingress` goes in a `netdev` or an `inet` table, `egress` in
+a `netdev` table only. nftgen renders such a chain like any other and does
+not check its rules against the hook, so know what differs there
+([best-practices §8f](docs/best-practices.md#8f-early-drops-at-ingress-device-chains)):
+
+- An early-drop chain wants `policy: accept`: the `filter` default `drop`
+  would drop everything its rules don't accept. A `netdev` chain sees
+  every frame, so under `policy: drop` it needs an accept for ARP too
+  (`raw: "meta protocol arp accept"`).
+- Conntrack has not run at ingress. In an `inet` ingress chain `ct:`
+  reads every packet as `invalid`, so `ct: invalid` + `action: drop`
+  drops everything; a `netdev` table refuses `ct:` at load.
+- Fragments are not reassembled yet, and `oifname`/`oif` never match.
+- Before kernel 6.16 every device must exist when the ruleset loads (and
+  at `nft -c`), and a chain loses a device that is removed for good.
 
 ## Rules
 
@@ -341,12 +359,14 @@ rule order. An empty chain stays empty.
   (`ct-mark` / `mark`): the result would depend on their order.
 - Duplicate map keys; reject/NAT inside a vmap; a port on a protocol without
   ports.
+- An `ingress`/`egress` chain without `devices:`, or `devices:` on any
+  other hook.
 
 **Not caught at build** (nft refuses them at load or `nft -c`, loudly):
 overlapping prefixes in a named set or a vmap (`10.0.0.0/8` and
 `10.1.0.0/16`), a port inside a range in a vmap. Merge or drop the covered
 entry.
 
-**Not modelled** (use `raw:` at table level): `netdev` per-device chains, set
-tuning (`size`, `gc-interval`), named verdict maps, named stateful objects other
-than counters.
+**Not modelled** (use `raw:` at table level): set tuning (`size`,
+`gc-interval`), named verdict maps, named stateful objects other than
+counters.

@@ -242,13 +242,17 @@ class Chain:
     type: str | None = None
     priority: int | str | None = None
     policy: str | None = None
+    devices: list[str] | None = None  # resolved device tokens (quoted), ingress/egress
     comment: str | None = None
 
     def render(self) -> list[str]:
         lines = [f"{SET_INDENT}chain {self.name} {{"]
         if self.hook is not None:
+            devices = (
+                f" devices = {{ {', '.join(self.devices)} }}" if self.devices else ""
+            )
             lines.append(
-                f"{BODY_INDENT}type {self.type} hook {self.hook} "
+                f"{BODY_INDENT}type {self.type} hook {self.hook}{devices} "
                 f"priority {self.priority}; policy {self.policy};"
             )
         if self.comment:

@@ -1236,8 +1236,36 @@ class RuleRenderer:
 
 _FLOWTABLE_KEYS = frozenset({"name", "hook", "priority", "devices"})
 _CHAIN_KEYS = frozenset(
-    {"name", "hook", "type", "priority", "policy", "rules", "comment"}
+    {"name", "hook", "type", "priority", "policy", "devices", "rules", "comment"}
 )
+_DEVICE_HOOKS = frozenset({"ingress", "egress"})
+
+
+def resolve_devices(groups, defs: Definitions, where: str) -> list[str]:
+    """The `devices:` of a flowtable or a device-bound chain: one interface
+    group or a list of them -> the quoted device tokens, each listed once."""
+    # one group or a list, like the rule keys; a bare string must not be
+    # read letter by letter
+    if isinstance(groups, str):
+        groups = [groups]
+    if not isinstance(groups, list) or not all(isinstance(g, str) for g in groups):
+        raise BuildError(
+            f"{where}: `devices:` takes an interface group or a list of them, "
+            f"got {groups!r}"
+        )
+    devices: list[str] = []
+    for dev in groups:
+        if dev not in defs.interfaces:
+            raise BuildError(
+                f"{where}: device {dev!r} is not a known interface group "
+                f"(define it under `interfaces:`)"
+            )
+        devices.extend(f'"{d}"' for d in defs.interface(dev))
+    # groups may share a device; nft refuses one listed twice ("File exists")
+    devices = list(dict.fromkeys(devices))
+    if not devices:
+        raise BuildError(f"{where} resolves to no devices")
+    return devices
 
 
 def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:
@@ -1249,34 +1277,14 @@ def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:
         if "name" not in spec:
             raise BuildError(f"flowtable needs a `name:`: {spec!r}")
         check_nft_name(spec["name"], "flowtable")
-        # one group or a list, like the rule keys; a bare string must not be
-        # read letter by letter
-        groups = spec.get("devices", [])
-        if isinstance(groups, str):
-            groups = [groups]
-        if not isinstance(groups, list) or not all(isinstance(g, str) for g in groups):
-            raise BuildError(
-                f"flowtable {spec['name']!r}: `devices:` takes an interface group "
-                f"or a list of them, got {groups!r}"
-            )
-        devices: list[str] = []
-        for dev in groups:
-            if dev not in defs.interfaces:
-                raise BuildError(
-                    f"flowtable {spec['name']!r}: device {dev!r} is not a known "
-                    f"interface group (define it under `interfaces:`)"
-                )
-            devices.extend(f'"{d}"' for d in defs.interface(dev))
-        # groups may share a device; nft refuses one listed twice ("File exists")
-        devices = list(dict.fromkeys(devices))
-        if not devices:
-            raise BuildError(f"flowtable {spec['name']!r} resolves to no devices")
         out.append(
             Flowtable(
                 name=spec["name"],
                 hook=spec.get("hook", "ingress"),
                 priority=resolve_priority(spec.get("priority", 0)),
-                devices=devices,
+                devices=resolve_devices(
+                    spec.get("devices", []), defs, f"flowtable {spec['name']!r}"
+                ),
             )
         )
     return out
@@ -1300,7 +1308,7 @@ def build_chain(spec: dict, renderer: RuleRenderer, annotate=None) -> Chain:
     if "name" not in spec:
         raise BuildError(f"chain needs a `name:`: {spec!r}")
     check_nft_name(spec["name"], "chain")
-    base_only = sorted(set(spec) & {"type", "priority", "policy"})
+    base_only = sorted(set(spec) & {"type", "priority", "policy", "devices"})
     if base_only and "hook" not in spec:
         # without a hook it's a regular chain (reached only by jump/goto), which
         # has no type/priority/policy — dropping them silently would leave an
@@ -1338,4 +1346,20 @@ def build_chain(spec: dict, renderer: RuleRenderer, annotate=None) -> Chain:
         chain.policy = spec.get(
             "policy", "drop" if chain.type == "filter" else "accept"
         )
+        # ingress and egress run per device: nft refuses the chain without one,
+        # and the other hooks take none
+        if chain.hook in _DEVICE_HOOKS:
+            if "devices" not in spec:
+                raise BuildError(
+                    f"chain {spec['name']!r}: hook {chain.hook} needs `devices:` "
+                    f"(an interface group or a list of them)"
+                )
+            chain.devices = resolve_devices(
+                spec["devices"], renderer.defs, f"chain {spec['name']!r}"
+            )
+        elif "devices" in spec:
+            raise BuildError(
+                f"chain {spec['name']!r}: `devices:` goes with an ingress or "
+                f"egress hook, not {chain.hook}"
+            )
     return chain

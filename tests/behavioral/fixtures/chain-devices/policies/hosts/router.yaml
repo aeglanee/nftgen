@@ -1,0 +1,55 @@
+---
+# Device chains (docs/testing.md B33/B34, best-practices §8f). The input chain
+# accepts both ports from every zone, so every drop below is an ingress one.
+# wan_in: the early-drop shape, `policy: accept` and one counted drop.
+# lan_in: `policy: drop` with the ARP accept the recipe asks for.
+# dmz_in: `policy: drop` without it, so address resolution fails.
+# early: an `inet` ingress chain that only counts what `ct: invalid` matches.
+tables:
+  - family: netdev
+    name: early
+    counters:
+      - early_drops
+    chains:
+      - name: wan_in
+        hook: ingress
+        devices: wan_if
+        policy: accept
+        rules:
+          - proto: tcp
+            dport: scrubbed
+            counter: early_drops
+            action: drop
+      - name: lan_in
+        hook: ingress
+        devices: lan_if
+        rules:
+          - raw: "meta protocol arp accept"
+          - proto: tcp
+            action: accept
+      - name: dmz_in
+        hook: ingress
+        devices: dmz_if
+        rules:
+          - proto: tcp
+            action: accept
+  - family: inet
+    name: filter
+    counters:
+      - before_conntrack
+    chains:
+      - name: early
+        hook: ingress
+        devices: wan_if
+        policy: accept
+        rules:
+          - ct: invalid
+            counter: before_conntrack
+      - name: input
+        hook: input
+        rules:
+          - ct: [established, related]
+            action: accept
+          - proto: tcp
+            dport: [svc, scrubbed]
+            action: accept

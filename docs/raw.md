@@ -8,7 +8,7 @@ unless noted.
 ## Table-level declarations
 
 A table's `raw:` list declares objects nftgen doesn't model: ct helpers,
-named quotas, named maps, sets with tuning, netdev device chains.
+named quotas, named verdict maps, sets with tuning.
 
 ```yaml
 tables:
@@ -88,5 +88,6 @@ The set is a `sets:` entry with `flags: [dynamic]`. With a rate limit, use the
 | routing lookups, anti-spoofing | `fib:` |
 | notrack | `notrack: true` |
 | named data maps, NAT through one | table `maps:` + `snat: {key, map}` |
+| netdev device chains | chain `devices:` with `hook: ingress` / `egress` |
 
 Every key: [DESIGN.md](../DESIGN.md). Candidates for a key: [TODO.md](../TODO.md).

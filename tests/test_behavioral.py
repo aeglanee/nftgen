@@ -1172,3 +1172,96 @@ def test_b32_router_pair_returns_one_way_flows(recipe, fib, kernel, v4, v6):
             assert _a_invalid_drops(h, "v6") > 0
     finally:
         h.close()
+
+
+# --------------------------------------------------------------------------- #
+# B33/B34 — chains bound to devices at ingress (fixture: chain-devices)
+# --------------------------------------------------------------------------- #
+
+DEV_ROUTERS = {"wan": "10.90.1.1", "lan": "10.90.2.1", "dmz": "10.90.3.1"}
+
+
+def _ok(fw, ns: str | None, *argv: str) -> str:
+    r = fw.run(ns, list(argv))
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def _forget_neighbours(fw, zone: str) -> None:
+    _ok(fw, zone, "ip", "neigh", "flush", "dev", "eth0")
+    _ok(fw, None, "ip", "neigh", "flush", "dev", f"r-{zone}")
+
+
+def _mac(fw, ns: str | None, dev: str) -> str:
+    m = re.search(r"link/ether (\S+)", _ok(fw, ns, "ip", "link", "show", "dev", dev))
+    assert m
+    return m.group(1)
+
+
+@pytest.fixture(scope="module")
+def fw_chain_devices():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": zone,
+                    "router_if": f"r-{zone}",
+                    "router_addr": f"{addr}/24",
+                    "ns_addr": f"{addr[:-1]}2/24",
+                    "gw": addr,
+                }
+                for zone, addr in DEV_ROUTERS.items()
+            ]
+        )
+        harness.nft_apply(build(FIXTURES / "chain-devices")["router"])
+        harness.listen(None, 7000)
+        harness.listen(None, 7001)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b33_ingress_chain_filters_its_own_devices_only(fw_chain_devices):
+    fw = fw_chain_devices
+    listing = _ok(fw, None, "nft", "list", "counter", "netdev", "early", "early_drops")
+    assert "packets 0" in listing
+    # wan_in passes what it does not drop: the input chain decides…
+    assert fw.probe_tcp("wan", DEV_ROUTERS["wan"], 7000) == "connected"
+    # …so this timeout is the ingress drop, counted there
+    assert fw.probe_tcp("wan", DEV_ROUTERS["wan"], 7001) == "timeout"
+    listing = _ok(fw, None, "nft", "list", "counter", "netdev", "early", "early_drops")
+    assert "packets 0" not in listing
+    # the same port through another device: wan_in is not on it
+    assert fw.probe_tcp("lan", DEV_ROUTERS["lan"], 7001) == "connected"
+
+
+@requires_netns
+def test_b33_conntrack_has_not_run_at_ingress(fw_chain_devices):
+    fw = fw_chain_devices
+    before = _counter_packets(fw, "before_conntrack")
+    # a handshake the input chain accepts as new, then established…
+    assert fw.probe_tcp("wan", DEV_ROUTERS["wan"], 7000) == "connected"
+    # …and at ingress `ct state invalid` matched its packets all the same
+    assert _counter_packets(fw, "before_conntrack") >= before + 2
+
+
+@requires_netns
+def test_b34_drop_policy_at_ingress_needs_an_arp_accept(fw_chain_devices):
+    fw = fw_chain_devices
+    # lan_in accepts ARP: with the neighbours forgotten, resolution still works
+    _forget_neighbours(fw, "lan")
+    assert fw.probe_tcp("lan", DEV_ROUTERS["lan"], 7000) == "connected"
+    # dmz_in has the same TCP accept, but its policy drops the ARP request
+    _forget_neighbours(fw, "dmz")
+    assert fw.probe_tcp("dmz", DEV_ROUTERS["dmz"], 7000) == "timeout"
+    # positive control: with the neighbours set by hand, the same probe
+    # connects, so only address resolution was missing
+    client = f"{DEV_ROUTERS['dmz'][:-1]}2"
+    for ns, dev, peer, peer_mac in (
+        ("dmz", "eth0", DEV_ROUTERS["dmz"], _mac(fw, None, "r-dmz")),
+        (None, "r-dmz", client, _mac(fw, "dmz", "eth0")),
+    ):
+        _ok(fw, ns, "ip", "neigh", "replace", peer, "dev", dev, "lladdr", peer_mac)
+    assert fw.probe_tcp("dmz", DEV_ROUTERS["dmz"], 7000) == "connected"
