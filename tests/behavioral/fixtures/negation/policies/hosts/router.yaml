@@ -1,0 +1,37 @@
+---
+# Negated matches (docs/testing.md B35, best-practices §2c). The last rule
+# accepts every port from anywhere, so every drop is a `{not: …}` one.
+# guarded:    the group has both families, so both are closed to strangers.
+# guarded_v4: the group has IPv4 only; nft's `ip saddr != …` then matches
+#             IPv4 packets only and an IPv6 stranger passes.
+# lan_only:   the interface form.
+tables:
+  - family: inet
+    name: filter
+    chains:
+      - name: input
+        hook: input
+        rules:
+          - ct: [established, related]
+            action: accept
+          - proto: icmpv6
+            icmp-type: [nd-neighbor-solicit, nd-neighbor-advert]
+            action: accept
+          - saddr:
+              not: admins
+            proto: tcp
+            dport: guarded
+            action: drop
+          - saddr:
+              not: admins_v4
+            proto: tcp
+            dport: guarded_v4
+            action: drop
+          - iifname:
+              not: lan_if
+            proto: tcp
+            dport: lan_only
+            action: drop
+          - proto: tcp
+            dport: [guarded, guarded_v4, lan_only, open]
+            action: accept

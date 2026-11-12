@@ -1,0 +1,12 @@
+---
+# B35 fixture: negated matches. `admins` has both families, `admins_v4` one.
+networks:
+  admins: [10.93.1.2, "fd00:93:1::2"]
+  admins_v4: [10.93.1.2]
+interfaces:
+  lan_if: [r-lan]
+services:
+  guarded: [7000/tcp]
+  guarded_v4: [7001/tcp]
+  lan_only: [7002/tcp]
+  open: [7003/tcp]

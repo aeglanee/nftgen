@@ -1172,3 +1172,78 @@ def test_b32_router_pair_returns_one_way_flows(recipe, fib, kernel, v4, v6):
             assert _a_invalid_drops(h, "v6") > 0
     finally:
         h.close()
+
+
+# --------------------------------------------------------------------------- #
+# B35 — negated matches, per address family (fixture: negation)
+# --------------------------------------------------------------------------- #
+
+NEG_ROUTER, NEG_ADMIN, NEG_STRANGER = "10.93.1.1", "10.93.1.2", "10.93.1.3"
+NEG_ROUTER6, NEG_ADMIN6, NEG_STRANGER6 = "fd00:93:1::1", "fd00:93:1::2", "fd00:93:1::3"
+NEG_WAN_ROUTER = "10.93.2.1"
+
+
+@pytest.fixture(scope="module")
+def fw_negation():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": "lan",
+                    "router_if": "r-lan",
+                    "router_addr": f"{NEG_ROUTER}/24",
+                    "ns_addr": f"{NEG_ADMIN}/24",
+                    "gw": NEG_ROUTER,
+                    "router_addr6": f"{NEG_ROUTER6}/64",
+                    "ns_addr6": f"{NEG_ADMIN6}/64",
+                    "gw6": NEG_ROUTER6,
+                },
+                {
+                    "name": "wan",
+                    "router_if": "r-wan",
+                    "router_addr": f"{NEG_WAN_ROUTER}/24",
+                    "ns_addr": "10.93.2.2/24",
+                    "gw": NEG_WAN_ROUTER,
+                },
+            ]
+        )
+        # the strangers: second addresses of the lan client, outside the groups
+        for addr in (f"{NEG_STRANGER}/24", f"{NEG_STRANGER6}/64"):
+            r = harness.run("lan", ["ip", "addr", "add", addr, "dev", "eth0", "nodad"])
+            assert r.returncode == 0, r.stderr
+        harness.nft_apply(build(FIXTURES / "negation")["router"])
+        for port in (7000, 7001, 7002, 7003):
+            harness.listen(None, port, addr="::")  # one listener, both families
+        yield harness
+    finally:
+        harness.close()
+
+
+def _neg_probe(fw, port: int, src: str) -> str:
+    dst = NEG_ROUTER6 if ":" in src else NEG_ROUTER
+    return fw.probe_tcp("lan", dst, port, src=src)
+
+
+@requires_netns
+def test_b35_negated_group_of_both_families_closes_both(fw_negation):
+    assert _neg_probe(fw_negation, 7000, NEG_ADMIN) == "connected"
+    assert _neg_probe(fw_negation, 7000, NEG_ADMIN6) == "connected"
+    assert _neg_probe(fw_negation, 7000, NEG_STRANGER) == "timeout"
+    assert _neg_probe(fw_negation, 7000, NEG_STRANGER6) == "timeout"
+
+
+@requires_netns
+def test_b35_negated_group_of_one_family_leaves_the_other_open(fw_negation):
+    assert _neg_probe(fw_negation, 7001, NEG_ADMIN) == "connected"
+    assert _neg_probe(fw_negation, 7001, NEG_STRANGER) == "timeout"
+    # `ip saddr != …` is an IPv4 match: no IPv6 packet reaches the drop
+    assert _neg_probe(fw_negation, 7001, NEG_STRANGER6) == "connected"
+
+
+@requires_netns
+def test_b35_negated_interface(fw_negation):
+    assert _neg_probe(fw_negation, 7002, NEG_STRANGER) == "connected"
+    assert fw_negation.probe_tcp("wan", NEG_WAN_ROUTER, 7002) == "timeout"
+    # positive control: the wan zone reaches a port without a negated rule
+    assert fw_negation.probe_tcp("wan", NEG_WAN_ROUTER, 7003) == "connected"

@@ -7,6 +7,16 @@ Versioning: [semantic versioning](https://semver.org) from 1.0.0 on. A new
 check that rejects input which rendered a wrong or broken ruleset is a fix,
 not a breaking change.
 
+## Unreleased
+
+- New: negated matches. `saddr: {not: allowed}` renders
+  `ip saddr != @allowed`, `iifname: {not: lan}` renders
+  `iifname != { "lan0", "lan1" }`; on `saddr`, `daddr`, `iifname`,
+  `oifname`, `iif` and `oif`, with the value the plain key takes. A
+  negated address match covers only the address families of its value:
+  see
+  [best-practices §2c](docs/best-practices.md#2c-negation-everything-but).
+
 ## 1.3.0 — 2026-11-10
 
 - New: Ethernet address matches. `ether-saddr:` / `ether-daddr:` take a

@@ -374,9 +374,22 @@ def _comment(key, value):
     return check_comment(value, "rule")
 
 
-_ADDR = _one_or_list("an address, a network group, or a set", _scalar)
+def _negatable(check):
+    """The key's value, or `{not: <value>}` for the negated match (`!=`)."""
+
+    def wrapped(key, value):
+        if not isinstance(value, dict):
+            return check(key, value)
+        if set(value) != {"not"} or isinstance(value["not"], dict):
+            _fail(key, "a value, a list, or `{not: <the same>}`", value)
+        return {"not": check(key, value["not"])}
+
+    return wrapped
+
+
+_ADDR = _negatable(_one_or_list("an address, a network group, or a set", _scalar))
 _PORT = _one_or_list("a port, a port range, or a service", _scalar)
-_IFACE = _one_or_list("an interface group or a set", _scalar)
+_IFACE = _negatable(_one_or_list("an interface group or a set", _scalar))
 _MARK = _pattern(MARK_VALUE, "a mark (a number or 0x…, or a range a-b)")
 
 RULE_SCHEMA = {
