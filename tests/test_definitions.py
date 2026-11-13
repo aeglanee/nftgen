@@ -126,6 +126,7 @@ def test_interface_group_and_composition():
         "wan0\t",
         "a/b",
         "eth0:1",
+        "eth%d",
         ".",
         "..",
         "",

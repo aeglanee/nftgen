@@ -112,7 +112,7 @@ interfaces:
   Only protocols with ports: tcp, udp, sctp, dccp, udplite.
 - **interfaces**: device names. Rules refer to interface **groups**, never to
   devices directly, so a typo can't become a device that never matches.
-  A device name follows the kernel's rule (1-15 bytes, no slash, colon or
+  A device name follows the kernel's rule (1-15 bytes, no slash, colon, `%` or
   whitespace, not `.` or `..`) and has no double quote or control
   character; a trailing `*` is nft's wildcard.
 - Composition is recursive, cycle-checked, and deduplicated (first-seen order).
@@ -337,8 +337,8 @@ rule order. An empty chain stays empty.
 - Undefined names; a group that resolves to nothing; definition and include
   cycles; an include with a missing or misnamed section.
 - A device name that could not be an interface name (empty, over 15
-  bytes, `.` or `..`, or a double quote, a slash, a colon or whitespace in
-  it).
+  bytes, `.` or `..`, or a double quote, a slash, a colon, a `%` or whitespace
+  in it).
 - A named set mixing v4 and v6; a rule whose addresses share no family; a
   NAT rule whose addresses include the other family than its target.
 - Object names that are reserved nft keywords (`counter`, `fwd`, `map`, …).

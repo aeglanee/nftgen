@@ -11,8 +11,8 @@ not a breaking change.
 
 - Fix: a device name under `interfaces:` that could not be an interface
   name fails the build: empty, longer than 15 bytes, `.` or `..`, or with a
-  double quote, a slash, a colon, whitespace or a control character in it
-  (the kernel's rule for a name, plus the quote). A double quote
+  double quote, a slash, a colon, a `%`, whitespace or a control character
+  in it (what the kernel takes as a name, less the quote). A double quote
   ended the quoted name early, so the rest of the text rendered as nft
   statements: `'wan0" accept #'` on a drop rule rendered
   `iifname "wan0" accept #" drop`, which nft loads as an accept (`#` starts
