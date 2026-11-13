@@ -52,7 +52,7 @@ Network namespaces, no VM, rootless (`unshare -rn`):
   missing.
 - iproute2 7.x needs `ip link add name X type veth …` (explicit `name`).
 
-### Primitives (B01–B32)
+### Primitives (B01–B36)
 
 One small fixture per concern under `tests/behavioral/fixtures/`.
 
@@ -90,6 +90,7 @@ One small fixture per concern under `tests/behavioral/fixtures/`.
 | B30 | own-tables reapply | apply the artifact again | ruleset identical; `inet foreign` still there |
 | B31 | own-tables, own table missing | `nft delete table inet filter`, then apply | applies (`destroy` of a missing table is a no-op); 7000 connects, 7001 still dropped |
 | B32 | router pair, one-way flows returned by connection marks (best-practices §8e) | the client's gateway is router A, its target is router B's own address; A drops `ct state invalid`; B runs a `ct-mark` variant | no recipe: v4 + v6 time out, A counts invalid; recipe: both connect; + strict §5 `fib`: both time out, loose on `peer0` only: both connect; kernel `rp_filter=1`: v4 times out, `rp_filter=2` on `peer0`: both connect |
+| B36 | interface group in a concat set row | one row `[group, server, port]` with a two-device group; probes from both zones, from a zone outside the group, and to another port | both zones connect; the outside zone and the other port time out |
 
 ### Reference fleet (P01–P22)
 

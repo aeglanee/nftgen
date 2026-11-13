@@ -7,6 +7,7 @@ YAML -> IR (Table / NamedSet / Chain) -> text. Keeping the model in the middle
 from __future__ import annotations
 
 import ipaddress
+import itertools
 import re
 from dataclasses import dataclass, field
 
@@ -677,14 +678,18 @@ def _concat_set(entry: dict, defs: Definitions) -> NamedSet:  # noqa: PLR0912 - 
                 f"concat set {name!r}: tuple {tup!r} must have {len(fields)} values "
                 f"(one per field {fields})"
             )
-        parts = []
+        columns = []
         for f, val in zip(fields, tup, strict=True):
-            token, fam, is_iv = _resolve_concat_value(name, f, val, proto, defs)
-            parts.append(token)
+            tokens, fam, is_iv = _resolve_concat_value(name, f, val, proto, defs)
+            columns.append(tokens)
             if fam:
                 families.add(fam)
             interval = interval or is_iv
-        rows.append(" . ".join(parts))
+        # an interface group expands its field: the row is every combination
+        rows.extend(" . ".join(combo) for combo in itertools.product(*columns))
+    # two rows may expand to a shared element: list it once (nft takes a
+    # repeat, but the render should not depend on how the rows overlap)
+    rows = list(dict.fromkeys(rows))
 
     if len(families) > 1:
         raise BuildError(
@@ -737,10 +742,33 @@ def _concat_family(name, fields, explicit, derived: set) -> str | None:
     return None
 
 
+def _concat_ifaces(setname, field, val, defs) -> list[str]:
+    """An interface group -> one token per device. Strict: a typo'd group
+    would silently become a literal device."""
+    if val not in defs.interfaces:
+        raise BuildError(
+            f"concat set {setname!r}: field {field}={val!r} is not a known "
+            f"interface group (define it under `interfaces:`)"
+        )
+    devs = defs.interface(val)
+    if not devs:
+        raise BuildError(
+            f"concat set {setname!r}: interface group {val!r} resolves to no devices"
+        )
+    return [f'"{d}"' for d in devs]
+
+
 def _resolve_concat_value(setname, field, val, proto, defs):
-    """Resolve one tuple value -> (nft token, family|None, needs_interval)."""
+    """Resolve one tuple value -> (nft tokens, family|None, needs_interval).
+    One token, except an interface group: one per device."""
     kind = _CONCAT_FIELD_TYPE[field]
+    if isinstance(val, list | dict):
+        raise BuildError(
+            f"concat set {setname!r}: field {field} takes one value, got {val!r}"
+        )
     val = str(val)
+    if kind == "ifname":
+        return _concat_ifaces(setname, field, val, defs), None, False
     if kind == "addr":
         if val in defs.networks:
             vals = defs.network(val)
@@ -760,7 +788,7 @@ def _resolve_concat_value(setname, field, val, proto, defs):
                 f"concat set {setname!r}: field {field}={val!r} is not a known "
                 f"network group or an IP/CIDR"
             ) from None
-        return val, fam, "/" in val  # prefix notation (incl. /32) needs interval
+        return [val], fam, "/" in val  # prefix notation (incl. /32) needs interval
     if kind == "inet_service":
         if val in defs.services:
             ports = defs.service_ports(val, proto)
@@ -775,27 +803,13 @@ def _resolve_concat_value(setname, field, val, proto, defs):
                 f"concat set {setname!r}: field {field}={val!r} is not a known "
                 f"service group or a port/range"
             )
-        return val, None, "-" in val  # a port range needs interval
-    if kind == "mark":
-        if not MARK_VALUE.match(val):
-            raise BuildError(
-                f"concat set {setname!r}: field mark={val!r} is not a mark "
-                f"(a number or 0x…, or a range a-b)"
-            )
-        return val, None, "-" in val  # bare fwmark number; no name resolution
-    # ifname — strict: a typo'd group would silently become a literal device
-    if val not in defs.interfaces:
+        return [val], None, "-" in val  # a port range needs interval
+    if not MARK_VALUE.match(val):  # mark: a bare number or range, no name
         raise BuildError(
-            f"concat set {setname!r}: field {field}={val!r} is not a known "
-            f"interface group (define it under `interfaces:`)"
+            f"concat set {setname!r}: field mark={val!r} is not a mark "
+            f"(a number or 0x…, or a range a-b)"
         )
-    devs = defs.interface(val)
-    if len(devs) != 1:
-        raise BuildError(
-            f"concat set {setname!r}: interface {val!r} resolves to {len(devs)} "
-            f"devices; a tuple field takes one"
-        )
-    return f'"{devs[0]}"', None, False
+    return [val], None, "-" in val
 
 
 def _classify_family(elements: list[str], name: str) -> str:

@@ -7,6 +7,15 @@ Versioning: [semantic versioning](https://semver.org) from 1.0.0 on. A new
 check that rejects input which rendered a wrong or broken ruleset is a fix,
 not a breaking change.
 
+## Unreleased
+
+- New: interface groups in concat set rows. An `iifname`/`oifname` field
+  takes a group of any size and the row expands to one element per device
+  (two groups give every combination), as `iifname: lan` does in a plain
+  rule and a concat vmap; a group of two devices failed the build before.
+  Address and port fields still take one value. An element that several
+  rows give is listed once.
+
 ## 1.3.0 — 2026-11-10
 
 - New: Ethernet address matches. `ether-saddr:` / `ether-daddr:` take a
