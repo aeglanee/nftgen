@@ -1346,8 +1346,8 @@ def build_chain(spec: dict, renderer: RuleRenderer, annotate=None) -> Chain:
         chain.policy = spec.get(
             "policy", "drop" if chain.type == "filter" else "accept"
         )
-        # ingress and egress run per device: nft refuses the chain without one,
-        # and the other hooks take none
+        # ingress and egress run per device: a chain without one loads and
+        # filters nothing, and the other hooks take none
         if chain.hook in _DEVICE_HOOKS:
             if "devices" not in spec:
                 raise BuildError(
