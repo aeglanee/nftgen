@@ -315,6 +315,29 @@ concat set.
 - **Ranges/CIDRs in a concat are fine** — stored as ranges (interval/pipapo),
   not expanded into individual addresses. No memory blowup; same as a
   normal interval set.
+- **An interface field takes a group** and the row expands to its devices:
+  with `lan: [lan0, lan1]`, the row `[lan, db, postgres]` in a
+  `concat: [iifname, daddr, dport]` set renders
+  `"lan0" . 192.0.2.20 . 5432, "lan1" . 192.0.2.20 . 5432`. The row still
+  says one thing, "from the LAN to the database", as `iifname: lan` does
+  in a plain rule. Two interface fields with groups give every device
+  pair, which is what zone → zone means. Only interfaces expand: an
+  address or port field keeps one value, so no source ↔ destination pair
+  appears that a row does not state. A device added to the group later
+  widens every row that names the group.
+- **One device alone** is a one-device group named after the device,
+  with the larger group under another name:
+
+  ```yaml
+  interfaces:
+    wan: [wan]                # the device itself
+    uplinks: [wan, wwan0]     # the zone
+  ```
+
+  `[wan, db, postgres]` is then one element and `[uplinks, db, postgres]`
+  two. Don't name the zone after one of its devices: with
+  `wan: [wan, wwan0]` the name `wan` means both everywhere, also inside
+  another group, so `wan_wired: [wan]` would be both devices too.
 
 ---
 

@@ -1172,3 +1172,44 @@ def test_b32_router_pair_returns_one_way_flows(recipe, fib, kernel, v4, v6):
             assert _a_invalid_drops(h, "v6") > 0
     finally:
         h.close()
+
+
+# --------------------------------------------------------------------------- #
+# B36 — an interface group in a concat row (fixture: concat-groups)
+# --------------------------------------------------------------------------- #
+
+GROUPS_SERVER = "10.94.4.2"
+
+
+@pytest.fixture(scope="module")
+def fw_concat_groups():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": zone,
+                    "router_if": f"r-{zone}",
+                    "router_addr": f"10.94.{n}.1/24",
+                    "ns_addr": f"10.94.{n}.2/24",
+                    "gw": f"10.94.{n}.1",
+                }
+                for n, zone in enumerate(("za", "zb", "zc", "zs"), start=1)
+            ]
+        )
+        harness.nft_apply(build(FIXTURES / "concat-groups")["router"])
+        harness.listen("zs", 9000)
+        harness.listen("zs", 9001)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b36_group_in_a_concat_row_covers_each_device(fw_concat_groups):
+    # one row, two devices in its group: both zones pass…
+    assert fw_concat_groups.probe_tcp("za", GROUPS_SERVER, 9000) == "connected"
+    assert fw_concat_groups.probe_tcp("zb", GROUPS_SERVER, 9000) == "connected"
+    # …a zone outside the group does not, and neither does another port
+    assert fw_concat_groups.probe_tcp("zc", GROUPS_SERVER, 9000) == "timeout"
+    assert fw_concat_groups.probe_tcp("za", GROUPS_SERVER, 9001) == "timeout"
