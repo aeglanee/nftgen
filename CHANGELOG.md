@@ -7,6 +7,17 @@ Versioning: [semantic versioning](https://semver.org) from 1.0.0 on. A new
 check that rejects input which rendered a wrong or broken ruleset is a fix,
 not a breaking change.
 
+## Unreleased
+
+- Fix: a device name under `interfaces:` that could not be an interface
+  name fails the build: empty, longer than 15 characters, or with a double
+  quote, a slash, whitespace or a control character in it. A double quote
+  ended the quoted name early, so the rest of the text rendered as nft
+  statements: `'wan0" accept #'` on a drop rule rendered
+  `iifname "wan0" accept #" drop`, which nft loads as an accept (`#` starts
+  a comment). The same text reached flowtable devices, `ifname` sets, maps
+  and vmaps.
+
 ## 1.3.0 — 2026-11-10
 
 - New: Ethernet address matches. `ether-saddr:` / `ether-daddr:` take a

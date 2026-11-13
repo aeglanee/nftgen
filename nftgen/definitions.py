@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ipaddress
 import pathlib
+import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -176,5 +177,16 @@ def _svc_leaf(item: str, group: str) -> list[tuple[str, str]]:
     return [(proto, port)]
 
 
+# What the kernel takes as an interface name and nft can write between double
+# quotes (it has no escape for one). A trailing `*` is nft's wildcard.
+_DEVICE_NAME = re.compile(r'[^\s"/\x00-\x1f\x7f]{1,15}')
+
+
 def _iface_leaf(item: str, group: str) -> list[str]:
-    return [item]  # any non-group string is a literal device name
+    # any non-group string is a literal device name
+    if not _DEVICE_NAME.fullmatch(item):
+        raise DefinitionError(
+            f"interface {group!r}: {item!r} is not a device name (1-15 characters, "
+            f"no double quote, slash or whitespace)"
+        )
+    return [item]

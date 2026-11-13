@@ -117,6 +117,30 @@ def test_interface_group_and_composition():
     assert d.interface("uplinks") == ["wan0", "wwan0", "lte0"]
 
 
+@pytest.mark.parametrize(
+    "device",
+    [
+        'wan0" accept #',
+        "wan0\naccept",
+        "wan 0",
+        "wan0\t",
+        "a/b",
+        "",
+        "a" * 16,
+    ],
+)
+def test_interface_device_name_must_be_a_possible_name(device):
+    d = Definitions.from_mappings({"interfaces": {"wan": [device]}})
+    with pytest.raises(DefinitionError, match="not a device name"):
+        d.interface("wan")
+
+
+@pytest.mark.parametrize("device", ["wan0", "a" * 15, "eth*", "br-lan.10", "wg_peer@1"])
+def test_interface_device_name_accepted(device):
+    d = Definitions.from_mappings({"interfaces": {"wan": [device]}})
+    assert d.interface("wan") == [device]
+
+
 # -- errors / merge --------------------------------------------------------- #
 def test_undefined_name_errors():
     d = Definitions.from_mappings({"networks": {}})
