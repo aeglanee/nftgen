@@ -216,6 +216,7 @@ forms below. Rule order is kept exactly.
 | `iifname` / `oifname` | `iifname: wan` | `iifname { "wan0", "wwan0" }` (name match) |
 | `iif` / `oif` | `iif: lan` | `iif "lan0"` (index match: faster, but the ruleset fails to load if the interface is missing; not with a named set) |
 | `saddr` / `daddr` | `saddr: mgmt` | `ip saddr 192.168.9.0/24` + `ip6 saddr fd00:9::/64` — one line per family the addresses share |
+| `{not: …}` on the above | `saddr: {not: allowed}` | `ip saddr != @allowed` — the negated match, on `saddr`, `daddr`, `iifname`, `oifname`, `iif` and `oif`; `not` takes what the plain key takes (a group, a literal, a list, or a set); addresses still render one line per family |
 | `proto` | `proto: icmp` | `meta l4proto icmp` (a name, or a number 0–255) |
 | `sport` / `dport` | `proto: tcp` + `dport: ssh` | `tcp dport 22` |
 | `ct` | `ct: [established, related]` | `ct state established,related` |
@@ -234,6 +235,20 @@ it would alone; a named set can't go inside a list.
 
 **Named or inline:** a value that is a set listed under `sets:` renders
 `@name`; a definition renders its values inline; a literal renders itself.
+
+**Negation:** `{not: …}` renders nft's `!=` and means what it means there:
+
+- A negated address match covers only the families its value has. In an
+  `inet` table `ip saddr != …` is an IPv4 match, so
+  `saddr: {not: admins_v4}` + `action: drop` drops IPv4 strangers and
+  matches no IPv6 packet at all. Give the group both families, or close
+  the other family with its own rule.
+- Two negated keys in one rule are AND-ed like any two keys:
+  `saddr: {not: a}` + `daddr: {not: b}` is "source outside a and
+  destination outside b", not "any flow but a → b".
+- A negated lookup in an empty named set matches every packet (of its
+  family), so with a set filled at runtime the rule applies to all traffic
+  until the first element is there.
 
 **Ports and protocols:**
 
