@@ -125,8 +125,12 @@ def test_interface_group_and_composition():
         "wan 0",
         "wan0\t",
         "a/b",
+        "eth0:1",
+        ".",
+        "..",
         "",
         "a" * 16,
+        "é" * 8,
     ],
 )
 def test_interface_device_name_must_be_a_possible_name(device):
@@ -135,7 +139,9 @@ def test_interface_device_name_must_be_a_possible_name(device):
         d.interface("wan")
 
 
-@pytest.mark.parametrize("device", ["wan0", "a" * 15, "eth*", "br-lan.10", "wg_peer@1"])
+@pytest.mark.parametrize(
+    "device", ["wan0", "a" * 15, "é" * 7, "eth*", "br-lan.10", "wg_peer@1", "..."]
+)
 def test_interface_device_name_accepted(device):
     d = Definitions.from_mappings({"interfaces": {"wan": [device]}})
     assert d.interface("wan") == [device]

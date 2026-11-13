@@ -177,16 +177,23 @@ def _svc_leaf(item: str, group: str) -> list[tuple[str, str]]:
     return [(proto, port)]
 
 
-# What the kernel takes as an interface name and nft can write between double
-# quotes (it has no escape for one). A trailing `*` is nft's wildcard.
-_DEVICE_NAME = re.compile(r'[^\s"/\x00-\x1f\x7f]{1,15}')
+# The kernel's rule for an interface name (`dev_valid_name`: 1-15 bytes, no
+# slash, colon or whitespace, not `.` or `..`), and no double quote or control
+# character: nft has no escape for a quote inside a quoted string. A trailing
+# `*` is nft's wildcard.
+_DEVICE_NAME = re.compile(r'[^\s"/:\x00-\x1f\x7f]+')
+_DEVICE_NAME_BYTES = 15
 
 
 def _iface_leaf(item: str, group: str) -> list[str]:
     # any non-group string is a literal device name
-    if not _DEVICE_NAME.fullmatch(item):
+    if (
+        not _DEVICE_NAME.fullmatch(item)
+        or item in (".", "..")
+        or len(item.encode()) > _DEVICE_NAME_BYTES
+    ):
         raise DefinitionError(
-            f"interface {group!r}: {item!r} is not a device name (1-15 characters, "
-            f"no double quote, slash or whitespace)"
+            f"interface {group!r}: {item!r} is not a device name (1-15 bytes, no "
+            f"double quote, slash, colon or whitespace, not `.` or `..`)"
         )
     return [item]
