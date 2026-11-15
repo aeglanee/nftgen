@@ -115,6 +115,11 @@ interfaces:
   A device name follows the kernel's rule (1-15 bytes, no slash, colon, `%` or
   whitespace, not `.` or `..`) and has no double quote or control
   character; a trailing `*` is nft's wildcard.
+  A name that is a group always means the group, also inside another
+  group, so a device that must be named alone keeps its own name for a
+  one-device group and the larger group takes another:
+  `wan: [wan]` + `uplinks: [wan, wwan0]`. With `wan: [wan, wwan0]`,
+  `wan_wired: [wan]` would be both devices again.
 - Composition is recursive, cycle-checked, and deduplicated (first-seen order).
 - A name is unique within a category; a duplicate is an error naming both
   origins.
@@ -163,9 +168,13 @@ rules:
     action: accept
 ```
 
-Each tuple field takes one value (a single-value group or a literal). The
-family comes from the tuples; a set filled at runtime (no tuples) with an
-address field needs `family: ip` or `ip6`.
+An address or port field takes one value (a single-value group or a
+literal). An interface field takes a group, and the row expands to every
+device in it (two groups in a row give every combination; an element two
+rows share is listed once). For one device alone, use its one-device
+group (`wan: [wan]`, see Definitions). The family comes from the tuples; a set
+filled at runtime (no tuples) with an address field needs `family: ip` or
+`ip6`.
 
 ## Maps
 

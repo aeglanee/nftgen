@@ -128,10 +128,24 @@ Protocols are a name or 0–255 (`vrrp`, `112`), checked as the name.
 ### 2.7 Concatenation sets list their tuples
 
 A concat set states each tuple (`concat:` fields + `tuples:` rows); the rule
-references it with `set:`.
+references it with `set:`. An address or port field takes one value; an
+interface field takes a group, and the row expands to one element per
+device.
 *Why:* the tuples are the intent — which source may reach which destination
-on which port. Building them from groups needs a pairing rule: `zip` drifts
-when a list changes, `product` silently allows every combination.
+on which port. Building them from address or service groups needs a pairing
+rule: `zip` drifts when a list changes, `product` silently allows every
+combination.
+*Why interface groups expand (2026-11):* a group is the only way to name an
+interface (§2.8), and it names one zone, not a list of peers to pair off:
+"from the LAN" on two devices is one statement. A plain rule
+(`iifname: lan`) and a concat vmap (`key: [iifname, oifname]`) already read
+it that way. Taking only one-device groups, as this section first did, made
+the author keep a group and a row per device by hand, the copy the groups
+exist to avoid. The row still states the pairing: zone, destination, port.
+The cost is the one every rule naming a group has: a device added to the
+group widens each row that names it.
+*Rejected:* expanding address and service groups the same way: that is the
+cross product this section exists to prevent.
 *Later, if reuse appears:* a fleet-wide `flows:` definition category; the
 `tuples:` shape lifts into it unchanged.
 

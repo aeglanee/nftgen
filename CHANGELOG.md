@@ -9,6 +9,12 @@ not a breaking change.
 
 ## Unreleased
 
+- New: interface groups in concat set rows. An `iifname`/`oifname` field
+  takes a group of any size and the row expands to one element per device
+  (two groups give every combination), as `iifname: lan` does in a plain
+  rule and a concat vmap; a group of two devices failed the build before.
+  Address and port fields still take one value. An element that several
+  rows give is listed once.
 - New: negated matches. `saddr: {not: allowed}` renders
   `ip saddr != @allowed`, `iifname: {not: lan}` renders
   `iifname != { "lan0", "lan1" }`; on `saddr`, `daddr`, `iifname`,

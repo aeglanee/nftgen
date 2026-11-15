@@ -1,0 +1,22 @@
+---
+# Interface group in a concat row (docs/testing.md B36): the one row
+# [clients, server, svc_a] expands to one element per device of the group.
+# Both client zones reach the server on 9000; a zone outside the group and
+# another port do not.
+tables:
+  - family: inet
+    name: filter
+    sets:
+      - name: flows
+        concat: [iifname, daddr, dport]
+        proto: tcp
+        tuples:
+          - [clients, server, svc_a]
+    chains:
+      - name: forward
+        hook: forward
+        rules:
+          - ct: [established, related]
+            action: accept
+          - set: flows
+            action: accept

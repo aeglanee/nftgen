@@ -52,7 +52,7 @@ Network namespaces, no VM, rootless (`unshare -rn`):
   missing.
 - iproute2 7.x needs `ip link add name X type veth …` (explicit `name`).
 
-### Primitives (B01–B35)
+### Primitives (B01–B36)
 
 One small fixture per concern under `tests/behavioral/fixtures/`.
 
@@ -93,6 +93,7 @@ One small fixture per concern under `tests/behavioral/fixtures/`.
 | B33 | chain bound to devices at ingress (best-practices §8f) | a `netdev` ingress chain on the wan device counts and drops one port; an `inet` ingress chain counts `ct state invalid` | the port times out from wan and the counter rises; the other port connects; the dropped port connects through the lan device; `ct state invalid` counted the packets of the good connection |
 | B34 | `policy: drop` at ingress and ARP (best-practices §8f) | neighbours flushed, then TCP to the router through a drop-policy chain with and without `meta protocol arp accept` | with it: connects; without: times out; without, neighbours set by hand: connects |
 | B35 | negated matches, `{not: …}` (best-practices §2c) | a port guarded by `saddr: {not: <group>}` + drop, probed from a listed and an unlisted source over v4 and v6; the same with a v4-only group; `iifname: {not: <group>}` from two zones | listed sources connect, unlisted time out, both families; v4-only group: the unlisted v6 source connects; the other zone times out |
+| B36 | interface group in a concat set row | one row `[group, server, port]` with a two-device group; probes from both zones, from a zone outside the group, and to another port | both zones connect; the outside zone and the other port time out |
 
 ### Reference fleet (P01–P22)
 

@@ -1,0 +1,8 @@
+---
+# B36 fixture: two client zones in one interface group, a third outside it.
+networks:
+  server: [10.94.4.2]
+interfaces:
+  clients: [r-za, r-zb]
+services:
+  svc_a: [9000/tcp]
