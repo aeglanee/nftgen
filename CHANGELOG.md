@@ -9,6 +9,17 @@ not a breaking change.
 
 ## Unreleased
 
+- New: base chains bound to devices. `devices:` on a chain with
+  `hook: ingress` or `egress` takes an interface group or a list and
+  renders `type filter hook ingress devices = { "wan0", "wwan0" }
+  priority 0; policy accept;`. `ingress` goes in a `netdev` or an `inet`
+  table, `egress` in a `netdev` table only. `devices:` on another hook
+  fails the build, and so does either hook without `devices:`
+  (`hook: ingress` alone rendered a chain on no device, which filters
+  nothing). What differs at ingress (no conntrack yet, ARP, fragments,
+  devices that come and go) is in
+  [best-practices §8f](docs/best-practices.md#8f-early-drops-at-ingress-device-chains).
+=======
 - Fix: a device name under `interfaces:` that could not be an interface
   name fails the build: empty, longer than 15 bytes, `.` or `..`, or with a
   double quote, a slash, a colon, a `%`, whitespace or a control character

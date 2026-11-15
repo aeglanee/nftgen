@@ -594,3 +594,107 @@ Linux `Documentation/networking/ip-sysctl.rst` (`rp_filter`: strict, loose,
 the max of `all` and the interface; loose for asymmetric routing).
 Checked with `nft -c` and behavioral test B32, IPv4 and IPv6, with both
 reverse-path checks strict and loose on the pair link.
+
+### 8f. Early drops at ingress (device chains)
+
+A chain bound to devices runs at the `ingress` hook, before prerouting,
+conntrack and the routing decision. Dropping there is the cheapest place
+to shed traffic that is never wanted, such as spoofed sources on an
+uplink:
+
+```yaml
+networks:
+  bogons: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+interfaces:
+  wan: [wan0, wwan0]
+```
+
+```yaml
+tables:
+  - family: netdev
+    name: early
+    counters:
+      - early_drops
+    chains:
+      - name: wan_in
+        hook: ingress
+        devices: wan
+        policy: accept      # not the filter default: this chain only sheds
+        rules:
+          - saddr: bogons
+            counter: early_drops
+            action: drop
+```
+
+```nft
+table netdev early {
+    counter early_drops {
+    }
+
+    chain wan_in {
+        type filter hook ingress devices = { "wan0", "wwan0" } priority 0; policy accept;
+        ip saddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } counter name early_drops drop
+    }
+}
+```
+
+`ingress` goes in a `netdev` table or an `inet` one, `egress` in a `netdev`
+table only. An `accept` here only ends this chain: the packet still runs
+through prerouting, input and forward. Only `drop` is final.
+
+The hook is early enough that several things a prerouting or input chain
+can rely on are not there yet:
+
+- **No conntrack.** In an `inet` ingress chain every packet reads as
+  `ct state invalid`, also the ones of an established connection, so
+  `ct: invalid` with `action: drop` drops all traffic on the devices and
+  `ct: [established, related]` never matches. A `netdev` table refuses
+  `ct:` when the ruleset loads. Keep every `ct:` rule in the `inet` hooks.
+- **`policy: drop` drops ARP.** A `netdev` chain sees every frame, not
+  only IP, so a default-drop chain there also drops the ARP requests and
+  replies of its devices and IPv4 stops resolving. There is no key for
+  ARP; accept it first with a `raw:` rule:
+
+  ```yaml
+  - name: lan_in
+    hook: ingress
+    devices: lan
+    rules:
+      - raw: "meta protocol arp accept"
+      - proto: icmpv6
+        icmp-type: [nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert]
+        action: accept
+  ```
+
+  IPv6 neighbour discovery is ICMPv6 and needs its accept there for the
+  same reason. An `inet` ingress chain sees IP packets only, so ARP is
+  not its concern.
+- **No reassembly.** Fragments arrive one by one; a port or TCP-flag match
+  sees only the first fragment of a datagram. Address matches work on
+  every fragment.
+- **No output interface.** `oifname` and `oif` never match.
+- **Devices that come and go.** Before kernel 6.16 every listed device
+  must exist when the ruleset loads, `nft -c` included, or the load fails
+  with "No such file or directory". On those kernels a device that is
+  removed leaves the chain for good, and the chain itself is deleted with
+  its last device; a device that comes back under the same name is not
+  filtered until the ruleset is loaded again. So list only devices that
+  are always present, or reload the ruleset when one appears (the §8a
+  rule for `iif`). From kernel 6.16 the chain keeps the names: it loads
+  without the device and attaches when the device appears. A wildcard
+  name (`eth*`) in `devices` needs nft 1.1.6 and kernel 6.16.
+
+Sources: nftables wiki,
+[Netfilter hooks](https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks)
+(ingress runs before reassembly and conntrack) and
+[families](https://wiki.nftables.org/wiki-nftables/index.php/Nftables_families)
+(netdev sees all frames of a device; dropping there costs half of a
+prerouting drop); Linux `net/netfilter/nft_ct.c` (no conntrack entry reads
+as the invalid state), `net/netfilter/nft_chain_filter.c` and
+`net/netfilter/nf_tables_api.c` at v6.15 and v6.16 (device events, a
+missing device at chain creation).
+Checked with `nft -c` and behavioral tests B33 (the chain filters only its
+devices; `ct: invalid` counts the packets of a good connection) and B34
+(`policy: drop` without the ARP accept times out, with it or with static
+neighbours it connects), IPv4, on kernel 7.0. The behaviour before kernel
+6.16 is from the kernel source, not from a test.
