@@ -52,7 +52,7 @@ Network namespaces, no VM, rootless (`unshare -rn`):
   missing.
 - iproute2 7.x needs `ip link add name X type veth …` (explicit `name`).
 
-### Primitives (B01–B34)
+### Primitives (B01–B35)
 
 One small fixture per concern under `tests/behavioral/fixtures/`.
 
@@ -92,6 +92,7 @@ One small fixture per concern under `tests/behavioral/fixtures/`.
 | B32 | router pair, one-way flows returned by connection marks (best-practices §8e) | the client's gateway is router A, its target is router B's own address; A drops `ct state invalid`; B runs a `ct-mark` variant | no recipe: v4 + v6 time out, A counts invalid; recipe: both connect; + strict §5 `fib`: both time out, loose on `peer0` only: both connect; kernel `rp_filter=1`: v4 times out, `rp_filter=2` on `peer0`: both connect |
 | B33 | chain bound to devices at ingress (best-practices §8f) | a `netdev` ingress chain on the wan device counts and drops one port; an `inet` ingress chain counts `ct state invalid` | the port times out from wan and the counter rises; the other port connects; the dropped port connects through the lan device; `ct state invalid` counted the packets of the good connection |
 | B34 | `policy: drop` at ingress and ARP (best-practices §8f) | neighbours flushed, then TCP to the router through a drop-policy chain with and without `meta protocol arp accept` | with it: connects; without: times out; without, neighbours set by hand: connects |
+| B35 | negated matches, `{not: …}` (best-practices §2c) | a port guarded by `saddr: {not: <group>}` + drop, probed from a listed and an unlisted source over v4 and v6; the same with a v4-only group; `iifname: {not: <group>}` from two zones | listed sources connect, unlisted time out, both families; v4-only group: the unlisted v6 source connects; the other zone times out |
 
 ### Reference fleet (P01–P22)
 

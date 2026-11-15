@@ -193,6 +193,64 @@ pairs with which destination (that's policy, not derivable); the concat set
 lets you *compose* the tuples, never guess them. Why:
 [DECISIONS.md](../DECISIONS.md) §2.7.
 
+### 2c. Negation: everything but
+
+`{not: …}` on an address or interface key renders nft's `!=`: the rule
+matches packets whose value is *outside* the group, set or literal. The
+usual shape is an early drop in front of the accepts:
+
+```yaml
+networks:
+  admins: [10.0.9.10, 10.0.9.11, "fd00:9::10"]
+```
+
+```yaml
+rules:
+  - saddr:
+      not: admins
+    proto: tcp
+    dport: ssh
+    action: drop
+```
+
+```nft
+ip saddr != { 10.0.9.10, 10.0.9.11 } tcp dport 22 drop
+ip6 saddr != fd00:9::10 tcp dport 22 drop
+```
+
+Three things nft does with `!=` that are easy to get wrong:
+
+- **One family negated leaves the other one open.** `ip saddr != …` is an
+  IPv4 match: an IPv6 packet does not match it, so it is not dropped by
+  it. A group with only IPv4 addresses renders only the first line above,
+  and every IPv6 source then reaches the rules below. Put both families
+  in the group, or close the other one with its own rule (`proto: tcp`,
+  `dport: ssh`, `saddr: "::/0"`, `action: drop`). An allow rule has no
+  such gap: a plain `saddr: admins` + `accept` in a default-drop chain
+  accepts what it lists and nothing else, so prefer it where it says the
+  same thing.
+- **Two negated keys are AND-ed.** `saddr: {not: a}` with
+  `daddr: {not: b}` matches a packet whose source is outside `a` *and*
+  whose destination is outside `b`. It is not "everything except the flow
+  a → b"; for that, accept the flow first and drop after it.
+- **An empty set negated matches everything.** `saddr: {not: allowlist}`
+  with `action: drop` and a set filled at runtime (a file a service
+  writes, `nft add element`) drops every packet of that family until the
+  first element is there. Load the elements with the ruleset, or accept
+  the lockout window knowingly.
+
+The interface keys negate the same way, without the family question:
+`iifname: {not: lan}` renders `iifname != { "lan0", "lan1" }`, any
+interface but the group's.
+
+Sources: `man nft` (relational expressions, `!=`; the implicit family
+match of `ip`/`ip6` expressions in an `inet` table);
+[nftables wiki, sets](https://wiki.nftables.org/wiki-nftables/index.php/Sets).
+Checked with `nft -c` and behavioral test B35, IPv4 and IPv6: a group of
+both families closes both, a group of one family leaves the other open,
+and the interface form. The empty-set case was checked by hand on a loaded
+ruleset, not by a test.
+
 ---
 
 ## 3. Pattern catalog (saddr/sport → daddr/dport)
@@ -574,8 +632,24 @@ mark changes.
   design: check it loosely, keep every other interface strict:
 
   ```yaml
-  - raw: 'iifname "peer0" fib saddr . mark oif missing drop'
-  - raw: 'iifname != "peer0" fib saddr . mark . iif oif missing drop'
+  - iifname: peer
+    fib:
+      key: [saddr, mark]
+      result: oif
+      match: missing
+    action: drop
+  - iifname:
+      not: peer
+    fib:
+      key: [saddr, mark, iif]
+      result: oif
+      match: missing
+    action: drop
+  ```
+
+  ```nft
+  iifname "peer0" fib saddr . mark oif missing drop
+  iifname != "peer0" fib saddr . mark . iif oif missing drop
   ```
 
   For the kernel check, `net.ipv4.conf.peer0.rp_filter=2` (the higher of

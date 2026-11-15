@@ -9,6 +9,13 @@ not a breaking change.
 
 ## Unreleased
 
+- New: negated matches. `saddr: {not: allowed}` renders
+  `ip saddr != @allowed`, `iifname: {not: lan}` renders
+  `iifname != { "lan0", "lan1" }`; on `saddr`, `daddr`, `iifname`,
+  `oifname`, `iif` and `oif`, with the value the plain key takes. A
+  negated address match covers only the address families of its value:
+  see
+  [best-practices §2c](docs/best-practices.md#2c-negation-everything-but).
 - New: base chains bound to devices. `devices:` on a chain with
   `hook: ingress` or `egress` takes an interface group or a list and
   renders `type filter hook ingress devices = { "wan0", "wwan0" }
@@ -19,7 +26,6 @@ not a breaking change.
   nothing). What differs at ingress (no conntrack yet, ARP, fragments,
   devices that come and go) is in
   [best-practices §8f](docs/best-practices.md#8f-early-drops-at-ingress-device-chains).
-=======
 - Fix: a device name under `interfaces:` that could not be an interface
   name fails the build: empty, longer than 15 bytes, `.` or `..`, or with a
   double quote, a slash, a colon, a `%`, whitespace or a control character

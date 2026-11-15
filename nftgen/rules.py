@@ -161,6 +161,14 @@ def _ether_match(key: str, value) -> str:
     return f"ether {field} & {mask} == {match}"
 
 
+def _negated(value) -> tuple[str, object]:
+    """`{not: v}` -> ("!= ", v): the operator to render and the value to
+    resolve as the plain match would."""
+    if isinstance(value, dict) and "not" in value:
+        return "!= ", value["not"]
+    return "", value
+
+
 def _check_nat_family(verdict: str | None, families: list, rule: dict) -> None:
     """nft refuses `ip6 saddr … snat ip to …` ("conflicting protocols")."""
     nat = verdict.split(" ", 2) if verdict else []
@@ -334,7 +342,11 @@ class RuleRenderer:
         if "action" not in rule and not statements and not rule.get("counter"):
             raise BuildError(f"rule has neither an action nor a statement: {rule!r}")
 
-        addr = {k: self._addr(rule[k]) for k in ("saddr", "daddr") if k in rule}
+        addr, op = {}, {}
+        for k in ("saddr", "daddr"):
+            if k in rule:
+                op[k], value = _negated(rule[k])
+                addr[k] = self._addr(value)
         if addr:
             families = sorted(set.intersection(*[set(a) for a in addr.values()]))
             if not families:
@@ -360,27 +372,23 @@ class RuleRenderer:
         for fam in families:
             for flag_clause in flag_clauses:
                 parts: list[str] = []
-                if "iifname" in rule:
-                    parts.append(f"iifname {self._iface(rule['iifname'])}")
-                if "oifname" in rule:
-                    parts.append(f"oifname {self._iface(rule['oifname'])}")
                 # iif/oif match the interface *index* (resolved from the name at
                 # load): faster, but the ruleset fails to load if the interface
                 # is absent, and a recreated interface needs a reload. Prefer
                 # for static-named interfaces; see docs/best-practices.md §8a.
-                if "iif" in rule:
-                    parts.append(f"iif {self._iface(rule['iif'], index=True)}")
-                if "oif" in rule:
-                    parts.append(f"oif {self._iface(rule['oif'], index=True)}")
+                for key in ("iifname", "oifname", "iif", "oif"):
+                    if key in rule:
+                        neg, value = _negated(rule[key])
+                        iface = self._iface(value, index=key in ("iif", "oif"))
+                        parts.append(f"{key} {neg}{iface}")
                 for key in ("ether-saddr", "ether-daddr"):
                     if key in rule:
                         parts.append(_ether_match(key, rule[key]))
                 if "fib" in rule:
                     parts.append(self._fib(rule["fib"]))
-                if "saddr" in rule:
-                    parts.append(f"{fam} saddr {addr['saddr'][fam]}")
-                if "daddr" in rule:
-                    parts.append(f"{fam} daddr {addr['daddr'][fam]}")
+                for key in ("saddr", "daddr"):
+                    if key in addr:
+                        parts.append(f"{fam} {key} {op[key]}{addr[key][fam]}")
                 if rule.get("ct"):
                     parts.append("ct state " + ",".join(rule["ct"]))
                 if "mark" in rule:
