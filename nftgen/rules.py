@@ -161,6 +161,14 @@ def _ether_match(key: str, value) -> str:
     return f"ether {field} & {mask} == {match}"
 
 
+def _negated(value) -> tuple[str, object]:
+    """`{not: v}` -> ("!= ", v): the operator to render and the value to
+    resolve as the plain match would."""
+    if isinstance(value, dict) and "not" in value:
+        return "!= ", value["not"]
+    return "", value
+
+
 def _check_nat_family(verdict: str | None, families: list, rule: dict) -> None:
     """nft refuses `ip6 saddr … snat ip to …` ("conflicting protocols")."""
     nat = verdict.split(" ", 2) if verdict else []
@@ -334,7 +342,11 @@ class RuleRenderer:
         if "action" not in rule and not statements and not rule.get("counter"):
             raise BuildError(f"rule has neither an action nor a statement: {rule!r}")
 
-        addr = {k: self._addr(rule[k]) for k in ("saddr", "daddr") if k in rule}
+        addr, op = {}, {}
+        for k in ("saddr", "daddr"):
+            if k in rule:
+                op[k], value = _negated(rule[k])
+                addr[k] = self._addr(value)
         if addr:
             families = sorted(set.intersection(*[set(a) for a in addr.values()]))
             if not families:
@@ -360,27 +372,23 @@ class RuleRenderer:
         for fam in families:
             for flag_clause in flag_clauses:
                 parts: list[str] = []
-                if "iifname" in rule:
-                    parts.append(f"iifname {self._iface(rule['iifname'])}")
-                if "oifname" in rule:
-                    parts.append(f"oifname {self._iface(rule['oifname'])}")
                 # iif/oif match the interface *index* (resolved from the name at
                 # load): faster, but the ruleset fails to load if the interface
                 # is absent, and a recreated interface needs a reload. Prefer
                 # for static-named interfaces; see docs/best-practices.md §8a.
-                if "iif" in rule:
-                    parts.append(f"iif {self._iface(rule['iif'], index=True)}")
-                if "oif" in rule:
-                    parts.append(f"oif {self._iface(rule['oif'], index=True)}")
+                for key in ("iifname", "oifname", "iif", "oif"):
+                    if key in rule:
+                        neg, value = _negated(rule[key])
+                        iface = self._iface(value, index=key in ("iif", "oif"))
+                        parts.append(f"{key} {neg}{iface}")
                 for key in ("ether-saddr", "ether-daddr"):
                     if key in rule:
                         parts.append(_ether_match(key, rule[key]))
                 if "fib" in rule:
                     parts.append(self._fib(rule["fib"]))
-                if "saddr" in rule:
-                    parts.append(f"{fam} saddr {addr['saddr'][fam]}")
-                if "daddr" in rule:
-                    parts.append(f"{fam} daddr {addr['daddr'][fam]}")
+                for key in ("saddr", "daddr"):
+                    if key in addr:
+                        parts.append(f"{fam} {key} {op[key]}{addr[key][fam]}")
                 if rule.get("ct"):
                     parts.append("ct state " + ",".join(rule["ct"]))
                 if "mark" in rule:
@@ -1236,8 +1244,36 @@ class RuleRenderer:
 
 _FLOWTABLE_KEYS = frozenset({"name", "hook", "priority", "devices"})
 _CHAIN_KEYS = frozenset(
-    {"name", "hook", "type", "priority", "policy", "rules", "comment"}
+    {"name", "hook", "type", "priority", "policy", "devices", "rules", "comment"}
 )
+_DEVICE_HOOKS = frozenset({"ingress", "egress"})
+
+
+def resolve_devices(groups, defs: Definitions, where: str) -> list[str]:
+    """The `devices:` of a flowtable or a device-bound chain: one interface
+    group or a list of them -> the quoted device tokens, each listed once."""
+    # one group or a list, like the rule keys; a bare string must not be
+    # read letter by letter
+    if isinstance(groups, str):
+        groups = [groups]
+    if not isinstance(groups, list) or not all(isinstance(g, str) for g in groups):
+        raise BuildError(
+            f"{where}: `devices:` takes an interface group or a list of them, "
+            f"got {groups!r}"
+        )
+    devices: list[str] = []
+    for dev in groups:
+        if dev not in defs.interfaces:
+            raise BuildError(
+                f"{where}: device {dev!r} is not a known interface group "
+                f"(define it under `interfaces:`)"
+            )
+        devices.extend(f'"{d}"' for d in defs.interface(dev))
+    # groups may share a device; nft refuses one listed twice ("File exists")
+    devices = list(dict.fromkeys(devices))
+    if not devices:
+        raise BuildError(f"{where} resolves to no devices")
+    return devices
 
 
 def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:
@@ -1249,34 +1285,14 @@ def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:
         if "name" not in spec:
             raise BuildError(f"flowtable needs a `name:`: {spec!r}")
         check_nft_name(spec["name"], "flowtable")
-        # one group or a list, like the rule keys; a bare string must not be
-        # read letter by letter
-        groups = spec.get("devices", [])
-        if isinstance(groups, str):
-            groups = [groups]
-        if not isinstance(groups, list) or not all(isinstance(g, str) for g in groups):
-            raise BuildError(
-                f"flowtable {spec['name']!r}: `devices:` takes an interface group "
-                f"or a list of them, got {groups!r}"
-            )
-        devices: list[str] = []
-        for dev in groups:
-            if dev not in defs.interfaces:
-                raise BuildError(
-                    f"flowtable {spec['name']!r}: device {dev!r} is not a known "
-                    f"interface group (define it under `interfaces:`)"
-                )
-            devices.extend(f'"{d}"' for d in defs.interface(dev))
-        # groups may share a device; nft refuses one listed twice ("File exists")
-        devices = list(dict.fromkeys(devices))
-        if not devices:
-            raise BuildError(f"flowtable {spec['name']!r} resolves to no devices")
         out.append(
             Flowtable(
                 name=spec["name"],
                 hook=spec.get("hook", "ingress"),
                 priority=resolve_priority(spec.get("priority", 0)),
-                devices=devices,
+                devices=resolve_devices(
+                    spec.get("devices", []), defs, f"flowtable {spec['name']!r}"
+                ),
             )
         )
     return out
@@ -1300,7 +1316,7 @@ def build_chain(spec: dict, renderer: RuleRenderer, annotate=None) -> Chain:
     if "name" not in spec:
         raise BuildError(f"chain needs a `name:`: {spec!r}")
     check_nft_name(spec["name"], "chain")
-    base_only = sorted(set(spec) & {"type", "priority", "policy"})
+    base_only = sorted(set(spec) & {"type", "priority", "policy", "devices"})
     if base_only and "hook" not in spec:
         # without a hook it's a regular chain (reached only by jump/goto), which
         # has no type/priority/policy — dropping them silently would leave an
@@ -1338,4 +1354,20 @@ def build_chain(spec: dict, renderer: RuleRenderer, annotate=None) -> Chain:
         chain.policy = spec.get(
             "policy", "drop" if chain.type == "filter" else "accept"
         )
+        # ingress and egress run per device: a chain without one loads and
+        # filters nothing, and the other hooks take none
+        if chain.hook in _DEVICE_HOOKS:
+            if "devices" not in spec:
+                raise BuildError(
+                    f"chain {spec['name']!r}: hook {chain.hook} needs `devices:` "
+                    f"(an interface group or a list of them)"
+                )
+            chain.devices = resolve_devices(
+                spec["devices"], renderer.defs, f"chain {spec['name']!r}"
+            )
+        elif "devices" in spec:
+            raise BuildError(
+                f"chain {spec['name']!r}: `devices:` goes with an ingress or "
+                f"egress hook, not {chain.hook}"
+            )
     return chain

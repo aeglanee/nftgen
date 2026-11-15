@@ -193,6 +193,64 @@ pairs with which destination (that's policy, not derivable); the concat set
 lets you *compose* the tuples, never guess them. Why:
 [DECISIONS.md](../DECISIONS.md) §2.7.
 
+### 2c. Negation: everything but
+
+`{not: …}` on an address or interface key renders nft's `!=`: the rule
+matches packets whose value is *outside* the group, set or literal. The
+usual shape is an early drop in front of the accepts:
+
+```yaml
+networks:
+  admins: [10.0.9.10, 10.0.9.11, "fd00:9::10"]
+```
+
+```yaml
+rules:
+  - saddr:
+      not: admins
+    proto: tcp
+    dport: ssh
+    action: drop
+```
+
+```nft
+ip saddr != { 10.0.9.10, 10.0.9.11 } tcp dport 22 drop
+ip6 saddr != fd00:9::10 tcp dport 22 drop
+```
+
+Three things nft does with `!=` that are easy to get wrong:
+
+- **One family negated leaves the other one open.** `ip saddr != …` is an
+  IPv4 match: an IPv6 packet does not match it, so it is not dropped by
+  it. A group with only IPv4 addresses renders only the first line above,
+  and every IPv6 source then reaches the rules below. Put both families
+  in the group, or close the other one with its own rule (`proto: tcp`,
+  `dport: ssh`, `saddr: "::/0"`, `action: drop`). An allow rule has no
+  such gap: a plain `saddr: admins` + `accept` in a default-drop chain
+  accepts what it lists and nothing else, so prefer it where it says the
+  same thing.
+- **Two negated keys are AND-ed.** `saddr: {not: a}` with
+  `daddr: {not: b}` matches a packet whose source is outside `a` *and*
+  whose destination is outside `b`. It is not "everything except the flow
+  a → b"; for that, accept the flow first and drop after it.
+- **An empty set negated matches everything.** `saddr: {not: allowlist}`
+  with `action: drop` and a set filled at runtime (a file a service
+  writes, `nft add element`) drops every packet of that family until the
+  first element is there. Load the elements with the ruleset, or accept
+  the lockout window knowingly.
+
+The interface keys negate the same way, without the family question:
+`iifname: {not: lan}` renders `iifname != { "lan0", "lan1" }`, any
+interface but the group's.
+
+Sources: `man nft` (relational expressions, `!=`; the implicit family
+match of `ip`/`ip6` expressions in an `inet` table);
+[nftables wiki, sets](https://wiki.nftables.org/wiki-nftables/index.php/Sets).
+Checked with `nft -c` and behavioral test B35, IPv4 and IPv6: a group of
+both families closes both, a group of one family leaves the other open,
+and the interface form. The empty-set case was checked by hand on a loaded
+ruleset, not by a test.
+
 ---
 
 ## 3. Pattern catalog (saddr/sport → daddr/dport)
@@ -597,8 +655,24 @@ mark changes.
   design: check it loosely, keep every other interface strict:
 
   ```yaml
-  - raw: 'iifname "peer0" fib saddr . mark oif missing drop'
-  - raw: 'iifname != "peer0" fib saddr . mark . iif oif missing drop'
+  - iifname: peer
+    fib:
+      key: [saddr, mark]
+      result: oif
+      match: missing
+    action: drop
+  - iifname:
+      not: peer
+    fib:
+      key: [saddr, mark, iif]
+      result: oif
+      match: missing
+    action: drop
+  ```
+
+  ```nft
+  iifname "peer0" fib saddr . mark oif missing drop
+  iifname != "peer0" fib saddr . mark . iif oif missing drop
   ```
 
   For the kernel check, `net.ipv4.conf.peer0.rp_filter=2` (the higher of
@@ -617,3 +691,107 @@ Linux `Documentation/networking/ip-sysctl.rst` (`rp_filter`: strict, loose,
 the max of `all` and the interface; loose for asymmetric routing).
 Checked with `nft -c` and behavioral test B32, IPv4 and IPv6, with both
 reverse-path checks strict and loose on the pair link.
+
+### 8f. Early drops at ingress (device chains)
+
+A chain bound to devices runs at the `ingress` hook, before prerouting,
+conntrack and the routing decision. Dropping there is the cheapest place
+to shed traffic that is never wanted, such as spoofed sources on an
+uplink:
+
+```yaml
+networks:
+  bogons: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+interfaces:
+  wan: [wan0, wwan0]
+```
+
+```yaml
+tables:
+  - family: netdev
+    name: early
+    counters:
+      - early_drops
+    chains:
+      - name: wan_in
+        hook: ingress
+        devices: wan
+        policy: accept      # not the filter default: this chain only sheds
+        rules:
+          - saddr: bogons
+            counter: early_drops
+            action: drop
+```
+
+```nft
+table netdev early {
+    counter early_drops {
+    }
+
+    chain wan_in {
+        type filter hook ingress devices = { "wan0", "wwan0" } priority 0; policy accept;
+        ip saddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } counter name early_drops drop
+    }
+}
+```
+
+`ingress` goes in a `netdev` table or an `inet` one, `egress` in a `netdev`
+table only. An `accept` here only ends this chain: the packet still runs
+through prerouting, input and forward. Only `drop` is final.
+
+The hook is early enough that several things a prerouting or input chain
+can rely on are not there yet:
+
+- **No conntrack.** In an `inet` ingress chain every packet reads as
+  `ct state invalid`, also the ones of an established connection, so
+  `ct: invalid` with `action: drop` drops all traffic on the devices and
+  `ct: [established, related]` never matches. A `netdev` table refuses
+  `ct:` when the ruleset loads. Keep every `ct:` rule in the `inet` hooks.
+- **`policy: drop` drops ARP.** A `netdev` chain sees every frame, not
+  only IP, so a default-drop chain there also drops the ARP requests and
+  replies of its devices and IPv4 stops resolving. There is no key for
+  ARP; accept it first with a `raw:` rule:
+
+  ```yaml
+  - name: lan_in
+    hook: ingress
+    devices: lan
+    rules:
+      - raw: "meta protocol arp accept"
+      - proto: icmpv6
+        icmp-type: [nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert]
+        action: accept
+  ```
+
+  IPv6 neighbour discovery is ICMPv6 and needs its accept there for the
+  same reason. An `inet` ingress chain sees IP packets only, so ARP is
+  not its concern.
+- **No reassembly.** Fragments arrive one by one; a port or TCP-flag match
+  sees only the first fragment of a datagram. Address matches work on
+  every fragment.
+- **No output interface.** `oifname` and `oif` never match.
+- **Devices that come and go.** Before kernel 6.16 every listed device
+  must exist when the ruleset loads, `nft -c` included, or the load fails
+  with "No such file or directory". On those kernels a device that is
+  removed leaves the chain for good, and the chain itself is deleted with
+  its last device; a device that comes back under the same name is not
+  filtered until the ruleset is loaded again. So list only devices that
+  are always present, or reload the ruleset when one appears (the §8a
+  rule for `iif`). From kernel 6.16 the chain keeps the names: it loads
+  without the device and attaches when the device appears. A wildcard
+  name (`eth*`) in `devices` needs nft 1.1.6 and kernel 6.16.
+
+Sources: nftables wiki,
+[Netfilter hooks](https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks)
+(ingress runs before reassembly and conntrack) and
+[families](https://wiki.nftables.org/wiki-nftables/index.php/Nftables_families)
+(netdev sees all frames of a device; dropping there costs half of a
+prerouting drop); Linux `net/netfilter/nft_ct.c` (no conntrack entry reads
+as the invalid state), `net/netfilter/nft_chain_filter.c` and
+`net/netfilter/nf_tables_api.c` at v6.15 and v6.16 (device events, a
+missing device at chain creation).
+Checked with `nft -c` and behavioral tests B33 (the chain filters only its
+devices; `ct: invalid` counts the packets of a good connection) and B34
+(`policy: drop` without the ARP accept times out, with it or with static
+neighbours it connects), IPv4, on kernel 7.0. The behaviour before kernel
+6.16 is from the kernel source, not from a test.

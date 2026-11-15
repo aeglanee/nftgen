@@ -1175,6 +1175,174 @@ def test_b32_router_pair_returns_one_way_flows(recipe, fib, kernel, v4, v6):
 
 
 # --------------------------------------------------------------------------- #
+# B33/B34 — chains bound to devices at ingress (fixture: chain-devices)
+# --------------------------------------------------------------------------- #
+
+DEV_ROUTERS = {"wan": "10.90.1.1", "lan": "10.90.2.1", "dmz": "10.90.3.1"}
+
+
+def _ok(fw, ns: str | None, *argv: str) -> str:
+    r = fw.run(ns, list(argv))
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def _forget_neighbours(fw, zone: str) -> None:
+    _ok(fw, zone, "ip", "neigh", "flush", "dev", "eth0")
+    _ok(fw, None, "ip", "neigh", "flush", "dev", f"r-{zone}")
+
+
+def _mac(fw, ns: str | None, dev: str) -> str:
+    m = re.search(r"link/ether (\S+)", _ok(fw, ns, "ip", "link", "show", "dev", dev))
+    assert m
+    return m.group(1)
+
+
+@pytest.fixture(scope="module")
+def fw_chain_devices():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": zone,
+                    "router_if": f"r-{zone}",
+                    "router_addr": f"{addr}/24",
+                    "ns_addr": f"{addr[:-1]}2/24",
+                    "gw": addr,
+                }
+                for zone, addr in DEV_ROUTERS.items()
+            ]
+        )
+        harness.nft_apply(build(FIXTURES / "chain-devices")["router"])
+        harness.listen(None, 7000)
+        harness.listen(None, 7001)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b33_ingress_chain_filters_its_own_devices_only(fw_chain_devices):
+    fw = fw_chain_devices
+    listing = _ok(fw, None, "nft", "list", "counter", "netdev", "early", "early_drops")
+    assert "packets 0" in listing
+    # wan_in passes what it does not drop: the input chain decides…
+    assert fw.probe_tcp("wan", DEV_ROUTERS["wan"], 7000) == "connected"
+    # …so this timeout is the ingress drop, counted there
+    assert fw.probe_tcp("wan", DEV_ROUTERS["wan"], 7001) == "timeout"
+    listing = _ok(fw, None, "nft", "list", "counter", "netdev", "early", "early_drops")
+    assert "packets 0" not in listing
+    # the same port through another device: wan_in is not on it
+    assert fw.probe_tcp("lan", DEV_ROUTERS["lan"], 7001) == "connected"
+
+
+@requires_netns
+def test_b33_conntrack_has_not_run_at_ingress(fw_chain_devices):
+    fw = fw_chain_devices
+    before = _counter_packets(fw, "before_conntrack")
+    # a handshake the input chain accepts as new, then established…
+    assert fw.probe_tcp("wan", DEV_ROUTERS["wan"], 7000) == "connected"
+    # …and at ingress `ct state invalid` matched its packets all the same
+    assert _counter_packets(fw, "before_conntrack") >= before + 2
+
+
+@requires_netns
+def test_b34_drop_policy_at_ingress_needs_an_arp_accept(fw_chain_devices):
+    fw = fw_chain_devices
+    # lan_in accepts ARP: with the neighbours forgotten, resolution still works
+    _forget_neighbours(fw, "lan")
+    assert fw.probe_tcp("lan", DEV_ROUTERS["lan"], 7000) == "connected"
+    # dmz_in has the same TCP accept, but its policy drops the ARP request
+    _forget_neighbours(fw, "dmz")
+    assert fw.probe_tcp("dmz", DEV_ROUTERS["dmz"], 7000) == "timeout"
+    # positive control: with the neighbours set by hand, the same probe
+    # connects, so only address resolution was missing
+    client = f"{DEV_ROUTERS['dmz'][:-1]}2"
+    for ns, dev, peer, peer_mac in (
+        ("dmz", "eth0", DEV_ROUTERS["dmz"], _mac(fw, None, "r-dmz")),
+        (None, "r-dmz", client, _mac(fw, "dmz", "eth0")),
+    ):
+        _ok(fw, ns, "ip", "neigh", "replace", peer, "dev", dev, "lladdr", peer_mac)
+    assert fw.probe_tcp("dmz", DEV_ROUTERS["dmz"], 7000) == "connected"
+
+
+# --------------------------------------------------------------------------- #
+# B35 — negated matches, per address family (fixture: negation)
+# --------------------------------------------------------------------------- #
+
+NEG_ROUTER, NEG_ADMIN, NEG_STRANGER = "10.93.1.1", "10.93.1.2", "10.93.1.3"
+NEG_ROUTER6, NEG_ADMIN6, NEG_STRANGER6 = "fd00:93:1::1", "fd00:93:1::2", "fd00:93:1::3"
+NEG_WAN_ROUTER = "10.93.2.1"
+
+
+@pytest.fixture(scope="module")
+def fw_negation():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": "lan",
+                    "router_if": "r-lan",
+                    "router_addr": f"{NEG_ROUTER}/24",
+                    "ns_addr": f"{NEG_ADMIN}/24",
+                    "gw": NEG_ROUTER,
+                    "router_addr6": f"{NEG_ROUTER6}/64",
+                    "ns_addr6": f"{NEG_ADMIN6}/64",
+                    "gw6": NEG_ROUTER6,
+                },
+                {
+                    "name": "wan",
+                    "router_if": "r-wan",
+                    "router_addr": f"{NEG_WAN_ROUTER}/24",
+                    "ns_addr": "10.93.2.2/24",
+                    "gw": NEG_WAN_ROUTER,
+                },
+            ]
+        )
+        # the strangers: second addresses of the lan client, outside the groups
+        for addr in (f"{NEG_STRANGER}/24", f"{NEG_STRANGER6}/64"):
+            r = harness.run("lan", ["ip", "addr", "add", addr, "dev", "eth0", "nodad"])
+            assert r.returncode == 0, r.stderr
+        harness.nft_apply(build(FIXTURES / "negation")["router"])
+        for port in (7000, 7001, 7002, 7003):
+            harness.listen(None, port, addr="::")  # one listener, both families
+        yield harness
+    finally:
+        harness.close()
+
+
+def _neg_probe(fw, port: int, src: str) -> str:
+    dst = NEG_ROUTER6 if ":" in src else NEG_ROUTER
+    return fw.probe_tcp("lan", dst, port, src=src)
+
+
+@requires_netns
+def test_b35_negated_group_of_both_families_closes_both(fw_negation):
+    assert _neg_probe(fw_negation, 7000, NEG_ADMIN) == "connected"
+    assert _neg_probe(fw_negation, 7000, NEG_ADMIN6) == "connected"
+    assert _neg_probe(fw_negation, 7000, NEG_STRANGER) == "timeout"
+    assert _neg_probe(fw_negation, 7000, NEG_STRANGER6) == "timeout"
+
+
+@requires_netns
+def test_b35_negated_group_of_one_family_leaves_the_other_open(fw_negation):
+    assert _neg_probe(fw_negation, 7001, NEG_ADMIN) == "connected"
+    assert _neg_probe(fw_negation, 7001, NEG_STRANGER) == "timeout"
+    # `ip saddr != …` is an IPv4 match: no IPv6 packet reaches the drop
+    assert _neg_probe(fw_negation, 7001, NEG_STRANGER6) == "connected"
+
+
+@requires_netns
+def test_b35_negated_interface(fw_negation):
+    assert _neg_probe(fw_negation, 7002, NEG_STRANGER) == "connected"
+    assert fw_negation.probe_tcp("wan", NEG_WAN_ROUTER, 7002) == "timeout"
+    # positive control: the wan zone reaches a port without a negated rule
+    assert fw_negation.probe_tcp("wan", NEG_WAN_ROUTER, 7003) == "connected"
+
+
+# --------------------------------------------------------------------------- #
 # B36 — an interface group in a concat row (fixture: concat-groups)
 # --------------------------------------------------------------------------- #
 

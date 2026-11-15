@@ -1,0 +1,9 @@
+---
+# B33/B34 fixture: one ingress chain per zone device.
+interfaces:
+  wan_if: [r-wan]
+  lan_if: [r-lan]
+  dmz_if: [r-dmz]
+services:
+  svc: [7000/tcp]
+  scrubbed: [7001/tcp]
