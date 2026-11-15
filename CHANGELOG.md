@@ -19,6 +19,16 @@ not a breaking change.
   nothing). What differs at ingress (no conntrack yet, ARP, fragments,
   devices that come and go) is in
   [best-practices §8f](docs/best-practices.md#8f-early-drops-at-ingress-device-chains).
+=======
+- Fix: a device name under `interfaces:` that could not be an interface
+  name fails the build: empty, longer than 15 bytes, `.` or `..`, or with a
+  double quote, a slash, a colon, a `%`, whitespace or a control character
+  in it (what the kernel takes as a name, less the quote). A double quote
+  ended the quoted name early, so the rest of the text rendered as nft
+  statements: `'wan0" accept #'` on a drop rule rendered
+  `iifname "wan0" accept #" drop`, which nft loads as an accept (`#` starts
+  a comment). The same text reached flowtable devices, `ifname` sets, maps
+  and vmaps.
 
 ## 1.3.0 — 2026-11-10
 

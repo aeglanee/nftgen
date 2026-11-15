@@ -146,6 +146,13 @@ def test_interface_named_and_unknown():
         one({"iifname": "eth9", "action": "drop"})
 
 
+def test_interface_device_cannot_break_out_of_its_quotes():
+    # rendered `iifname "wan0" accept #" drop`, which nft loads as an accept
+    defs = Definitions.from_mappings({"interfaces": {"wan": ['wan0" accept #']}})
+    with pytest.raises(DefinitionError, match="not a device name"):
+        RuleRenderer(defs, {}).render({"iifname": "wan", "action": "drop"})
+
+
 def test_ct_state():
     assert (
         one({"ct": ["established", "related"], "action": "accept"})
