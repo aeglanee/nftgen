@@ -56,8 +56,8 @@ TABLES = [
 ]
 
 
-def _base_line(spec: dict) -> str:
-    return build_chain(spec, R).render()[1].strip()
+def _base_line(spec: dict, family: str = "inet") -> str:
+    return build_chain(spec, R, family=family).render()[1].strip()
 
 
 def test_ingress_chain_lists_the_groups_devices():
@@ -82,7 +82,8 @@ def test_one_group_plain():
 
 def test_egress_chain_takes_devices_too():
     assert _base_line(
-        {"name": "out", "hook": "egress", "devices": "lan_if", "priority": 10}
+        {"name": "out", "hook": "egress", "devices": "lan_if", "priority": 10},
+        family="netdev",
     ) == ('type filter hook egress devices = { "lan0" } priority 10; policy drop;')
 
 
@@ -127,7 +128,7 @@ def test_devices_without_a_hook_errors():
 @pytest.mark.parametrize("hook", ["ingress", "egress"])
 def test_a_device_hook_needs_devices(hook):
     with pytest.raises(BuildError, match="needs `devices:`"):
-        build_chain({"name": "c", "hook": hook}, R)
+        build_chain({"name": "c", "hook": hook}, R, family="netdev")
 
 
 def test_tables_render():

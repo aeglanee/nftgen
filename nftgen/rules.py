@@ -1248,6 +1248,24 @@ _CHAIN_KEYS = frozenset(
 )
 _DEVICE_HOOKS = frozenset({"ingress", "egress"})
 
+# What nft takes in a base chain, per table family: the hooks, and the types
+# beyond `filter` (which takes every hook of its family) with their hooks.
+_IP_HOOKS = ("prerouting", "input", "forward", "output", "postrouting")
+CHAIN_HOOKS = {
+    "ip": _IP_HOOKS,
+    "ip6": _IP_HOOKS,
+    "inet": (*_IP_HOOKS, "ingress"),
+    "arp": ("input", "output"),
+    "bridge": _IP_HOOKS,
+    "netdev": ("ingress", "egress"),
+}
+_TYPE_HOOKS = {
+    "nat": ("prerouting", "input", "output", "postrouting"),
+    "route": ("output",),
+}
+_TYPE_FAMILIES = ("ip", "ip6", "inet")
+_POLICIES = ("accept", "drop")
+
 
 def resolve_devices(groups, defs: Definitions, where: str) -> list[str]:
     """The `devices:` of a flowtable or a device-bound chain: one interface
@@ -1288,7 +1306,11 @@ def build_flowtables(specs: list, defs: Definitions) -> list[Flowtable]:
         out.append(
             Flowtable(
                 name=spec["name"],
-                hook=spec.get("hook", "ingress"),
+                hook=_one_of(
+                    spec.get("hook", "ingress"),
+                    ("ingress",),
+                    f"flowtable {spec['name']!r}: `hook:`",
+                ),
                 priority=resolve_priority(spec.get("priority", 0)),
                 devices=resolve_devices(
                     spec.get("devices", []), defs, f"flowtable {spec['name']!r}"
@@ -1309,7 +1331,33 @@ def _note_suffix(note) -> str:
     return f"  # {note}"
 
 
-def build_chain(spec: dict, renderer: RuleRenderer, annotate=None) -> Chain:
+def _one_of(value, allowed: tuple, what: str):
+    # a value renders as a bare nft token: anything else, a line break above
+    # all, would render as more statements or another chain
+    if not isinstance(value, str) or value not in allowed:
+        raise BuildError(f"{what} must be one of {', '.join(allowed)}, got {value!r}")
+    return value
+
+
+def _check_base_chain(chain: Chain, family: str) -> None:
+    where = f"chain {chain.name!r}"
+    in_family = f"{where} (table family {family})"
+    _one_of(chain.hook, CHAIN_HOOKS[family], f"{in_family}: `hook:`")
+    types = ("filter", *_TYPE_HOOKS) if family in _TYPE_FAMILIES else ("filter",)
+    _one_of(chain.type, types, f"{in_family}: `type:`")
+    if chain.type in _TYPE_HOOKS:
+        _one_of(
+            chain.hook,
+            _TYPE_HOOKS[chain.type],
+            f"{where}: a {chain.type} chain's `hook:`",
+        )
+    _one_of(chain.policy, _POLICIES, f"{where}: `policy:`")
+
+
+def build_chain(
+    spec: dict, renderer: RuleRenderer, annotate=None, *, family: str = "inet"
+) -> Chain:
+    """One chain of a table of ``family`` (`render_tables` passes the table's)."""
     unknown = set(spec) - _CHAIN_KEYS
     if unknown:
         raise BuildError(f"unknown chain key(s) {sorted(unknown)}: {spec!r}")
@@ -1354,6 +1402,7 @@ def build_chain(spec: dict, renderer: RuleRenderer, annotate=None) -> Chain:
         chain.policy = spec.get(
             "policy", "drop" if chain.type == "filter" else "accept"
         )
+        _check_base_chain(chain, family)
         # ingress and egress run per device: a chain without one loads and
         # filters nothing, and the other hooks take none
         if chain.hook in _DEVICE_HOOKS:
