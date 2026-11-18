@@ -18,6 +18,7 @@ from nftgen.definitions import Definitions
 from nftgen.ir import (
     _PORT_LITERAL,
     BODY_INDENT,
+    MARK_VALUE,
     PORT_PROTOS,
     SERVICE_PAIR_TYPE,
     BuildError,
@@ -169,15 +170,26 @@ def _negated(value) -> tuple[str, object]:
     return "", value
 
 
-def _check_nat_family(verdict: str | None, families: list, rule: dict) -> None:
-    """nft refuses `ip6 saddr … snat ip to …` ("conflicting protocols")."""
-    nat = verdict.split(" ", 2) if verdict else []
-    if nat[:1] in (["snat"], ["dnat"]) and families != [nat[1]]:
-        raise BuildError(
-            f"{nat[0]} to an {'IPv4' if nat[1] == 'ip' else 'IPv6'} target, but "
-            f"the rule matches {'IPv6' if nat[1] == 'ip' else 'IPv4'} addresses "
-            f"— a NAT rule's addresses and target are one family: {rule!r}"
-        )
+_FAMILY_NAMES = {"ip": "IPv4", "ip6": "IPv6"}
+
+
+def _check_families(matched, acts: list, rule: dict) -> None:
+    """nft refuses `ip6 saddr … snat ip to …` ("conflicting protocols"): what a
+    rule does in one IP family (`_acts`) takes the family its matches pinned,
+    `matched` as (what, families) or None, and the family of each other."""
+    given = [matched] if matched else []
+    given += [(f"{what} is", [fam]) for what, fam in acts]
+    if not given:
+        return
+    first, first_fams = given[0]
+    for what, fams in given[1:]:
+        if fams != first_fams:
+            names = " and ".join(_FAMILY_NAMES[f] for f in first_fams)
+            raise BuildError(
+                f"{what} {_FAMILY_NAMES[fams[0]]}, but {first} {names} — a "
+                f"rule's matches, statements and NAT target are one family: "
+                f"{rule!r}"
+            )
 
 
 _KNOWN_RULE_KEYS = frozenset(
@@ -378,8 +390,8 @@ class RuleRenderer:
         else:
             families = [None]
         verdict = self._verdict(rule["action"]) if "action" in rule else None
-        if addr:
-            _check_nat_family(verdict, families, rule)
+        matched = ("the rule's addresses are", families) if addr else None
+        _check_families(matched, self._acts(rule, verdict), rule)
 
         lines = []
         for fam in families:
@@ -454,9 +466,13 @@ class RuleRenderer:
             out.append(self._log(rule["log"]))
         if "set-mark" in rule:
             src = rule["set-mark"]
+            if isinstance(src, dict):
+                src = self._mark_from_map("set-mark", src)
             out.append(f"meta mark set {'ct mark' if src == 'ct-mark' else src}")
         if "set-ct-mark" in rule:
             src = rule["set-ct-mark"]
+            if isinstance(src, dict):
+                src = self._mark_from_map("set-ct-mark", src)
             out.append(f"ct mark set {'meta mark' if src == 'mark' else src}")
         if "set-mss" in rule:
             mss = rule["set-mss"]
@@ -989,6 +1005,13 @@ class RuleRenderer:
                 f"vmap {keytype} value {value!r} is not a known interface group "
                 f"(define it under `interfaces:`)"
             )
+        if keytype == "mark" and (
+            isinstance(value, bool) or not MARK_VALUE.match(str(value))
+        ):
+            raise BuildError(
+                f"vmap mark value {value!r} is not a mark (a number or 0x…, or a "
+                f"range a-b)"
+            )
         return [str(value)]  # proto / mark / state literal
 
     def _vmap_port_pairs(self, keytype: str, value, proto: str | None = None):
@@ -1048,11 +1071,8 @@ class RuleRenderer:
                 f"a concat rule (`set: {name}`) can't carry match keys {sorted(extra)}: {rule!r}"
             )
         _reject_offload_with_verdict(rule)
-        if (
-            "action" not in rule
-            and not self._statements(rule)
-            and not rule.get("counter")
-        ):
+        statements = self._statements(rule)
+        if "action" not in rule and not statements and not rule.get("counter"):
             raise BuildError(
                 f"concat rule has neither an action nor a statement: {rule!r}"
             )
@@ -1068,10 +1088,12 @@ class RuleRenderer:
             else:  # iifname / oifname: field name is the nft expression
                 exprs.append(f)
         verdict = self._verdict(rule["action"]) if "action" in rule else None
-        if s.concat_family:
-            _check_nat_family(verdict, [s.concat_family], rule)
+        matched = (
+            ("the set's addresses are", [s.concat_family]) if s.concat_family else None
+        )
+        _check_families(matched, self._acts(rule, verdict), rule)
         parts = [" . ".join(exprs) + f" @{name}"]
-        parts.extend(self._statements(rule))
+        parts.extend(statements)
         if rule.get("counter"):
             parts.append(self._counter(rule["counter"]))
         if verdict:
@@ -1185,43 +1207,37 @@ class RuleRenderer:
     }
     _NAT_FAMILY = {"ipv4_addr": "ip", "ipv6_addr": "ip6"}
 
-    def _nat_named_map(self, kind: str, spec: dict) -> str:
-        """`dnat/snat: {key, map: <name>, proto?}` -> `snat ip to oifname map
-        @name`: the target comes from a table's named map."""
+    def _named_map(self, what: str, spec: dict):
         unknown = set(spec) - {"key", "map", "proto"}
         if unknown:
-            raise BuildError(f"unknown {kind} map key(s) {sorted(unknown)}: {spec!r}")
+            raise BuildError(f"unknown {what} map key(s) {sorted(unknown)}: {spec!r}")
         name = spec["map"]
         if name not in self.maps:
             declared = ", ".join(sorted(self.maps)) or "none"
             raise BuildError(
-                f"{kind} map @{name} is not declared in the table's `maps:` "
+                f"{what} map @{name} is not declared in the table's `maps:` "
                 f"(declared: {declared})"
             )
-        m = self.maps[name]
-        fam = self._NAT_FAMILY.get(m.value_type)
-        if fam is None:
-            raise BuildError(
-                f"{kind} map @{name} holds {m.value_type}; a nat map's values are "
-                f"ipv4_addr or ipv6_addr"
-            )
+        return self.maps[name]
+
+    def _map_lookup(self, what: str, spec: dict, m) -> str:
         key = spec.get("key")
-        wanted = self._NAT_MAP_KEY_TYPES.get(key)
+        wanted = self._NAT_MAP_KEY_TYPES.get(key) if isinstance(key, str) else None
         if wanted is None:
             raise BuildError(
-                f"{kind} map key must be one of {', '.join(self._NAT_MAP_KEY_TYPES)}, "
+                f"{what} map key must be one of {', '.join(self._NAT_MAP_KEY_TYPES)}, "
                 f"got {key!r}"
             )
         proto = proto_name(spec.get("proto")) if "proto" in spec else None
         if wanted == "inet_service":
             if proto not in PORT_PROTOS:
                 raise BuildError(
-                    f"{kind} map key {key} needs `proto:` with ports "
+                    f"{what} map key {key} needs `proto:` with ports "
                     f"({', '.join(PORT_PROTOS)})"
                 )
             expr = f"{proto} {key}"
         elif proto is not None:
-            raise BuildError(f"{kind} map key {key} takes no `proto:`")
+            raise BuildError(f"{what} map key {key} takes no `proto:`")
         elif wanted == "addr":
             expr = f"{self._NAT_FAMILY.get(m.key_type, '?')} {key}"
             wanted = (
@@ -1233,16 +1249,53 @@ class RuleRenderer:
             expr = "meta mark" if key == "mark" else key
         if m.key_type != wanted:
             raise BuildError(
-                f"{kind} map @{name} is keyed by {m.key_type}, but `key: {key}` "
+                f"{what} map @{m.name} is keyed by {m.key_type}, but `key: {key}` "
                 f"looks up {wanted}"
             )
+        return f"{expr} map @{m.name}"
+
+    def _nat_named_map(self, kind: str, spec: dict) -> str:
+        """`dnat/snat: {key, map: <name>, proto?}` -> `snat ip to oifname map
+        @name`: the target comes from a table's named map."""
+        m = self._named_map(kind, spec)
+        fam = self._NAT_FAMILY.get(m.value_type)
+        if fam is None:
+            raise BuildError(
+                f"{kind} map @{m.name} holds {m.value_type}; a nat map's values are "
+                f"ipv4_addr or ipv6_addr"
+            )
+        lookup = self._map_lookup(kind, spec, m)
+        key = spec.get("key")
         if key in ("saddr", "daddr") and m.key_type != m.value_type:
             # `snat ip to ip6 saddr map @m` loads, and never translates a packet
             raise BuildError(
-                f"{kind} map @{name} maps {m.key_type} to {m.value_type}; a "
+                f"{kind} map @{m.name} maps {m.key_type} to {m.value_type}; a "
                 f"`key: {key}` lookup needs both of one family"
             )
-        return f"{kind} {fam} to {expr} map @{name}"
+        return f"{kind} {fam} to {lookup}"
+
+    def _mark_from_map(self, what: str, spec: dict) -> str:
+        m = self._named_map(what, spec)
+        if m.value_type != "mark":
+            raise BuildError(
+                f"{what} map @{m.name} holds {m.value_type}; a mark map's values "
+                f"are mark"
+            )
+        return self._map_lookup(what, spec, m)
+
+    def _acts(self, rule: dict, verdict: str | None) -> list:
+        """What the rule does in one IP family: (what, 'ip' | 'ip6'). Read
+        after the statements and the verdict rendered, so they are valid."""
+        acts = []
+        for key in ("set-mark", "set-ct-mark"):
+            spec = rule.get(key)
+            if isinstance(spec, dict) and spec["key"] in ("saddr", "daddr"):
+                fam = self._NAT_FAMILY[self.maps[spec["map"]].key_type]
+                acts.append((f"the {key} {spec['key']} lookup", fam))
+        nat = verdict.split(" ", 2) if verdict else []
+        if nat[:1] in (["snat"], ["dnat"]):
+            acts.append((f"the {nat[0]} target", nat[1]))
+        return acts
 
     def _map_port_key(self, kind: str, val, proto: str) -> str:
         val = str(val)

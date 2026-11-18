@@ -179,7 +179,8 @@ filled at runtime (no tuples) with an address field needs `family: ip` or
 ## Maps
 
 A table's `maps:` declares named data maps. A rule uses one through a NAT
-action (`snat ip to oifname map @lease_snat`, under Actions).
+action (`snat ip to oifname map @lease_snat`, under Actions) or a mark
+statement (`meta mark set iifname map @zone_marks`, under Statements).
 
 ```yaml
 maps:
@@ -302,7 +303,9 @@ it would alone; a named set can't go inside a list.
 | `meter` | `{set: m, key: saddr, rate: 4/minute, timeout: 1m}` | `update @m { ip saddr timeout 1m limit rate 4/minute }` (a `dynamic` set; keys saddr/daddr/iifname/oifname) |
 | `quota` | `over 10 mbytes` | `quota over 10 mbytes` |
 | `set-mark` | `"0x1"` / `ct-mark` | `meta mark set 0x1` / `meta mark set ct mark` (restore the connection's mark) |
+| `set-mark` | `{key: iifname, map: zone_marks}` | `meta mark set iifname map @zone_marks` (a table's named map with `mark` values; `key` as for a NAT map, below) |
 | `set-ct-mark` | `"0x1"` / `mark` | `ct mark set 0x1` / `ct mark set meta mark` (save the packet's mark) |
+| `set-ct-mark` | `{key: iifname, map: zone_marks}` | `ct mark set iifname map @zone_marks` |
 | `set-mss` | `pmtu` / `1452` | `tcp flags syn tcp option maxseg size set rt mtu` / `… 1452` (1–65535) |
 | `flow-offload` | `ft` | `flow add @ft` (a declared flowtable; a separate rule from the verdict) |
 | `notrack` | `true` | `notrack` (no conntrack entry; in a chain hooked before conntrack, `priority: raw`) |
@@ -386,7 +389,8 @@ rule order. An empty chain stays empty.
   bytes, `.` or `..`, or a double quote, a slash, a colon, a `%` or whitespace
   in it).
 - A named set mixing v4 and v6; a rule whose addresses share no family; a
-  NAT rule whose addresses include the other family than its target.
+  NAT target or a `saddr`/`daddr` mark map lookup of another family than
+  the rule's addresses or each other.
 - Object names that are reserved nft keywords (`counter`, `fwd`, `map`, …).
 - `flow-offload:` and an action in one rule (the verdict would never run).
 - `set-mark:` and `set-ct-mark:` in one rule when one copies the other

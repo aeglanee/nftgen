@@ -9,6 +9,14 @@ not a breaking change.
 
 ## Unreleased
 
+- New: `set-mark:` and `set-ct-mark:` from a named map.
+  `set-mark: {key: iifname, map: zone_marks}` renders
+  `meta mark set iifname map @zone_marks` (`ct mark set …` for
+  `set-ct-mark:`); the map is a table's `maps:` entry with `mark` values,
+  and `key` takes what a NAT map's does. Marking the source zone once in
+  prerouting lets the forward chain match `mark` (a rule key, a concat set
+  field, a vmap column) instead of repeating interface lists. A vmap
+  `mark` column now checks its values like the `mark:` key.
 - New: a list in a concat vmap `match:` column. `match: [[mgmt, dmz], wan]`
   is the two rows `[mgmt, wan]` and `[dmz, wan]`, in every column (an
   interface, an address, a port, a protocol, a mark or a state); lists in
