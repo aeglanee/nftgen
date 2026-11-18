@@ -44,7 +44,7 @@ def test_fleet_shares_one_policy_specialised_by_overlay():
     # identical structure: same chains everywhere (the vmap dispatch spine)
     for host in HOSTS:
         assert "iifname . oifname vmap {" in arts[host]
-        assert "ip6 hoplimit 255 accept" in arts[host]  # RFC 4890 NDP
+        assert "ip6 hoplimit 255 icmpv6 type {" in arts[host]  # RFC 4890 NDP
         assert "flow add @ft" in arts[host]  # fast path
     # but the site overlay resolves each site's own subnets from the same YAML
     assert "192.168.1.0/24" in arts["hq-r"]  # users_hq

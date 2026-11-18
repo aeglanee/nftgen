@@ -19,6 +19,17 @@ import re
 from nftgen.ir import MARK_SET_VALUE, MARK_VALUE, BuildError, check_comment
 
 CT_STATES = ("new", "established", "related", "invalid", "untracked")
+CT_STATUSES = (
+    "expected",
+    "seen-reply",
+    "assured",
+    "confirmed",
+    "snat",
+    "dnat",
+    "dying",
+)
+PKTTYPES = ("host", "unicast", "broadcast", "multicast", "other")
+_HOPS = re.compile(r"^([0-9]{1,3})(?:-([0-9]{1,3}))?\Z")
 LOG_LEVELS = (
     "emerg",
     "alert",
@@ -98,6 +109,29 @@ def _ct(key, value):
     check = _one_or_list(f"a ct state ({', '.join(CT_STATES)})", _ct_state)
     value = check(key, value)
     return value if isinstance(value, list) else [value]
+
+
+def _ct_status(key, value):
+    def element(key, item, what):
+        if item not in CT_STATUSES:
+            _fail(key, what, item)
+
+    value = _one_or_list(f"a ct status ({', '.join(CT_STATUSES)})", element)(key, value)
+    return value if isinstance(value, list) else [value]
+
+
+def _pkttype(key, item, what):
+    if item not in PKTTYPES:
+        _fail(key, what, item)
+
+
+def _hops(key, item, what):
+    found = None if isinstance(item, bool) else _HOPS.match(str(item))
+    if found is None:
+        _fail(key, what, item)
+    low, high = int(found[1]), int(found[2] or found[1])
+    if not low <= high <= 255:
+        _fail(key, what, item)
 
 
 def _proto(key, value):
@@ -394,6 +428,7 @@ def _negatable(check):
 _ADDR = _negatable(_one_or_list("an address, a network group, or a set", _scalar))
 _PORT = _one_or_list("a port, a port range, or a service", _scalar)
 _IFACE = _negatable(_one_or_list("an interface group or a set", _scalar))
+_HOP_COUNT = _negatable(_one_or_list("a number 0-255 or a range a-b", _hops))
 _MARK = _pattern(MARK_VALUE, "a mark (a number or 0x…, or a range a-b)")
 
 RULE_SCHEMA = {
@@ -413,6 +448,13 @@ RULE_SCHEMA = {
     "ct-mark": _MARK,
     "proto": _proto,
     "icmp-type": _one_or_list("an icmp type name", _scalar),
+    "icmp-code": _one_or_list("an icmp code name or number", _scalar),
+    "ct-status": _ct_status,
+    "pkttype": _negatable(
+        _one_or_list(f"a packet type ({', '.join(PKTTYPES)})", _pkttype)
+    ),
+    "ttl": _HOP_COUNT,
+    "hoplimit": _HOP_COUNT,
     "flags": _flags,
     "meter": _mapping("a mapping of set / key / rate / timeout"),
     "limit": _plain("a rate such as 10/minute"),
@@ -464,11 +506,12 @@ def check_rule(rule) -> dict:
         check = RULE_SCHEMA.get(key)
         if check is not None:
             out[key] = check(key, value)
-    if "icmp-type" in out and ("sport" in out or "dport" in out):
-        raise BuildError(
-            f"`icmp-type` can't be combined with `sport`/`dport` — icmp has no "
-            f"ports: {rule!r}"
-        )
+    for icmp_key in ("icmp-type", "icmp-code"):
+        if icmp_key in out and ("sport" in out or "dport" in out):
+            raise BuildError(
+                f"`{icmp_key}` can't be combined with `sport`/`dport` — icmp has "
+                f"no ports: {rule!r}"
+            )
     if (
         "set-mark" in out
         and "set-ct-mark" in out

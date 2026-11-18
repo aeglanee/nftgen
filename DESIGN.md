@@ -247,20 +247,25 @@ forms below. Rule order is kept exactly.
 | `iifname` / `oifname` | `iifname: wan` | `iifname { "wan0", "wwan0" }` (name match) |
 | `iif` / `oif` | `iif: lan` | `iif "lan0"` (index match: faster, but the ruleset fails to load if the interface is missing; not with a named set) |
 | `saddr` / `daddr` | `saddr: mgmt` | `ip saddr 192.168.9.0/24` + `ip6 saddr fd00:9::/64` — one line per family the addresses share |
-| `{not: …}` on the above | `saddr: {not: allowed}` | `ip saddr != @allowed` — the negated match, on `saddr`, `daddr`, `iifname`, `oifname`, `iif` and `oif`; `not` takes what the plain key takes (a group, a literal, a list, or a set); addresses still render one line per family |
+| `{not: …}` on the above | `saddr: {not: allowed}` | `ip saddr != @allowed` — the negated match, on `saddr`, `daddr`, `iifname`, `oifname`, `iif`, `oif`, `pkttype`, `ttl` and `hoplimit`; `not` takes what the plain key takes (a group, a literal, a list, or a set); addresses still render one line per family |
 | `proto` | `proto: icmp` | `meta l4proto icmp` (a name, or a number 0–255) |
 | `sport` / `dport` | `proto: tcp` + `dport: ssh` | `tcp dport 22` |
 | `ct` | `ct: [established, related]` | `ct state established,related` |
 | `mark` | `mark: "0x1"` | `meta mark 0x1` (a number, `0x…`, or a range; quote hex, or YAML reads `0x1` as `1`) |
 | `ct-mark` | `ct-mark: "0x1"` | `ct mark 0x1` (the connection's mark; a number, `0x…`, or a range) |
 | `icmp-type` | `proto: icmpv6` + `icmp-type: [nd-neighbor-solicit]` | `icmpv6 type nd-neighbor-solicit` (needs `proto: icmp`/`icmpv6`, no ports) |
+| `icmp-code` | `proto: icmp` + `icmp-code: port-unreachable` | `icmp code port-unreachable` (a name or a number; needs `proto: icmp`/`icmpv6`, no ports; with `icmp-type` both render) |
+| `pkttype` | `pkttype: [broadcast, multicast]` | `meta pkttype { broadcast, multicast }` (`host`, `unicast`, `broadcast`, `multicast`, `other`) |
+| `ttl` / `hoplimit` | `hoplimit: 255` | `ip6 hoplimit 255` (a number 0-255 or a range `a-b`); `ttl` is IPv4-only (`ip ttl`), `hoplimit` IPv6-only, like `proto: icmp`/`icmpv6` |
+| `ct-status` | `ct-status: dnat` | `ct status dnat` (`expected`, `seen-reply`, `assured`, `confirmed`, `snat`, `dnat`, `dying`; a list is any of them) |
 | `flags` | `flags: {match: [syn], mask: [syn, ack]}` | `tcp flags & (syn\|ack) == syn` (a list makes one line each) |
 | `ether-saddr` / `ether-daddr` | `ether-saddr: "02:00:00:00:00:01"` | `ether saddr 02:00:00:00:00:01` (one MAC or a list; quote it, or YAML may read it as a number) |
 | `ether-saddr` / `ether-daddr` | `ether-daddr: {match: "01:00:00:00:00:00", mask: "01:00:00:00:00:00"}` | `ether daddr & 01:00:00:00:00:00 == 01:00:00:00:00:00` (masked: the multicast bit; `match` must lie inside `mask`) |
 | `fib` | `fib: {key: daddr, result: oifname, match: lo}` | `fib daddr oifname "lo"` (a routing lookup; `key` is one of saddr/daddr plus mark and iif or oif, in nft's order; `match` is an interface group, a set, or `missing`/`exists` with `result: oif`, or address types with `result: type`) |
 
 **One value or a list:** `saddr`/`daddr`, `sport`/`dport`, the interface keys,
-`ether-saddr`/`ether-daddr`, `ct` and `icmp-type` take one value or a list
+`ether-saddr`/`ether-daddr`, `ct`, `ct-status`, `icmp-type`, `icmp-code`,
+`pkttype`, `ttl` and `hoplimit` take one value or a list
 (`dport: [ssh, 8080]` → `tcp dport { 22, 8080 }`). Each element resolves as
 it would alone; a named set can't go inside a list.
 
@@ -291,7 +296,11 @@ it would alone; a named set can't go inside a list.
   `meta l4proto . th dport { tcp . 53, udp . 53 }` (named: `@dns`). A bare
   port number, a hand-written port-only set, or `sport` + `dport` together
   still need `proto:`.
-- `icmp` renders only IPv4 lines and `icmpv6` only IPv6 lines.
+- `icmp` renders only IPv4 lines and `icmpv6` only IPv6 lines; so do
+  `ttl` and `hoplimit`. A rule that names both families this way
+  (`ttl:` with `proto: icmpv6`) fails the build, and so does one whose NAT
+  target or address meter is of the other family (`hoplimit:` with
+  `snat: 192.0.2.1`).
 
 ### Statements
 
@@ -389,8 +398,8 @@ rule order. An empty chain stays empty.
   bytes, `.` or `..`, or a double quote, a slash, a colon, a `%` or whitespace
   in it).
 - A named set mixing v4 and v6; a rule whose addresses share no family; a
-  NAT target or a `saddr`/`daddr` mark map lookup of another family than
-  the rule's addresses or each other.
+  NAT target, a `saddr`/`daddr` mark map lookup or a `saddr`/`daddr` meter
+  of another family than the rule's matches or each other.
 - Object names that are reserved nft keywords (`counter`, `fwd`, `map`, …).
 - `flow-offload:` and an action in one rule (the verdict would never run).
 - `set-mark:` and `set-ct-mark:` in one rule when one copies the other
