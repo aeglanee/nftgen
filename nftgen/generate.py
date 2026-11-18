@@ -23,7 +23,7 @@ from nftgen.ir import (
     check_nft_name,
     check_reset,
 )
-from nftgen.rules import RuleRenderer, build_chain, build_flowtables
+from nftgen.rules import CHAIN_HOOKS, RuleRenderer, build_chain, build_flowtables
 
 # Strict authoring surface: an unknown key is a typo, and a typo'd `tables:` or
 # `chains:` would otherwise generate a valid-but-empty ruleset that nft -c
@@ -156,6 +156,11 @@ def _check_table(tspec, where: str) -> None:
         )
     if "family" not in tspec or "name" not in tspec:
         raise BuildError(f"{where}a table needs `family:` and `name:`: {tspec!r}")
+    if not isinstance(tspec["family"], str) or tspec["family"] not in CHAIN_HOOKS:
+        raise BuildError(
+            f"{where}table {tspec['name']!r}: `family:` must be one of "
+            f"{', '.join(CHAIN_HOOKS)}, got {tspec['family']!r}"
+        )
     for key in ("sets", "maps", "chains", "flowtables"):
         if tspec.get(key) is not None and not isinstance(tspec[key], list):
             # a single mapping was iterated by its keys (confusing errors)
@@ -245,7 +250,9 @@ def render_tables(  # noqa: PLR0913 - the extras are keyword-only options
                 )
             cspec = dict(spec)
             cspec["rules"] = _resolve_list(cspec.get("rules", []), "rules", resolver)
-            chains.append(build_chain(cspec, renderer, annotate=annotate))
+            chains.append(
+                build_chain(cspec, renderer, annotate=annotate, family=tspec["family"])
+            )
         out_tables.append(
             Table(
                 family=tspec["family"],

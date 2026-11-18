@@ -7,6 +7,19 @@ Versioning: [semantic versioning](https://semver.org) from 1.0.0 on. A new
 check that rejects input which rendered a wrong or broken ruleset is a fix,
 not a breaking change.
 
+## Unreleased
+
+- Fix: a base chain's `hook:`, `type:` and `policy:`, a table's `family:`
+  and a flowtable's `hook:` must be values nft takes there, or the build
+  fails naming the key. They render as bare tokens, so a line break turned
+  the rest of the text into nft: `policy: "drop;\n accept"` rendered a
+  second line `accept;`, a rule that accepts everything the `drop` chain
+  sees, and nft loads it; a multi-line `hook:` or `type:` closed the chain
+  and opened another. The hook must be one of the table family's
+  (`egress` in `netdev` only, `ingress` in `netdev` or `inet`), `nat` and
+  `route` go in `ip`, `ip6` and `inet` only and on their hooks (`route` on
+  `output`), and `policy:` is `accept` or `drop`.
+
 ## 1.4.0 — 2026-11-15
 
 - New: interface groups in concat set rows. An `iifname`/`oifname` field

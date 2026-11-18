@@ -128,12 +128,12 @@ interfaces:
 
 | Key | Meaning |
 | --- | --- |
-| `family`, `name` | `table inet filter { … }` — required |
+| `family`, `name` | `table inet filter { … }` — required; `family` is `ip`, `ip6`, `inet`, `arp`, `bridge` or `netdev` |
 | `sets` | named sets (below) |
 | `maps` | named data maps (below) |
 | `chains` | base and regular chains (below) |
 | `counters` | named counters, one name or a list: `counters: [bad_tcp]` → `counter bad_tcp { }` |
-| `flowtables` | `{name, devices, hook?, priority?}` — `devices` is one interface group or a list (a device in two groups is listed once); hook defaults to `ingress`, priority to `0` |
+| `flowtables` | `{name, devices, hook?, priority?}` — `devices` is one interface group or a list (a device in two groups is listed once); hook is `ingress` (the default, and the only one nft takes), priority defaults to `0` |
 | `raw` | object declarations copied into the table verbatim, one line or a list |
 | `comment` | nft `comment "…"` on the table |
 
@@ -206,10 +206,10 @@ A set and a map can't share a name. Verdict maps are still inline (`vmap:`).
 | Key | Meaning |
 | --- | --- |
 | `name` | required; not a reserved nft keyword |
-| `hook` | makes it a base chain (`input`, `forward`, `output`, `prerouting`, `postrouting`, `ingress`, `egress`) |
-| `type` | `filter` (default), `nat`, `route` — base chains only |
+| `hook` | makes it a base chain: `prerouting`, `input`, `forward`, `output`, `postrouting` in `ip`, `ip6`, `inet` and `bridge`, and `ingress` in `inet`; `input`, `output` in `arp`; `ingress`, `egress` in `netdev` |
+| `type` | `filter` (default, every hook), `nat` (`prerouting`, `input`, `output`, `postrouting`), `route` (`output`) — `nat` and `route` in `ip`, `ip6` and `inet` only; base chains only |
 | `priority` | a number or `raw`, `mangle`, `dstnat`, `filter` (0, default), `security`, `srcnat` — base chains only |
-| `policy` | defaults to `drop` for `filter`, `accept` otherwise — base chains only |
+| `policy` | `accept` or `drop`; defaults to `drop` for `filter`, `accept` otherwise — base chains only |
 | `devices` | one interface group or a list (a device in two groups is listed once): `type filter hook ingress devices = { "wan0", "wwan0" } priority 0; …` — required with `hook: ingress` / `egress`, an error with any other hook |
 | `rules` | the rules, in order (first match wins) |
 | `comment` | nft `comment "…"` on the chain |
@@ -391,6 +391,11 @@ rule order. An empty chain stays empty.
   ports.
 - An `ingress`/`egress` chain without `devices:`, or `devices:` on any
   other hook.
+- A table `family:` nft does not have; a chain `hook:` or `type:` its
+  table's family does not take, or a `type:` / `hook:` pair nft refuses
+  (`nat` on `forward`); a `policy:` other than `accept` or `drop`; a
+  flowtable `hook:` other than `ingress`. Each renders as a bare token, so a
+  line break in one rendered more statements or another chain.
 
 **Not caught at build** (nft refuses them at load or `nft -c`, loudly):
 overlapping prefixes in a named set or a vmap (`10.0.0.0/8` and
