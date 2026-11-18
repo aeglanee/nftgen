@@ -345,14 +345,18 @@ Anything else (`queue`, `redirect`, …) is a `raw:` rule.
           jump: lan_to_wan
         - match: [wan, lan]
           action: drop
+        - match: [[mgmt, dmz], wan]   # a list: one row per value
+          jump: to_wan
   ```
 
   Values are verdicts only: `accept`, `drop`, `return`, `continue`, `jump`,
   `goto` (nft refuses reject or NAT in a vmap). `dport`/`sport` keys are
   protocol+port lookups (`ssh` → `tcp . 22`; a bare number needs `/tcp`); with
   a `proto` column the port column takes that row's protocol, and
-  `sport` + `dport` need one. Address keys are single-family. The same key
-  twice with different verdicts is an error.
+  `sport` + `dport` need one. Address keys are single-family. A list in a
+  `match:` column stands for one row per value, so lists in two columns give
+  every combination; a value is anything the column takes alone. The same
+  key twice with different verdicts is an error.
 
 ## What nftgen derives, and what it leaves to you
 

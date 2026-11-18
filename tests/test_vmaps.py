@@ -515,7 +515,7 @@ def test_sport_and_dport_vmap_needs_a_proto_column():
 
 
 # -- review N9: a vmap row's proto column is checked like a rule's proto --------- #
-@pytest.mark.parametrize("bad_proto", [["tcp", "udp"], "t cp", 300, True])
+@pytest.mark.parametrize("bad_proto", ["t cp", 300, True])
 def test_vmap_proto_column_is_checked(bad_proto):
     rule = {
         "vmap": {
