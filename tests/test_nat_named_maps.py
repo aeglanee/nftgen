@@ -96,6 +96,8 @@ def test_other_keys(target, line):
         ({"snat": {"key": "oifname", "map": "verdicts"}}, "holds verdict"),
         ({"snat": {"key": "iif", "map": "lease_snat"}}, "key must be one of"),
         ({"snat": {"map": "lease_snat"}}, "key must be one of"),
+        ({"snat": {"key": ["oifname"], "map": "lease_snat"}}, "key must be one of"),
+        ({"dnat": {"key": {"x": 1}, "map": "lease_snat"}}, "key must be one of"),
         ({"snat": {"key": "dport", "map": "lease_snat"}}, "needs `proto:`"),
         ({"snat": {"key": "oifname", "proto": "tcp", "map": "lease_snat"}}, "takes no"),
         ({"snat": {"key": "saddr", "map": "lease_snat"}}, "keyed by ifname"),

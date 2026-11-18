@@ -170,15 +170,26 @@ def _negated(value) -> tuple[str, object]:
     return "", value
 
 
-def _check_nat_family(verdict: str | None, families: list, rule: dict) -> None:
-    """nft refuses `ip6 saddr … snat ip to …` ("conflicting protocols")."""
-    nat = verdict.split(" ", 2) if verdict else []
-    if nat[:1] in (["snat"], ["dnat"]) and families != [nat[1]]:
-        raise BuildError(
-            f"{nat[0]} to an {'IPv4' if nat[1] == 'ip' else 'IPv6'} target, but "
-            f"the rule matches {'IPv6' if nat[1] == 'ip' else 'IPv4'} addresses "
-            f"— a NAT rule's addresses and target are one family: {rule!r}"
-        )
+_FAMILY_NAMES = {"ip": "IPv4", "ip6": "IPv6"}
+
+
+def _check_families(matched, acts: list, rule: dict) -> None:
+    """nft refuses `ip6 saddr … snat ip to …` ("conflicting protocols"): what a
+    rule does in one IP family (`_acts`) takes the family its matches pinned,
+    `matched` as (what, families) or None, and the family of each other."""
+    given = [matched] if matched else []
+    given += [(f"{what} is", [fam]) for what, fam in acts]
+    if not given:
+        return
+    first, first_fams = given[0]
+    for what, fams in given[1:]:
+        if fams != first_fams:
+            names = " and ".join(_FAMILY_NAMES[f] for f in first_fams)
+            raise BuildError(
+                f"{what} {_FAMILY_NAMES[fams[0]]}, but {first} {names} — a "
+                f"rule's matches, statements and NAT target are one family: "
+                f"{rule!r}"
+            )
 
 
 _KNOWN_RULE_KEYS = frozenset(
@@ -366,8 +377,8 @@ class RuleRenderer:
         else:
             families = [None]
         verdict = self._verdict(rule["action"]) if "action" in rule else None
-        if addr:
-            _check_nat_family(verdict, families, rule)
+        matched = ("the rule's addresses are", families) if addr else None
+        _check_families(matched, self._acts(rule, verdict), rule)
 
         lines = []
         for fam in families:
@@ -1046,11 +1057,8 @@ class RuleRenderer:
                 f"a concat rule (`set: {name}`) can't carry match keys {sorted(extra)}: {rule!r}"
             )
         _reject_offload_with_verdict(rule)
-        if (
-            "action" not in rule
-            and not self._statements(rule)
-            and not rule.get("counter")
-        ):
+        statements = self._statements(rule)
+        if "action" not in rule and not statements and not rule.get("counter"):
             raise BuildError(
                 f"concat rule has neither an action nor a statement: {rule!r}"
             )
@@ -1066,10 +1074,12 @@ class RuleRenderer:
             else:  # iifname / oifname: field name is the nft expression
                 exprs.append(f)
         verdict = self._verdict(rule["action"]) if "action" in rule else None
-        if s.concat_family:
-            _check_nat_family(verdict, [s.concat_family], rule)
+        matched = (
+            ("the set's addresses are", [s.concat_family]) if s.concat_family else None
+        )
+        _check_families(matched, self._acts(rule, verdict), rule)
         parts = [" . ".join(exprs) + f" @{name}"]
-        parts.extend(self._statements(rule))
+        parts.extend(statements)
         if rule.get("counter"):
             parts.append(self._counter(rule["counter"]))
         if verdict:
@@ -1198,7 +1208,7 @@ class RuleRenderer:
 
     def _map_lookup(self, what: str, spec: dict, m) -> str:
         key = spec.get("key")
-        wanted = self._NAT_MAP_KEY_TYPES.get(key)
+        wanted = self._NAT_MAP_KEY_TYPES.get(key) if isinstance(key, str) else None
         if wanted is None:
             raise BuildError(
                 f"{what} map key must be one of {', '.join(self._NAT_MAP_KEY_TYPES)}, "
@@ -1258,6 +1268,20 @@ class RuleRenderer:
                 f"are mark"
             )
         return self._map_lookup(what, spec, m)
+
+    def _acts(self, rule: dict, verdict: str | None) -> list:
+        """What the rule does in one IP family: (what, 'ip' | 'ip6'). Read
+        after the statements and the verdict rendered, so they are valid."""
+        acts = []
+        for key in ("set-mark", "set-ct-mark"):
+            spec = rule.get(key)
+            if isinstance(spec, dict) and spec["key"] in ("saddr", "daddr"):
+                fam = self._NAT_FAMILY[self.maps[spec["map"]].key_type]
+                acts.append((f"the {key} {spec['key']} lookup", fam))
+        nat = verdict.split(" ", 2) if verdict else []
+        if nat[:1] in (["snat"], ["dnat"]):
+            acts.append((f"the {nat[0]} target", nat[1]))
+        return acts
 
     def _map_port_key(self, kind: str, val, proto: str) -> str:
         val = str(val)

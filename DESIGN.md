@@ -385,7 +385,8 @@ rule order. An empty chain stays empty.
   bytes, `.` or `..`, or a double quote, a slash, a colon, a `%` or whitespace
   in it).
 - A named set mixing v4 and v6; a rule whose addresses share no family; a
-  NAT rule whose addresses include the other family than its target.
+  NAT target or a `saddr`/`daddr` mark map lookup of another family than
+  the rule's addresses or each other.
 - Object names that are reserved nft keywords (`counter`, `fwd`, `map`, …).
 - `flow-offload:` and an action in one rule (the verdict would never run).
 - `set-mark:` and `set-ct-mark:` in one rule when one copies the other

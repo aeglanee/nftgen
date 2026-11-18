@@ -11,7 +11,10 @@ from nftgen.ir import BuildError
 DEFS = Definitions.from_mappings(
     {
         "interfaces": {"lan": ["lan0", "lan1"], "dmz": ["dmz0"], "wan": ["wan0"]},
-        "networks": {"admins": ["192.0.2.10"]},
+        "networks": {
+            "admins": ["192.0.2.10"],
+            "both": ["192.0.2.0/24", "2001:db8::/64"],
+        },
     }
 )
 MAPS = [
@@ -21,6 +24,7 @@ MAPS = [
         "elements": {"lan": "0x1", "dmz": "0x2", "wan": "0x3"},
     },
     {"name": "admin_marks", "type": "ipv4_addr : mark"},
+    {"name": "admin6_marks", "type": "ipv6_addr : mark"},
     {"name": "port_marks", "type": "inet_service : mark"},
     {"name": "mark_marks", "type": "mark : mark"},
     {"name": "lease_snat", "type": "ifname : ipv4_addr"},
@@ -30,7 +34,12 @@ SETS = [
         "name": "zone_pairs",
         "concat": ["mark", "oifname"],
         "tuples": [["0x1", "wan"], ["0x2", "wan"]],
-    }
+    },
+    {
+        "name": "v6_hosts",
+        "concat": ["saddr", "iifname"],
+        "tuples": [["2001:db8::1", "lan"]],
+    },
 ]
 
 
@@ -146,6 +155,59 @@ def test_bad_mark_maps_fail(spec, message):
         _render([{"set-mark": spec}])
 
 
+@pytest.mark.parametrize("statement", ["set-mark", "set-ct-mark"])
+@pytest.mark.parametrize("key", [["iifname"], {"name": "iifname"}])
+def test_a_lookup_key_is_one_word(statement, key):
+    with pytest.raises(BuildError, match="key must be one of"):
+        _render([{statement: {"key": key, "map": "zone_marks"}}])
+
+
+V4_LOOKUP = {"key": "saddr", "map": "admin_marks"}
+
+
+@pytest.mark.parametrize("statement", ["set-mark", "set-ct-mark"])
+@pytest.mark.parametrize(
+    "rule",
+    [
+        {"daddr": "2001:db8::1"},
+        {"saddr": "both"},
+        {"saddr": "both", "proto": "icmpv6"},
+        {"set": "v6_hosts"},
+        {"action": {"snat": "2001:db8::1"}},
+    ],
+    ids=["v6 address", "both families", "icmpv6", "v6 concat set", "v6 snat target"],
+)
+def test_an_address_lookup_takes_the_rules_family(statement, rule):
+    with pytest.raises(BuildError, match="are one family"):
+        _render([{**rule, statement: V4_LOOKUP}])
+
+
+def test_a_concat_rule_checks_its_lookup_before_its_family():
+    rule = {
+        "set": "v6_hosts",
+        "set-mark": {"key": "saddr", "map": "zone_marks"},
+        "action": "accept",
+    }
+    with pytest.raises(BuildError, match="keyed by ifname"):
+        _render([rule])
+
+
+def test_two_lookups_take_one_family():
+    rule = {
+        "set-mark": V4_LOOKUP,
+        "set-ct-mark": {"key": "saddr", "map": "admin6_marks"},
+    }
+    with pytest.raises(BuildError, match="are one family"):
+        _render([rule])
+
+
+def test_an_address_lookup_keeps_the_family_it_shares():
+    text = _render([{"saddr": "admins", "set-mark": V4_LOOKUP}])
+    assert (
+        "        ip saddr 192.0.2.10 meta mark set ip saddr map @admin_marks\n" in text
+    )
+
+
 @pytest.mark.parametrize("bad", ["lan", "0x1-", True, "1.5"])
 def test_a_vmap_mark_column_takes_marks(bad):
     rule = {
@@ -164,6 +226,7 @@ def test_passes_nft_check():
         MARK_ZONE,
         {"set-ct-mark": {"key": "iifname", "map": "zone_marks"}},
         {"set-mark": {"key": "saddr", "map": "admin_marks"}},
+        {"saddr": "admins", "set-mark": V4_LOOKUP},
         {"set-mark": {"key": "dport", "proto": "tcp", "map": "port_marks"}},
         {"set-mark": {"key": "mark", "map": "mark_marks"}},
     ]
