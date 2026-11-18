@@ -29,7 +29,7 @@ CT_STATUSES = (
     "dying",
 )
 PKTTYPES = ("host", "unicast", "broadcast", "multicast", "other")
-_HOPS = re.compile(r"^(\d{1,3})(?:-(\d{1,3}))?\Z")
+_HOPS = re.compile(r"^([0-9]{1,3})(?:-([0-9]{1,3}))?\Z")
 LOG_LEVELS = (
     "emerg",
     "alert",

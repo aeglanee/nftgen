@@ -297,7 +297,9 @@ it would alone; a named set can't go inside a list.
   still need `proto:`.
 - `icmp` renders only IPv4 lines and `icmpv6` only IPv6 lines; so do
   `ttl` and `hoplimit`. A rule that names both families this way
-  (`ttl:` with `proto: icmpv6`) fails the build.
+  (`ttl:` with `proto: icmpv6`) fails the build, and so does one whose NAT
+  target or address meter is of the other family (`hoplimit:` with
+  `snat: 192.0.2.1`).
 
 ### Statements
 
@@ -389,7 +391,8 @@ rule order. An empty chain stays empty.
   bytes, `.` or `..`, or a double quote, a slash, a colon, a `%` or whitespace
   in it).
 - A named set mixing v4 and v6; a rule whose addresses share no family; a
-  NAT rule whose addresses include the other family than its target.
+  NAT target or a `saddr`/`daddr` meter of another family than the rule's
+  matches or each other.
 - Object names that are reserved nft keywords (`counter`, `fwd`, `map`, …).
 - `flow-offload:` and an action in one rule (the verdict would never run).
 - `set-mark:` and `set-ct-mark:` in one rule when one copies the other

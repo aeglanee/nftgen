@@ -3,7 +3,7 @@ import pytest
 from nftgen import validate
 from nftgen.definitions import Definitions
 from nftgen.generate import DictResolver, render_tables
-from nftgen.ir import BuildError
+from nftgen.ir import BuildError, build_sets
 from nftgen.rules import RuleRenderer
 
 DEFS = Definitions.from_mappings(
@@ -88,6 +88,8 @@ def test_the_neighbour_discovery_hop_limit_rule():
         ({"ttl": "5-1"}, "a number 0-255"),
         ({"ttl": "64-"}, "a number 0-255"),
         ({"ttl": True}, "a number 0-255"),
+        ({"ttl": "\u0666\u0664"}, "a number 0-255"),
+        ({"hoplimit": "\uff16\uff14"}, "a number 0-255"),
         ({"hoplimit": []}, "non-empty list"),
         ({"pkttype": "bcast"}, "a packet type"),
         ({"ct-status": "new"}, "a ct status"),
@@ -97,6 +99,70 @@ def test_the_neighbour_discovery_hop_limit_rule():
 def test_bad_values_fail(rule, message):
     with pytest.raises(BuildError, match=message):
         R.render({**rule, "action": "accept"})
+
+
+SETS = build_sets(
+    [
+        {"name": "m4", "type": "ipv4_addr", "flags": ["dynamic", "timeout"]},
+        {"name": "m6", "type": "ipv6_addr", "flags": ["dynamic", "timeout"]},
+        {
+            "name": "v6_in",
+            "concat": ["saddr", "iifname"],
+            "tuples": [["lan_v6", "wan"]],
+        },
+    ],
+    DEFS,
+)
+RS = RuleRenderer(DEFS, {s.name: s for s in SETS})
+M4 = {"set": "m4", "key": "saddr", "rate": "1/second"}
+M6 = {"set": "m6", "key": "saddr", "rate": "1/second"}
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        {"hoplimit": 64, "action": {"snat": "192.0.2.1"}},
+        {"ttl": 64, "action": {"dnat": "2001:db8::1"}},
+        {"ttl": 64, "action": {"dnat": {"proto": "tcp", "map": {80: "2001:db8::5"}}}},
+        {"proto": "icmpv6", "action": {"snat": "192.0.2.1"}},
+        {"ttl": 64, "meter": M6, "action": "drop"},
+        {"hoplimit": 64, "meter": M4, "action": "drop"},
+        {"saddr": "lan_v6", "meter": M4, "action": "drop"},
+        {"saddr": "both", "meter": M4, "action": "drop"},
+        {"meter": M6, "action": {"snat": "192.0.2.1"}},
+        {"set": "v6_in", "meter": M4, "action": "drop"},
+    ],
+    ids=[
+        "hoplimit snat ip",
+        "ttl dnat ip6",
+        "ttl dnat ip6 map",
+        "icmpv6 snat ip",
+        "ttl ip6 meter",
+        "hoplimit ip meter",
+        "v6 address ip meter",
+        "both families ip meter",
+        "ip6 meter snat ip",
+        "v6 concat ip meter",
+    ],
+)
+def test_a_family_bound_meets_what_the_rule_does(rule):
+    with pytest.raises(BuildError, match="are one family"):
+        RS.render(rule)
+
+
+def test_a_concat_rule_checks_its_meter_before_its_family():
+    meter = {"set": "nope", "key": "saddr", "rate": "1/second"}
+    with pytest.raises(BuildError, match="not a declared set"):
+        RS.render({"set": "v6_in", "meter": meter, "action": "drop"})
+
+
+def test_a_family_bound_keeps_what_shares_its_family():
+    assert RS.render({"hoplimit": 64, "action": {"snat": "2001:db8::1"}}) == [
+        "ip6 hoplimit 64 snat ip6 to 2001:db8::1"
+    ]
+    assert RS.render({"ttl": 1, "meter": M4, "action": "drop"}) == [
+        "ip ttl 1 update @m4 { ip saddr limit rate 1/second } drop"
+    ]
 
 
 TABLES = [
