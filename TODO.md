@@ -21,6 +21,8 @@ The current working list (review follow-ups, release order) is
 - [ ] `set-dscp`, rendered per family (`ip dscp set` / `ip6 dscp set`).
 - [ ] `redirect` action; socket owner matches (`meta skuid`, `meta skgid`,
       `socket cgroupv2`) and IPv6 extension headers (`exthdr`, `rt type`).
+- [ ] `set-ct-zone:` from a named map and a `ct-zone` match. A zone map
+      needs `typeof … : ct zone` (nft has no zone datatype for `type`).
 
 ## Checks
 

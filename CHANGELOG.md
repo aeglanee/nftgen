@@ -7,6 +7,16 @@ Versioning: [semantic versioning](https://semver.org) from 1.0.0 on. A new
 check that rejects input which rendered a wrong or broken ruleset is a fix,
 not a breaking change.
 
+## Unreleased
+
+- New: `set-ct-zone:` statement. `set-ct-zone: 1` renders `ct zone set 1`,
+  the conntrack zone of the connection, a number 0-65535 or `0x…`; any
+  other value fails the build naming the key. Like `notrack:` it acts only
+  before conntrack, in a `priority: raw` chain at `prerouting` or `output`
+  or a chain it jumps to. Two routers that sync conntrack state can keep a
+  flow on one router's own uplink in a zone of its own, apart from the
+  partner's synced entries, without `raw:`.
+
 ## 1.5.0 — 2026-11-18
 
 - New: match keys `pkttype:` (`meta pkttype`), `ttl:` and `hoplimit:`
