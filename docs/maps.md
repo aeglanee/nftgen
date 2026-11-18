@@ -81,6 +81,58 @@ chain prerouting {
 and the forward table reads as a single reviewable list. The same machinery does
 `snat … map`, `meta mark set … map`, etc.
 
+**Zone marks:** mark each packet's source zone once, then match the mark
+where the zone pairs are decided, instead of repeating interface lists in
+every zone-pair rule.
+
+```yaml
+maps:
+  - name: zone_marks
+    type: "ifname : mark"
+    elements:
+      lan: "0x1"
+      dmz: "0x2"
+chains:
+  - name: prerouting
+    hook: prerouting
+    priority: mangle
+    policy: accept
+    rules:
+      - set-mark:
+          key: iifname
+          map: zone_marks
+  - name: forward
+    hook: forward
+    rules:
+      - vmap:
+          key: [mark, oifname]
+          map:
+            - match: ["0x1", wan]
+              jump: lan_wan
+```
+
+```nft
+map zone_marks {
+    type ifname : mark
+    elements = { "lan0" : 0x1, "dmz0" : 0x2 }
+}
+
+chain prerouting {
+    type filter hook prerouting priority -150; policy accept;
+    meta mark set iifname map @zone_marks
+}
+
+chain forward {
+    type filter hook forward priority 0; policy drop;
+    meta mark . oifname vmap { 0x1 . "wan0" : jump lan_wan }
+}
+```
+
+A packet from a device the map lacks stops that rule at the failed lookup
+and keeps its mark (0 unless set elsewhere). A packet has one mark, so a
+policy that also uses marks for routing or QoS splits the 32 bits between
+them (`meta mark & 0xff`, through `raw:`).
+
 ---
 
 ## 3. Concatenated keys (advanced)

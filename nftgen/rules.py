@@ -18,6 +18,7 @@ from nftgen.definitions import Definitions
 from nftgen.ir import (
     _PORT_LITERAL,
     BODY_INDENT,
+    MARK_VALUE,
     PORT_PROTOS,
     SERVICE_PAIR_TYPE,
     BuildError,
@@ -441,9 +442,13 @@ class RuleRenderer:
             out.append(self._log(rule["log"]))
         if "set-mark" in rule:
             src = rule["set-mark"]
+            if isinstance(src, dict):
+                src = self._mark_from_map("set-mark", src)
             out.append(f"meta mark set {'ct mark' if src == 'ct-mark' else src}")
         if "set-ct-mark" in rule:
             src = rule["set-ct-mark"]
+            if isinstance(src, dict):
+                src = self._mark_from_map("set-ct-mark", src)
             out.append(f"ct mark set {'meta mark' if src == 'mark' else src}")
         if "set-mss" in rule:
             mss = rule["set-mss"]
@@ -975,6 +980,13 @@ class RuleRenderer:
                 f"vmap {keytype} value {value!r} is not a known interface group "
                 f"(define it under `interfaces:`)"
             )
+        if keytype == "mark" and (
+            isinstance(value, bool) or not MARK_VALUE.match(str(value))
+        ):
+            raise BuildError(
+                f"vmap mark value {value!r} is not a mark (a number or 0x…, or a "
+                f"range a-b)"
+            )
         return [str(value)]  # proto / mark / state literal
 
     def _vmap_port_pairs(self, keytype: str, value, proto: str | None = None):
@@ -1171,43 +1183,37 @@ class RuleRenderer:
     }
     _NAT_FAMILY = {"ipv4_addr": "ip", "ipv6_addr": "ip6"}
 
-    def _nat_named_map(self, kind: str, spec: dict) -> str:
-        """`dnat/snat: {key, map: <name>, proto?}` -> `snat ip to oifname map
-        @name`: the target comes from a table's named map."""
+    def _named_map(self, what: str, spec: dict):
         unknown = set(spec) - {"key", "map", "proto"}
         if unknown:
-            raise BuildError(f"unknown {kind} map key(s) {sorted(unknown)}: {spec!r}")
+            raise BuildError(f"unknown {what} map key(s) {sorted(unknown)}: {spec!r}")
         name = spec["map"]
         if name not in self.maps:
             declared = ", ".join(sorted(self.maps)) or "none"
             raise BuildError(
-                f"{kind} map @{name} is not declared in the table's `maps:` "
+                f"{what} map @{name} is not declared in the table's `maps:` "
                 f"(declared: {declared})"
             )
-        m = self.maps[name]
-        fam = self._NAT_FAMILY.get(m.value_type)
-        if fam is None:
-            raise BuildError(
-                f"{kind} map @{name} holds {m.value_type}; a nat map's values are "
-                f"ipv4_addr or ipv6_addr"
-            )
+        return self.maps[name]
+
+    def _map_lookup(self, what: str, spec: dict, m) -> str:
         key = spec.get("key")
         wanted = self._NAT_MAP_KEY_TYPES.get(key)
         if wanted is None:
             raise BuildError(
-                f"{kind} map key must be one of {', '.join(self._NAT_MAP_KEY_TYPES)}, "
+                f"{what} map key must be one of {', '.join(self._NAT_MAP_KEY_TYPES)}, "
                 f"got {key!r}"
             )
         proto = proto_name(spec.get("proto")) if "proto" in spec else None
         if wanted == "inet_service":
             if proto not in PORT_PROTOS:
                 raise BuildError(
-                    f"{kind} map key {key} needs `proto:` with ports "
+                    f"{what} map key {key} needs `proto:` with ports "
                     f"({', '.join(PORT_PROTOS)})"
                 )
             expr = f"{proto} {key}"
         elif proto is not None:
-            raise BuildError(f"{kind} map key {key} takes no `proto:`")
+            raise BuildError(f"{what} map key {key} takes no `proto:`")
         elif wanted == "addr":
             expr = f"{self._NAT_FAMILY.get(m.key_type, '?')} {key}"
             wanted = (
@@ -1219,16 +1225,39 @@ class RuleRenderer:
             expr = "meta mark" if key == "mark" else key
         if m.key_type != wanted:
             raise BuildError(
-                f"{kind} map @{name} is keyed by {m.key_type}, but `key: {key}` "
+                f"{what} map @{m.name} is keyed by {m.key_type}, but `key: {key}` "
                 f"looks up {wanted}"
             )
+        return f"{expr} map @{m.name}"
+
+    def _nat_named_map(self, kind: str, spec: dict) -> str:
+        """`dnat/snat: {key, map: <name>, proto?}` -> `snat ip to oifname map
+        @name`: the target comes from a table's named map."""
+        m = self._named_map(kind, spec)
+        fam = self._NAT_FAMILY.get(m.value_type)
+        if fam is None:
+            raise BuildError(
+                f"{kind} map @{m.name} holds {m.value_type}; a nat map's values are "
+                f"ipv4_addr or ipv6_addr"
+            )
+        lookup = self._map_lookup(kind, spec, m)
+        key = spec.get("key")
         if key in ("saddr", "daddr") and m.key_type != m.value_type:
             # `snat ip to ip6 saddr map @m` loads, and never translates a packet
             raise BuildError(
-                f"{kind} map @{name} maps {m.key_type} to {m.value_type}; a "
+                f"{kind} map @{m.name} maps {m.key_type} to {m.value_type}; a "
                 f"`key: {key}` lookup needs both of one family"
             )
-        return f"{kind} {fam} to {expr} map @{name}"
+        return f"{kind} {fam} to {lookup}"
+
+    def _mark_from_map(self, what: str, spec: dict) -> str:
+        m = self._named_map(what, spec)
+        if m.value_type != "mark":
+            raise BuildError(
+                f"{what} map @{m.name} holds {m.value_type}; a mark map's values "
+                f"are mark"
+            )
+        return self._map_lookup(what, spec, m)
 
     def _map_port_key(self, kind: str, val, proto: str) -> str:
         val = str(val)

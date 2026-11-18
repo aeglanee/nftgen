@@ -363,6 +363,10 @@ def _mark_or(word, what):
     def check(key, value):
         if value == word:
             return value
+        if isinstance(value, dict):
+            if "map" not in value or not isinstance(value["map"], str):
+                _fail(key, "a {key, map} mapping naming a table's map", value)
+            return value
         if isinstance(value, bool) or not MARK_SET_VALUE.match(str(value)):
             _fail(key, what, value)
         return value
@@ -414,8 +418,12 @@ RULE_SCHEMA = {
     "limit": _plain("a rate such as 10/minute"),
     "quota": _plain("a quota such as 25 mbytes"),
     "log": _log,
-    "set-mark": _mark_or("ct-mark", "a mark (a number or 0x…) or `ct-mark`"),
-    "set-ct-mark": _mark_or("mark", "a mark (a number or 0x…) or `mark`"),
+    "set-mark": _mark_or(
+        "ct-mark", "a mark (a number or 0x…), `ct-mark`, or a {key, map} lookup"
+    ),
+    "set-ct-mark": _mark_or(
+        "mark", "a mark (a number or 0x…), `mark`, or a {key, map} lookup"
+    ),
     "set-mss": _set_mss,
     "flow-offload": _text("a flowtable name"),
     "notrack": _bool,

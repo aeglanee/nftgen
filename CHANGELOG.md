@@ -9,6 +9,14 @@ not a breaking change.
 
 ## Unreleased
 
+- New: `set-mark:` and `set-ct-mark:` from a named map.
+  `set-mark: {key: iifname, map: zone_marks}` renders
+  `meta mark set iifname map @zone_marks` (`ct mark set …` for
+  `set-ct-mark:`); the map is a table's `maps:` entry with `mark` values,
+  and `key` takes what a NAT map's does. Marking the source zone once in
+  prerouting lets the forward chain match `mark` (a rule key, a concat set
+  field, a vmap column) instead of repeating interface lists. A vmap
+  `mark` column now checks its values like the `mark:` key.
 - Fix: a base chain's `hook:`, `type:` and `policy:`, a table's `family:`
   and a flowtable's `hook:` must be values nft takes there, or the build
   fails naming the key. They render as bare tokens, so a line break turned
