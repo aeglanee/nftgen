@@ -284,6 +284,19 @@ def _unique_entries(rows, what: str) -> list[str]:
     return out
 
 
+def _concat_vmap_rows(match: list, entry) -> list[list]:
+    columns = []
+    for value in match:
+        values = value if isinstance(value, list) else [value]
+        if not values or any(isinstance(v, list | dict) for v in values):
+            raise BuildError(
+                f"concat vmap `match` column {value!r} takes one value or a "
+                f"non-empty list of values: {entry!r}"
+            )
+        columns.append(values)
+    return [list(row) for row in itertools.product(*columns)]
+
+
 class RuleRenderer:
     def __init__(
         self,
@@ -919,20 +932,21 @@ class RuleRenderer:
                 )
             # `action: <verdict>` like a rule's, or the `jump:`/`goto:` shorthand
             v = self._vmap_verdict(rest.get("action", rest))
-            row_proto = self._row_proto(match, proto_col, keys)
-            cols = []
-            for kt, value in zip(keys, match, strict=True):
-                if kt in self._VMAP_ADDR:  # family-aware position
-                    kfam, toks = self._vmap_addr_tokens(kt, value)
-                    fam = self._one_family(kt, fam, kfam)
-                    cols.append(toks)
-                else:
-                    cols.append(self._concat_col_tokens(kt, value, row_proto))
-            for combo in itertools.product(*cols):
-                ident = combo
-                if proto_col is not None:  # `17 . 53` and `udp . 53` are one key
-                    ident = (*combo[:proto_col], row_proto, *combo[proto_col + 1 :])
-                rows.append((" . ".join(combo), v, match, ident))
+            for row in _concat_vmap_rows(match, entry):
+                row_proto = self._row_proto(row, proto_col, keys)
+                cols = []
+                for kt, value in zip(keys, row, strict=True):
+                    if kt in self._VMAP_ADDR:  # family-aware position
+                        kfam, toks = self._vmap_addr_tokens(kt, value)
+                        fam = self._one_family(kt, fam, kfam)
+                        cols.append(toks)
+                    else:
+                        cols.append(self._concat_col_tokens(kt, value, row_proto))
+                for combo in itertools.product(*cols):
+                    ident = combo
+                    if proto_col is not None:  # `17 . 53` and `udp . 53` are one key
+                        ident = (*combo[:proto_col], row_proto, *combo[proto_col + 1 :])
+                    rows.append((" . ".join(combo), v, match, ident))
         if any(k in self._VMAP_ADDR for k in keys) and fam is None:
             raise BuildError(
                 f"concat vmap with an address key needs at least one entry: {spec!r}"

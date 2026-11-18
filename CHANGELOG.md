@@ -9,6 +9,12 @@ not a breaking change.
 
 ## Unreleased
 
+- New: a list in a concat vmap `match:` column. `match: [[mgmt, dmz], wan]`
+  is the two rows `[mgmt, wan]` and `[dmz, wan]`, in every column (an
+  interface, an address, a port, a protocol, a mark or a state); lists in
+  two columns give every combination. A list there failed the build with a
+  Python error before (`unhashable type: 'list'`), and an empty or nested
+  list now fails naming the column.
 - Fix: a base chain's `hook:`, `type:` and `policy:`, a table's `family:`
   and a flowtable's `hook:` must be values nft takes there, or the build
   fails naming the key. They render as bare tokens, so a line break turned
