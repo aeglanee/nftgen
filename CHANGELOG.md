@@ -7,7 +7,7 @@ Versioning: [semantic versioning](https://semver.org) from 1.0.0 on. A new
 check that rejects input which rendered a wrong or broken ruleset is a fix,
 not a breaking change.
 
-## Unreleased
+## 1.5.0 — 2026-11-18
 
 - New: match keys `pkttype:` (`meta pkttype`), `ttl:` and `hoplimit:`
   (`ip ttl`, `ip6 hoplimit`), `icmp-code:` (`icmp code`, `icmpv6 code`) and
