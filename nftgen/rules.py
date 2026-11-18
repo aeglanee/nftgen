@@ -169,6 +169,28 @@ def _negated(value) -> tuple[str, object]:
     return "", value
 
 
+def _listed(expr: str, value) -> str:
+    neg, value = _negated(value)
+    items = value if isinstance(value, list) else [value]
+    return f"{expr} {neg}{_anon(list(dict.fromkeys(str(v) for v in items)))}"
+
+
+_FIELD_FAMILY = {"ttl": "ip", "hoplimit": "ip6"}
+
+
+def _family_bound(rule: dict):
+    bounds = [(key, fam) for key, fam in _FIELD_FAMILY.items() if key in rule]
+    proto_family = _PROTO_FAMILY.get(proto_name(rule.get("proto")))
+    if proto_family is not None:
+        bounds.insert(0, (f"proto: {rule['proto']}", proto_family))
+    if len({fam for _w, fam in bounds}) > 1:
+        raise BuildError(
+            f"{' and '.join(f'`{w}`' for w, _f in bounds)} belong to different IP "
+            f"families, so no packet matches the rule: {rule!r}"
+        )
+    return bounds[0] if bounds else None
+
+
 def _check_nat_family(verdict: str | None, families: list, rule: dict) -> None:
     """nft refuses `ip6 saddr … snat ip to …` ("conflicting protocols")."""
     nat = verdict.split(" ", 2) if verdict else []
@@ -199,6 +221,11 @@ _KNOWN_RULE_KEYS = frozenset(
         "fib",
         "flags",
         "icmp-type",
+        "icmp-code",
+        "ct-status",
+        "pkttype",
+        "ttl",
+        "hoplimit",
         "meter",
         "limit",
         "quota",
@@ -347,17 +374,18 @@ class RuleRenderer:
             if k in rule:
                 op[k], value = _negated(rule[k])
                 addr[k] = self._addr(value)
+        family_bound = _family_bound(rule)
         if addr:
             families = sorted(set.intersection(*[set(a) for a in addr.values()]))
             if not families:
                 raise BuildError(f"rule mixes incompatible address families: {rule!r}")
             # icmp exists only in IPv4 and icmpv6 only in IPv6: the other
             # family's line could never match, so it isn't rendered
-            only = _PROTO_FAMILY.get(proto_name(rule.get("proto")))
-            if only is not None:
+            if family_bound is not None:
+                written, only = family_bound
                 if only not in families:
                     raise BuildError(
-                        f"`proto: {rule['proto']}` is {'IPv4' if only == 'ip' else 'IPv6'}"
+                        f"`{written}` is {'IPv4' if only == 'ip' else 'IPv6'}"
                         f"-only, but the rule's addresses are "
                         f"{'IPv6' if only == 'ip' else 'IPv4'}: {rule!r}"
                     )
@@ -386,24 +414,33 @@ class RuleRenderer:
                         parts.append(_ether_match(key, rule[key]))
                 if "fib" in rule:
                     parts.append(self._fib(rule["fib"]))
+                if "pkttype" in rule:
+                    parts.append(_listed("meta pkttype", rule["pkttype"]))
                 for key in ("saddr", "daddr"):
                     if key in addr:
                         parts.append(f"{fam} {key} {op[key]}{addr[key][fam]}")
+                if "ttl" in rule:
+                    parts.append(_listed("ip ttl", rule["ttl"]))
+                if "hoplimit" in rule:
+                    parts.append(_listed("ip6 hoplimit", rule["hoplimit"]))
                 if rule.get("ct"):
                     parts.append("ct state " + ",".join(rule["ct"]))
+                if "ct-status" in rule:
+                    parts.append("ct status " + ",".join(rule["ct-status"]))
                 if "mark" in rule:
                     parts.append(f"meta mark {rule['mark']}")
                 if "ct-mark" in rule:
                     parts.append(f"ct mark {rule['ct-mark']}")
-                if "icmp-type" in rule:
+                icmp_keys = [k for k in ("icmp-type", "icmp-code") if k in rule]
+                if icmp_keys:
                     proto = proto_name(rule.get("proto"))
                     if proto not in ("icmp", "icmpv6"):
                         raise BuildError(
-                            f"icmp-type needs `proto: icmp` or `proto: icmpv6`, got {proto!r}: {rule!r}"
+                            f"{icmp_keys[0]} needs `proto: icmp` or `proto: icmpv6`, got {proto!r}: {rule!r}"
                         )
-                    types = rule["icmp-type"]
-                    types = types if isinstance(types, list) else [types]
-                    parts.append(f"{proto} type {_anon([str(t) for t in types])}")
+                    for key in icmp_keys:
+                        field = key.removeprefix("icmp-")
+                        parts.append(_listed(f"{proto} {field}", rule[key]))
                 else:
                     parts.extend(self._proto_ports(rule))
                 if flag_clause:

@@ -82,7 +82,7 @@ table inet filter {
         icmp type { echo-reply, destination-unreachable, time-exceeded, parameter-problem } accept
         icmpv6 type echo-request limit rate 5/second accept
         icmpv6 type { echo-reply, destination-unreachable, packet-too-big, time-exceeded, parameter-problem } accept
-        icmpv6 type { nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect } ip6 hoplimit 255 accept
+        ip6 hoplimit 255 icmpv6 type { nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect } accept
         iifname "lan_nwm" ip saddr 10.90.2.0/24 tcp dport 22 accept
         iifname "lan_nwm" ip saddr 10.90.2.0/24 udp dport 161 accept
         update @log_meter { ip saddr timeout 1m limit rate 4/minute } log prefix "input-drop " level info
@@ -101,7 +101,7 @@ table inet filter {
         icmp type { echo-reply, destination-unreachable, time-exceeded, parameter-problem } accept
         icmpv6 type echo-request limit rate 5/second accept
         icmpv6 type { echo-reply, destination-unreachable, packet-too-big, time-exceeded, parameter-problem } accept
-        icmpv6 type { nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect } ip6 hoplimit 255 accept
+        ip6 hoplimit 255 icmpv6 type { nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect } accept
         iifname . oifname vmap {
             "lan_users" . "lan_svc" : jump fwd_users_services,
             "lan_users" . "lan_dmz" : jump fwd_users_dmz,

@@ -19,7 +19,8 @@ The current working list (review follow-ups, release order) is
 - [ ] Named verdict maps: a `maps:` entry of type `… : verdict` referenced
       from a `vmap:` rule (named data maps for NAT exist).
 - [ ] `set-dscp`, rendered per family (`ip dscp set` / `ip6 dscp set`).
-- [ ] `redirect` action; more meta matches (`pkttype`, `skuid`, …).
+- [ ] `redirect` action; socket owner matches (`meta skuid`, `meta skgid`,
+      `socket cgroupv2`) and IPv6 extension headers (`exthdr`, `rt type`).
 
 ## Checks
 

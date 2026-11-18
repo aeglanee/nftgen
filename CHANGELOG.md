@@ -9,6 +9,14 @@ not a breaking change.
 
 ## Unreleased
 
+- New: match keys `pkttype:` (`meta pkttype`), `ttl:` and `hoplimit:`
+  (`ip ttl`, `ip6 hoplimit`), `icmp-code:` (`icmp code`, `icmpv6 code`) and
+  `ct-status:` (`ct status`). `pkttype`, `ttl` and `hoplimit` take
+  `{not: …}`, so the neighbour discovery check is
+  `hoplimit: {not: 255}` + `action: drop`. `ttl` renders only IPv4 lines and
+  `hoplimit` only IPv6 lines, like `proto: icmp`/`icmpv6`; a rule that pins
+  both families fails the build. The example fleet's hop-limit rule is
+  structured now instead of `raw:`.
 - Fix: a base chain's `hook:`, `type:` and `policy:`, a table's `family:`
   and a flowtable's `hook:` must be values nft takes there, or the build
   fails naming the key. They render as bare tokens, so a line break turned

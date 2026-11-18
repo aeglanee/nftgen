@@ -63,11 +63,11 @@ The set is a `sets:` entry with `flags: [dynamic]`. With a rate limit, use the
 - raw: "ip saddr 192.168.10.55 meta nftrace set 1"   # then: nft monitor trace
 ```
 
-## Meta matches beyond mark
+## Matches without a key yet
 
 ```yaml
-- raw: "meta pkttype broadcast drop"
 - raw: "meta skuid 1000 accept"   # output chain
+- raw: "rt type 0 drop"           # IPv6 routing header type 0
 ```
 
 ## Now structured — use the key, not `raw:`
@@ -90,5 +90,8 @@ The set is a `sets:` entry with `flags: [dynamic]`. With a rate limit, use the
 | named data maps, NAT through one | table `maps:` + `snat: {key, map}` |
 | negated matches (`!=`) | `{not: …}` on an address or interface key |
 | netdev device chains | chain `devices:` with `hook: ingress` / `egress` |
+| packet type, TTL, hop limit | `pkttype:` / `ttl:` / `hoplimit:` |
+| ICMP codes | `icmp-code:` |
+| conntrack status (`dnat`, `snat`, …) | `ct-status:` |
 
 Every key: [DESIGN.md](../DESIGN.md). Candidates for a key: [TODO.md](../TODO.md).

@@ -23,8 +23,8 @@ rules:
     action: accept
 
   # ----- ICMPv6 NDP (RFC 4890 §4.3.3): permit only with hop limit 255, the
-  # anti-spoof guarantee that the packet was not forwarded. Not structured —
-  # `ip6 hoplimit` is a raw match. -----
-  - raw: >-
-      icmpv6 type { nd-router-solicit, nd-router-advert, nd-neighbor-solicit,
-      nd-neighbor-advert, nd-redirect } ip6 hoplimit 255 accept
+  # anti-spoof guarantee that the packet was not forwarded. -----
+  - proto: icmpv6
+    icmp-type: [nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect]
+    hoplimit: 255
+    action: accept
