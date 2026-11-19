@@ -30,6 +30,7 @@ CT_STATUSES = (
 )
 PKTTYPES = ("host", "unicast", "broadcast", "multicast", "other")
 _HOPS = re.compile(r"^([0-9]{1,3})(?:-([0-9]{1,3}))?\Z")
+_CT_ZONE = re.compile(r"^(?:0x[0-9a-fA-F]{1,4}|0|[1-9][0-9]{0,4})\Z")
 LOG_LEVELS = (
     "emerg",
     "alert",
@@ -324,6 +325,16 @@ def _set_mss(key, value):
     )
 
 
+def _ct_zone(key, value):
+    if (
+        not _is_scalar(value)
+        or not _CT_ZONE.match(str(value))
+        or int(str(value), 0) > 0xFFFF
+    ):
+        _fail(key, "a conntrack zone (a number 0-65535 or 0x…)", value)
+    return value
+
+
 def _action(key, value):
     if isinstance(value, str):
         if value in VERDICTS or _REJECT_WITH.match(value):
@@ -466,6 +477,7 @@ RULE_SCHEMA = {
     "set-ct-mark": _mark_or(
         "mark", "a mark (a number or 0x…), `mark`, or a {key, map} lookup"
     ),
+    "set-ct-zone": _ct_zone,
     "set-mss": _set_mss,
     "flow-offload": _text("a flowtable name"),
     "notrack": _bool,

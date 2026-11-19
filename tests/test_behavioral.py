@@ -1381,3 +1381,49 @@ def test_b36_group_in_a_concat_row_covers_each_device(fw_concat_groups):
     # …a zone outside the group does not, and neither does another port
     assert fw_concat_groups.probe_tcp("zc", GROUPS_SERVER, 9000) == "timeout"
     assert fw_concat_groups.probe_tcp("za", GROUPS_SERVER, 9001) == "timeout"
+
+
+# --------------------------------------------------------------------------- #
+# B37 — conntrack zones, `set-ct-zone` (fixture: ct-zone)
+# --------------------------------------------------------------------------- #
+
+ZONE_SERVER = "10.95.2.2"
+
+
+@pytest.fixture(scope="module")
+def fw_ct_zone():
+    harness = Harness()
+    try:
+        harness.topology(
+            [
+                {
+                    "name": zone,
+                    "router_if": f"r-{zone}",
+                    "router_addr": f"10.95.{n}.1/24",
+                    "ns_addr": f"10.95.{n}.2/24",
+                    "gw": f"10.95.{n}.1",
+                }
+                for n, zone in enumerate(("lan", "wan"), start=1)
+            ]
+        )
+        harness.nft_apply(build(FIXTURES / "ct-zone")["router"])
+        for port in (9000, 9001, 9002):
+            harness.listen("wan", port)
+        yield harness
+    finally:
+        harness.close()
+
+
+@requires_netns
+def test_b37_zone_set_in_both_directions_keeps_the_flow(fw_ct_zone):
+    assert fw_ct_zone.probe_tcp("lan", ZONE_SERVER, 9000) == "connected"
+    # positive control: the same path without a zone
+    assert fw_ct_zone.probe_tcp("lan", ZONE_SERVER, 9002) == "connected"
+
+
+@requires_netns
+def test_b37_zone_set_one_way_loses_the_reply(fw_ct_zone):
+    # the SYN is tracked in zone 2, the SYN-ACK is looked up in zone 0: not
+    # established, so the forward policy drops it. It also shows the zone
+    # took effect: with both directions in zone 0 this port would connect.
+    assert fw_ct_zone.probe_tcp("lan", ZONE_SERVER, 9001) == "timeout"

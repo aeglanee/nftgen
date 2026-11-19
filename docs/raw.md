@@ -87,6 +87,7 @@ The set is a `sets:` entry with `flags: [dynamic]`. With a rate limit, use the
 | masked Ethernet matches | `ether-saddr:` / `ether-daddr:` with `match:` + `mask:` |
 | routing lookups, anti-spoofing | `fib:` |
 | notrack | `notrack: true` |
+| setting a conntrack zone | `set-ct-zone:` |
 | named data maps, NAT through one | table `maps:` + `snat: {key, map}` |
 | negated matches (`!=`) | `{not: …}` on an address or interface key |
 | netdev device chains | chain `devices:` with `hook: ingress` / `egress` |

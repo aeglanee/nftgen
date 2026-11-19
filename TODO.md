@@ -21,6 +21,8 @@ The current working list (review follow-ups, release order) is
 - [ ] `set-dscp`, rendered per family (`ip dscp set` / `ip6 dscp set`).
 - [ ] `redirect` action; socket owner matches (`meta skuid`, `meta skgid`,
       `socket cgroupv2`) and IPv6 extension headers (`exthdr`, `rt type`).
+- [ ] `set-ct-zone:` from a named map and a `ct-zone` match. A zone map
+      needs `typeof … : ct zone` (nft has no zone datatype for `type`).
 
 ## Checks
 
@@ -31,6 +33,9 @@ The current working list (review follow-ups, release order) is
       different verdicts) fail only at nft load — detect them at build if it
       ever matters. Table in
       [docs/sets-and-performance.md](docs/sets-and-performance.md) §5.
+- [ ] Conntrack keys (`ct`, `ct-mark`, `ct-status`, `set-ct-mark`,
+      `set-ct-zone`) in a `netdev` or `arp` table fail only at nft load
+      (`Protocol error`) — detect them at build if it ever matters.
 - [ ] Definition values checked where they're defined (`22/tpc`,
       `99999/tcp`), not only where they're used.
 - [ ] Mark values checked for meaning, not only shape: at most 32 bits,
@@ -92,6 +97,9 @@ The current working list (review follow-ups, release order) is
 - [ ] A Nix dev shell (python + nftables + iproute2): today `make verify`
       silently skips the `nft -c` and netns tests when `nft` isn't on `PATH`.
 - [ ] A two-router behavioral harness (true cross-site end to end).
+- [ ] A best-practices recipe for conntrack zones on a router pair that
+      syncs conntrack state (each router's own-uplink flows in a zone of
+      their own), with a behavioral test; the harness needs conntrackd.
 
 ## Ideas (low priority)
 

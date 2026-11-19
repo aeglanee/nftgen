@@ -244,6 +244,7 @@ _KNOWN_RULE_KEYS = frozenset(
         "log",
         "set-mark",
         "set-ct-mark",
+        "set-ct-zone",
         "set-mss",
         "flow-offload",
         "notrack",
@@ -267,6 +268,7 @@ _CONCAT_RULE_KEYS = frozenset(
         "log",
         "set-mark",
         "set-ct-mark",
+        "set-ct-zone",
         "set-mss",
         "flow-offload",
         "notrack",
@@ -505,16 +507,7 @@ class RuleRenderer:
         # mapping is falsy, so test for False, not for truthiness)
         if "log" in rule and rule["log"] is not False:
             out.append(self._log(rule["log"]))
-        if "set-mark" in rule:
-            src = rule["set-mark"]
-            if isinstance(src, dict):
-                src = self._mark_from_map("set-mark", src)
-            out.append(f"meta mark set {'ct mark' if src == 'ct-mark' else src}")
-        if "set-ct-mark" in rule:
-            src = rule["set-ct-mark"]
-            if isinstance(src, dict):
-                src = self._mark_from_map("set-ct-mark", src)
-            out.append(f"ct mark set {'meta mark' if src == 'mark' else src}")
+        out += self._mangle(rule)
         if "set-mss" in rule:
             mss = rule["set-mss"]
             target = "rt mtu" if str(mss) in ("pmtu", "rt-mtu", "rt_mtu") else str(mss)
@@ -532,6 +525,22 @@ class RuleRenderer:
             out.append(f"flow add @{name}")
         if rule.get("notrack"):
             out.append("notrack")
+        return out
+
+    def _mangle(self, rule: dict) -> list[str]:
+        out = []
+        if "set-mark" in rule:
+            src = rule["set-mark"]
+            if isinstance(src, dict):
+                src = self._mark_from_map("set-mark", src)
+            out.append(f"meta mark set {'ct mark' if src == 'ct-mark' else src}")
+        if "set-ct-mark" in rule:
+            src = rule["set-ct-mark"]
+            if isinstance(src, dict):
+                src = self._mark_from_map("set-ct-mark", src)
+            out.append(f"ct mark set {'meta mark' if src == 'mark' else src}")
+        if "set-ct-zone" in rule:
+            out.append(f"ct zone set {rule['set-ct-zone']}")
         return out
 
     # -- fib (routing lookup) ----------------------------------------------- #
