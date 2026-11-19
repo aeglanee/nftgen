@@ -13,7 +13,7 @@ DEFS = Definitions.from_mappings(
         "services": {"ssh": ["22/tcp"]},
     }
 )
-R = RuleRenderer(DEFS, {s.name: s for s in build_sets(["ssh"], DEFS)})
+R = RuleRenderer(DEFS, {})
 
 
 @pytest.mark.parametrize(
@@ -91,7 +91,6 @@ def test_in_a_concat_rule():
         "zone1",
         "",
         "٣",
-        "007",
         True,
         1.5,
         [1],
@@ -99,6 +98,20 @@ def test_in_a_concat_rule():
     ],
 )
 def test_rejects_what_nft_does_not_take(zone):
+    with pytest.raises(BuildError, match="rule key 'set-ct-zone'"):
+        R.render({"set-ct-zone": zone})
+
+
+@pytest.mark.parametrize(
+    "zone",
+    [
+        "007",  # nft reads it as 7; one spelling per zone
+        "0x00001",
+        "9" * 5000,  # past int()'s digit limit: a build error, not a crash
+        "0x" + "0" * 5000 + "1",
+    ],
+)
+def test_rejects_a_padded_or_oversized_number(zone):
     with pytest.raises(BuildError, match="rule key 'set-ct-zone'"):
         R.render({"set-ct-zone": zone})
 

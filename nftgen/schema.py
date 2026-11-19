@@ -30,7 +30,7 @@ CT_STATUSES = (
 )
 PKTTYPES = ("host", "unicast", "broadcast", "multicast", "other")
 _HOPS = re.compile(r"^([0-9]{1,3})(?:-([0-9]{1,3}))?\Z")
-_CT_ZONE = re.compile(r"^(?:0x[0-9a-fA-F]+|0|[1-9][0-9]*)\Z")
+_CT_ZONE = re.compile(r"^(?:0x[0-9a-fA-F]{1,4}|0|[1-9][0-9]{0,4})\Z")
 LOG_LEVELS = (
     "emerg",
     "alert",
