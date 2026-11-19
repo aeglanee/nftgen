@@ -1,0 +1,10 @@
+---
+# B37 fixture: conntrack zones. One port zoned in both directions, one in
+# the forward direction only, one not at all.
+interfaces:
+  lan_if: [r-lan]
+  wan_if: [r-wan]
+services:
+  both_ways: [9000/tcp]
+  one_way: [9001/tcp]
+  plain: [9002/tcp]

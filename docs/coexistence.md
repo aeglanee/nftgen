@@ -260,8 +260,8 @@ output depend on more than the YAML.
 - **Same-priority base chains.** Order is undefined (nftables wiki); the
   kernel runs the most recently registered first, so each own-tables deploy
   moves our chains ahead of same-priority peers. Plain accept/drop results
-  don't depend on it; marks, counters/logs, NAT and `notrack` do. Give such
-  chains their own priority (e.g. `filter - 5`).
+  don't depend on it; marks, conntrack zones, counters/logs, NAT and
+  `notrack` do. Give such chains their own priority (e.g. `filter - 5`).
 - **kube-proxy nftables mode** (`mode: nftables`, GA in Kubernetes 1.33,
   kernel ≥ 5.13; default is still `iptables`) does not open NodePorts in
   other firewalls: the host policy must allow the NodePort range itself.

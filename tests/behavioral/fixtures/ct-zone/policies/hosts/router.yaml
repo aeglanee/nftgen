@@ -1,0 +1,40 @@
+---
+# Conntrack zones (docs/testing.md B37). The zone is the packet's: conntrack
+# looks a packet up in the zone it carries, so a flow needs it in both
+# directions.
+# both_ways: zoned from lan and on the way back from wan; the reply finds
+#            the entry and is established.
+# one_way:   zoned from lan only; the reply is looked up in zone 0, finds
+#            nothing and falls to the forward policy.
+# plain:     no zone, the control.
+tables:
+  - family: inet
+    name: filter
+    chains:
+      - name: raw_prerouting
+        hook: prerouting
+        priority: raw
+        policy: accept
+        rules:
+          - iifname: lan_if
+            proto: tcp
+            dport: both_ways
+            set-ct-zone: 1
+          - iifname: wan_if
+            proto: tcp
+            sport: both_ways
+            set-ct-zone: 1
+          - iifname: lan_if
+            proto: tcp
+            dport: one_way
+            set-ct-zone: 2
+      - name: forward
+        hook: forward
+        rules:
+          - ct: [established, related]
+            action: accept
+          - iifname: lan_if
+            oifname: wan_if
+            proto: tcp
+            dport: [both_ways, one_way, plain]
+            action: accept

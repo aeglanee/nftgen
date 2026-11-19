@@ -10,12 +10,13 @@ not a breaking change.
 ## Unreleased
 
 - New: `set-ct-zone:` statement. `set-ct-zone: 1` renders `ct zone set 1`,
-  the conntrack zone of the connection, a number 0-65535 or `0x…`; any
+  the conntrack zone of the packet, a number 0-65535 or `0x…`; any
   other value fails the build naming the key. Like `notrack:` it acts only
   before conntrack, in a `priority: raw` chain at `prerouting` or `output`
-  or a chain it jumps to. Two routers that sync conntrack state can keep a
-  flow on one router's own uplink in a zone of its own, apart from the
-  partner's synced entries, without `raw:`.
+  or a chain it jumps to, and a flow needs it in both directions: a reply
+  without it is looked up in zone 0. Two routers that sync conntrack state
+  can keep a flow on one router's own uplink in a zone of its own, apart
+  from the partner's synced entries, without `raw:`.
 
 ## 1.5.0 — 2026-11-18
 

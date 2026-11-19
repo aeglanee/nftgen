@@ -52,7 +52,7 @@ Network namespaces, no VM, rootless (`unshare -rn`):
   missing.
 - iproute2 7.x needs `ip link add name X type veth …` (explicit `name`).
 
-### Primitives (B01–B36)
+### Primitives (B01–B37)
 
 One small fixture per concern under `tests/behavioral/fixtures/`.
 
@@ -94,6 +94,7 @@ One small fixture per concern under `tests/behavioral/fixtures/`.
 | B34 | `policy: drop` at ingress and ARP (best-practices §8f) | neighbours flushed, then TCP to the router through a drop-policy chain with and without `meta protocol arp accept` | with it: connects; without: times out; without, neighbours set by hand: connects |
 | B35 | negated matches, `{not: …}` (best-practices §2c) | a port guarded by `saddr: {not: <group>}` + drop, probed from a listed and an unlisted source over v4 and v6; the same with a v4-only group; `iifname: {not: <group>}` from two zones | listed sources connect, unlisted time out, both families; v4-only group: the unlisted v6 source connects; the other zone times out |
 | B36 | interface group in a concat set row | one row `[group, server, port]` with a two-device group; probes from both zones, from a zone outside the group, and to another port | both zones connect; the outside zone and the other port time out |
+| B37 | conntrack zones, `set-ct-zone` | three ports through forward: one zoned from lan and on the way back from wan, one zoned from lan only, one not zoned | zoned both ways and not zoned: connect; zoned one way: times out (the reply is looked up in zone 0 and is not established) |
 
 ### Reference fleet (P01–P22)
 

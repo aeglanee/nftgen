@@ -230,7 +230,8 @@ not check its rules against the hook, so know what differs there
   (`raw: "meta protocol arp accept"`).
 - Conntrack has not run at ingress. In an `inet` ingress chain `ct:`
   reads every packet as `invalid`, so `ct: invalid` + `action: drop`
-  drops everything; a `netdev` table refuses `ct:` at load.
+  drops everything; a `netdev` or `arp` table refuses every conntrack key
+  at load (`ct:`, `ct-mark:`, `ct-status:`, `set-ct-mark:`, `set-ct-zone:`).
 - Fragments are not reassembled yet, and `oifname`/`oif` never match.
 - Before kernel 6.16 every device must exist when the ruleset loads (and
   at `nft -c`), and a chain loses a device that is removed for good.
@@ -315,7 +316,7 @@ it would alone; a named set can't go inside a list.
 | `set-mark` | `{key: iifname, map: zone_marks}` | `meta mark set iifname map @zone_marks` (a table's named map with `mark` values; `key` as for a NAT map, below) |
 | `set-ct-mark` | `"0x1"` / `mark` | `ct mark set 0x1` / `ct mark set meta mark` (save the packet's mark) |
 | `set-ct-mark` | `{key: iifname, map: zone_marks}` | `ct mark set iifname map @zone_marks` |
-| `set-ct-zone` | `1` / `"0x10"` | `ct zone set 1` (the connection's conntrack zone, 0–65535; like `notrack`, only before conntrack: `prerouting` or `output` with `priority: raw`, or a chain they jump to) |
+| `set-ct-zone` | `1` / `"0x10"` | `ct zone set 1` (the packet's conntrack zone, 0–65535. Set it on every packet of a flow, in both directions, before conntrack: `prerouting` and `output` with `priority: raw`, or a chain they jump to. Does nothing beside a conntrack match, `set-ct-mark` or `notrack`) |
 | `set-mss` | `pmtu` / `1452` | `tcp flags syn tcp option maxseg size set rt mtu` / `… 1452` (1–65535) |
 | `flow-offload` | `ft` | `flow add @ft` (a declared flowtable; a separate rule from the verdict) |
 | `notrack` | `true` | `notrack` (no conntrack entry; in a chain hooked before conntrack, `priority: raw`) |
